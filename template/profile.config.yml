@@ -3,4 +3,7 @@ framework: personal-ai-profile
 default_visibility: private
 model_mode: disabled
 require_confirmation: true
+memory_mode: balanced
+mcp_transport: stdio
+save_raw_conversations: false
 

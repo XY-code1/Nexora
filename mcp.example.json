@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "personal-profile": {
+      "command": "python",
+      "args": ["ABSOLUTE_PATH_TO_FRAMEWORK/mcp_server.py"],
+      "env": {
+        "PROFILE_VAULT": "ABSOLUTE_PATH_TO_PRIVATE_VAULT"
+      }
+    }
+  }
+}

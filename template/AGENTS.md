@@ -1,10 +1,10 @@
 # Private Profile Rules
 
-1. 开始任务前阅读`PROFILE.md`和`CONTEXT.md`。
+1. 开始任务前通过MCP读取`10 Profile/Profile.md`和`00 Dashboard/Current Context.md`。
 2. 只读取当前任务需要的文件。
 3. 不得把推测写成已确认事实。
-4. 新记忆先进入`memory/inbox/`。
-5. 用户明确确认后才能进入`memory/confirmed/`。
+4. 新记忆先进入`30 Memory/Inbox/`。
+5. 用户明确确认后才能进入`30 Memory/Confirmed/`。
 6. 不保存密码、Token、验证码、API Key、私钥或证件资料。
 7. 模型输出只作为草稿；正式写入前展示变更。
 8. 冲突信息标记为`disputed`，不得自行覆盖。

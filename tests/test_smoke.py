@@ -14,13 +14,13 @@ def main():
         )
         run("init", str(vault))
         run("remember", str(vault), "喜欢先给结论")
-        candidate = next((vault / "memory" / "inbox").glob("*.md"))
+        candidate = next((vault / "30 Memory" / "Inbox").glob("*.md"))
         run("confirm", str(vault), candidate.name)
         run("build-context", str(vault))
         run("human3", str(vault))
         run("validate", str(vault))
-        assert next((vault / "memory" / "confirmed").glob("*.md"))
-        assert (vault / "indexes" / "ai-context.md").is_file()
+        assert next((vault / "30 Memory" / "Confirmed").glob("*.md"))
+        assert (vault / "90 System" / "Indexes" / "ai-context.md").is_file()
     print("smoke test passed")
 
 

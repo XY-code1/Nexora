@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-REQUIRED = ["PROFILE.md", "CONTEXT.md", "AGENTS.md", "profile.config.yml"]
+REQUIRED = ["10 Profile/Profile.md", "00 Dashboard/Current Context.md", "AGENTS.md", "profile.config.yml"]
 SECRET_PATTERNS = {
     "private key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     "GitHub token": re.compile(r"\b(?:gh[opusr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"),
@@ -58,7 +58,7 @@ def remember(path: str, text: str) -> None:
     root = vault(path)
     day = date.today().isoformat()
     record_id = f"mem-{day.replace('-', '')}-{uuid.uuid4().hex[:8]}"
-    destination = root / "memory" / "inbox" / f"{day}-{record_id}.md"
+    destination = root / "30 Memory" / "Inbox" / f"{day}-{record_id}.md"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         f"---\nid: {record_id}\nstatus: candidate\ncreated: {day}\n"
@@ -71,12 +71,12 @@ def remember(path: str, text: str) -> None:
 
 def confirm(path: str, file: str) -> None:
     root = vault(path)
-    source = (root / "memory" / "inbox" / file).resolve()
-    inbox = (root / "memory" / "inbox").resolve()
+    source = (root / "30 Memory" / "Inbox" / file).resolve()
+    inbox = (root / "30 Memory" / "Inbox").resolve()
     if inbox not in source.parents or not source.is_file():
         raise SystemExit("只能确认 memory/inbox 中存在的文件。")
     text = source.read_text(encoding="utf-8").replace("status: candidate", "status: confirmed", 1)
-    destination = root / "memory" / "confirmed" / source.name
+    destination = root / "30 Memory" / "Confirmed" / source.name
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(text, encoding="utf-8")
     source.unlink()
@@ -91,12 +91,12 @@ def section(file: Path, limit: int = 3000) -> str:
 
 def build_context(path: str) -> None:
     root = vault(path)
-    destination = root / "indexes" / "ai-context.md"
+    destination = root / "90 System" / "Indexes" / "ai-context.md"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         "# AI Context\n\n> 自动生成；只包含任务所需的最小上下文。\n\n"
-        f"## Profile\n\n{section(root / 'PROFILE.md')}\n\n"
-        f"## Current Context\n\n{section(root / 'CONTEXT.md')}\n",
+        f"## Profile\n\n{section(root / '10 Profile' / 'Profile.md')}\n\n"
+        f"## Current Context\n\n{section(root / '00 Dashboard' / 'Current Context.md')}\n",
         encoding="utf-8",
     )
     print(f"上下文已生成：{destination}")
@@ -105,7 +105,7 @@ def build_context(path: str) -> None:
 def human3(path: str) -> None:
     root = vault(path)
     day = date.today().isoformat()
-    destination = root / "assessments" / "human3" / "answers" / f"{day}.md"
+    destination = root / "40 Reviews" / "Human3" / "Answers" / f"{day}.md"
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         raise SystemExit(f"今日问卷已存在：{destination}")
