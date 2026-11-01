@@ -4,7 +4,9 @@
       "command": "python",
       "args": ["ABSOLUTE_PATH_TO_FRAMEWORK/mcp_server.py"],
       "env": {
-        "PROFILE_VAULT": "ABSOLUTE_PATH_TO_PRIVATE_VAULT"
+        "PROFILE_VAULT": "ABSOLUTE_PATH_TO_PRIVATE_VAULT",
+        "PROFILE_AGENT_ID": "example-agent",
+        "PROFILE_SCOPES": "profile:read,context:read,memory:search,memory:propose,memory:pending,project:read,assessment:read"
       }
     }
   }

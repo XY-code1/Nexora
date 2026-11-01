@@ -1,3 +1,8 @@
+---
+visibility: private
+ai_access: allowed
+---
+
 # Profile
 
 ## Basic

@@ -54,7 +54,7 @@ def validate(path: str) -> None:
     print("验证通过：结构完整，未发现已知秘密模式。")
 
 
-def remember(path: str, text: str) -> None:
+def remember(path: str, text: str, source_agent: str = "local-cli") -> None:
     root = vault(path)
     day = date.today().isoformat()
     record_id = f"mem-{day.replace('-', '')}-{uuid.uuid4().hex[:8]}"
@@ -62,8 +62,8 @@ def remember(path: str, text: str) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         f"---\nid: {record_id}\nstatus: candidate\ncreated: {day}\n"
-        "visibility: private\nai_access: summary-only\n---\n\n"
-        f"# 候选记忆\n\n{text.strip()}\n",
+        f"visibility: private\nai_access: summary-only\nsource_agent: {source_agent}\n---\n\n"
+        f"# 候选记忆\n\n## 摘要\n\n{text.strip()}\n",
         encoding="utf-8",
     )
     print(f"候选记忆已创建：{destination}")

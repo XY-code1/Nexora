@@ -181,7 +181,9 @@ MCP 不向 Agent 提供任意文件写入、确认、删除或公开能力。高
       "command": "python",
       "args": ["ABSOLUTE_PATH_TO_FRAMEWORK/mcp_server.py"],
       "env": {
-        "PROFILE_VAULT": "ABSOLUTE_PATH_TO_PRIVATE_VAULT"
+        "PROFILE_VAULT": "ABSOLUTE_PATH_TO_PRIVATE_VAULT",
+        "PROFILE_AGENT_ID": "my-agent",
+        "PROFILE_SCOPES": "profile:read,context:read,memory:search,memory:propose"
       }
     }
   }
@@ -189,6 +191,8 @@ MCP 不向 Agent 提供任意文件写入、确认、删除或公开能力。高
 ```
 
 第一阶段使用本地 `stdio`，不把档案服务暴露到公网。远程访问以后再考虑 HTTPS、OAuth、权限 Scope、撤销机制和审计日志。
+
+每个AI客户端必须配置独立的`PROFILE_AGENT_ID`和最小`PROFILE_SCOPES`；缺失身份或权限时，Gateway默认拒绝访问。
 
 ## 记忆模型
 
