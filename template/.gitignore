@@ -1,0 +1,6 @@
+.env
+*.key
+*.pem
+secrets/
+local-only/
+

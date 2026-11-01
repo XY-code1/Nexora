@@ -1,0 +1,6 @@
+schema_version: 1
+framework: personal-ai-profile
+default_visibility: private
+model_mode: disabled
+require_confirmation: true
+
