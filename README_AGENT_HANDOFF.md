@@ -1,9 +1,9 @@
 # Personal AI Profile — Agent 交接说明
 
-> 交接基线：`main` / `be5081d`（Phase 4已提交推送）
+> 交接基线：`main` / `05970ba`（Phase 5已提交推送）
 > 仓库：<https://github.com/XY-code1/personal-ai-profile>
 > 更新日期：2026-11-02
-> 当前阶段：Phase 0–4已完成并推送；Phase 5已完成审计，待本次提交。
+> 当前阶段：Phase 0–5已完成并推送；Phase 6已通过审计，待本次提交。
 
 ## 1. 项目目标
 
@@ -130,7 +130,7 @@ POST   /api/v1/shutdown
 安装：
 
 ```powershell
-pip install -r requirements.txt
+pip install --require-hashes -r requirements.lock.txt
 ```
 
 完整测试：
@@ -138,18 +138,21 @@ pip install -r requirements.txt
 ```powershell
 python tests/test_smoke.py
 python tests/test_mcp_security.py
+python tests/test_mcp_protocol.py
 python tests/test_memory_lifecycle.py
 python tests/test_review_app.py
 python tests/test_core_contract.py
 python tests/test_local_api.py
 python tests/test_vault_management.py
+python tests/test_release_gate.py
 python tests/test_launcher.py
+python scripts/check_release.py
 python -m compileall -q .
 python -m pip check
 git diff --check
 ```
 
-当前这些检查以及GitHub Actions均通过。GitHub Actions存在Node运行时弃用提示，但不影响当前测试结果；后续可在升级Actions版本时处理。
+当前这些检查以及GitHub Actions均通过。GitHub Actions第三方Action已按commit SHA固定。
 
 ## 7. 尚未完成
 
@@ -159,21 +162,21 @@ git diff --check
 - 对话式首次引导、渐进信息收集和月度复盘。
 - Git跨设备同步和冲突处理。
 - 公开内容脱敏预览和发布工作流。
-- 依赖锁文件、SBOM、签名与正式Release流程。
+- 代码签名与正式Release流程。
 
-## 8. 下一任务：Phase 6
+## 8. 下一任务：Phase 7
 
 ### 目标
 
-建立真实MCP协议级测试、可重复依赖与发布安全门禁。
+在不扩大AI读取权限的前提下，增加本地可视化Profile、记忆时间线、隐私审计和Human 3.0趋势。
 
 ### 最小范围
 
-1. 使用真实stdio MCP client验证initialize、tools/list和工具调用。
-2. 锁定Python与Node依赖，并验证干净环境安装。
-3. 生成SBOM与依赖安全扫描结果。
-4. 增加公共构建产物的私密数据和本机路径泄漏检查。
-5. 建立干净Windows环境启动验收脚本。
+1. 只读API返回最小化Profile摘要、记忆时间线和审计汇总。
+2. React增加Profile、Timeline、Privacy和Human 3.0四个本地页面。
+3. 默认不展示私密正文，敏感展开需要明确用户操作。
+4. 所有统计在本地Core/API中生成，不增加云端分析。
+5. 增加组件、API、权限负测试和至少一条E2E可视化流程。
 
 ### 暂时不要做
 
@@ -186,12 +189,12 @@ git diff --check
 - 自动采集用户信息；
 - 完整自主Agent。
 
-### Phase 6验收标准
+### Phase 7验收标准
 
-- 真实MCP协议往返和权限负测试通过。
-- Python与Node依赖可从锁文件重现。
-- SBOM和泄漏扫描由CI生成，高危问题阻止发布。
-- 干净Windows环境能启动本地服务并正常关闭。
+- 可视化数据只来自当前私人Vault，无外部网络请求。
+- 默认视图不泄露`denied`、`local-only`或未确认正文。
+- Timeline能正确表示记忆状态和生命周期时间。
+- Human 3.0明确标记为自我反思，不作为诊断。
 - 所有既有测试继续通过。
 
 ## 9. 推荐实施顺序
@@ -199,12 +202,12 @@ git diff --check
 ```text
 1. 读取README、docs/BEHAVIOR_CONTRACT.md、docs/LOCAL_API.md
 2. 运行全部现有测试并确认基线
-3. 增加真实stdio MCP协议往返与权限负测试
-4. 锁定Python和Node依赖并验证干净安装
-5. 生成SBOM并建立依赖安全门禁
-6. 增加构建产物的私密数据与本机路径泄漏扫描
+3. 定义可视化只读API与隐私裁剪规则
+4. 先实现Profile与Timeline最小闭环
+5. 增加Privacy审计和Human 3.0趋势页
+6. 增加API、组件、权限负测试与E2E
 7. 运行Python、前端、Launcher与E2E完整门禁
-8. 更新README和发布文档，等待用户确认后提交
+8. 更新README和可视化文档，等待用户确认后提交
 ```
 
 ## 10. 交接给其他Agent的启动提示词
@@ -220,7 +223,7 @@ git diff --check
 - docs/LOCAL_API.md
 - docs/ARCHITECTURE.md
 
-先运行全部现有测试，确认基线后再开发Phase 6：MCP统一测试与发布门禁。
+先运行全部现有测试，确认基线后再开发Phase 7：可视化档案、记忆时间线与隐私审计。
 
 必须遵守：
 1. 不访问、复制或提交任何真实私人Vault。
@@ -233,7 +236,7 @@ git diff --check
 8. 开发完成后运行Python、前端、E2E和git diff检查。
 9. 先给出改动和验证结果，等待确认后再提交推送。
 
-Phase 6验收标准以README_AGENT_HANDOFF.md第8节为准。
+Phase 7验收标准以README_AGENT_HANDOFF.md第8节为准。
 ```
 
 ## 11. 提交规则
