@@ -13,6 +13,10 @@
 ```text
 GET    /api/v1/health
 GET    /api/v1/capabilities
+GET    /api/v1/visualization/profile
+GET    /api/v1/visualization/timeline
+GET    /api/v1/visualization/privacy
+GET    /api/v1/visualization/human3
 GET    /api/v1/memories?status=candidate|confirmed|rejected|archived
 GET    /api/v1/memories/{id}
 POST   /api/v1/memories/candidates
@@ -23,6 +27,8 @@ POST   /api/v1/memories/{id}/forget
 POST   /api/v1/memories/{id}/supersede
 POST   /api/v1/shutdown
 ```
+
+可视化端点均为只读，并执行[`VISUALIZATION_PRIVACY.md`](VISUALIZATION_PRIVACY.md)定义的最小披露规则。
 
 修改请求必须提交上一次读取到的`expected_revision`。记录已变化时返回`409 REVISION_CONFLICT`，不会覆盖其他进程的更新。
 

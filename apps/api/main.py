@@ -17,6 +17,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from core import profile
 from core.access import extract_summary
+from core.visualization import human3_trend, privacy_audit, profile_overview, timeline
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
 
@@ -134,7 +135,27 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
 
     @app.get("/api/v1/capabilities", dependencies=[auth])
     def capabilities() -> dict[str, Any]:
-        return envelope({"memoryLifecycle": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
+        return envelope({"memoryLifecycle": True, "visualization": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
+
+    @app.get("/api/v1/visualization/profile", dependencies=[auth])
+    def visualization_profile() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(profile_overview(root))
+
+    @app.get("/api/v1/visualization/timeline", dependencies=[auth])
+    def visualization_timeline(limit: int = 100) -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(timeline(root, max(1, min(limit, 100))))
+
+    @app.get("/api/v1/visualization/privacy", dependencies=[auth])
+    def visualization_privacy() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(privacy_audit(root))
+
+    @app.get("/api/v1/visualization/human3", dependencies=[auth])
+    def visualization_human3() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(human3_trend(root))
 
     @app.post("/api/v1/shutdown", dependencies=[auth])
     def shutdown(background_tasks: BackgroundTasks) -> dict[str, Any]:

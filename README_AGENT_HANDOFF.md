@@ -1,9 +1,9 @@
 # Personal AI Profile — Agent 交接说明
 
-> 交接基线：`main` / `05970ba`（Phase 5已提交推送）
+> 交接基线：`main`（Phase 7完成）
 > 仓库：<https://github.com/XY-code1/personal-ai-profile>
 > 更新日期：2026-11-02
-> 当前阶段：Phase 0–5已完成并推送；Phase 6已通过审计，待本次提交。
+> 当前阶段：Phase 0–7已完成；下一阶段为Phase 8。
 
 ## 1. 项目目标
 
@@ -143,6 +143,7 @@ python tests/test_memory_lifecycle.py
 python tests/test_review_app.py
 python tests/test_core_contract.py
 python tests/test_local_api.py
+python tests/test_visualization.py
 python tests/test_vault_management.py
 python tests/test_release_gate.py
 python tests/test_launcher.py
@@ -164,7 +165,7 @@ git diff --check
 - 公开内容脱敏预览和发布工作流。
 - 代码签名与正式Release流程。
 
-## 8. 下一任务：Phase 7
+## 8. 已完成：Phase 7
 
 ### 目标
 
@@ -196,6 +197,17 @@ git diff --check
 - Timeline能正确表示记忆状态和生命周期时间。
 - Human 3.0明确标记为自我反思，不作为诊断。
 - 所有既有测试继续通过。
+
+### 当前实现
+
+- `core/visualization.py`集中生成权限裁剪后的四类只读视图。
+- API新增`/api/v1/visualization/profile|timeline|privacy|human3`。
+- React新增个人档案、时间线、隐私审计和Human 3.0页面。
+- 时间线摘要默认折叠；未确认、`denied`和`local-only`不返回预览。
+- 已增加Python权限负测试、React组件测试和Playwright可视化流程。
+- 完整隐私规则见`docs/VISUALIZATION_PRIVACY.md`。
+
+安全与隐私复审未发现阻断问题。下一阶段为Phase 8：对话式首次引导与渐进信息收集。
 
 ## 9. 推荐实施顺序
 
