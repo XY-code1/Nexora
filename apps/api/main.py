@@ -17,6 +17,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from core import profile
 from core.access import extract_summary
+from core.onboarding import onboarding_state, propose_answer
 from core.visualization import human3_trend, privacy_audit, profile_overview, timeline
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
@@ -43,6 +44,12 @@ class ActionInput(BaseModel):
     expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
     reason: str = Field(default="user-request", max_length=200)
     content: str = Field(default="", max_length=4000)
+
+
+class OnboardingInput(BaseModel):
+    topic: str = Field(min_length=1, max_length=40)
+    content: str = Field(min_length=1, max_length=1000)
+    consent: bool
 
 
 def envelope(data: Any, revision: str | None = None) -> dict[str, Any]:
@@ -135,7 +142,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
 
     @app.get("/api/v1/capabilities", dependencies=[auth])
     def capabilities() -> dict[str, Any]:
-        return envelope({"memoryLifecycle": True, "visualization": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
+        return envelope({"memoryLifecycle": True, "visualization": True, "onboarding": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
 
     @app.get("/api/v1/visualization/profile", dependencies=[auth])
     def visualization_profile() -> dict[str, Any]:
@@ -156,6 +163,22 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     def visualization_human3() -> dict[str, Any]:
         with profile.vault_lock(root):
             return envelope(human3_trend(root))
+
+    @app.get("/api/v1/onboarding", dependencies=[auth])
+    def get_onboarding() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(onboarding_state(root))
+
+    @app.post("/api/v1/onboarding/responses", status_code=201, dependencies=[auth])
+    def onboarding_response(data: OnboardingInput) -> dict[str, Any]:
+        if data.consent is not True:
+            raise ApiError(400, "CONSENT_REQUIRED", "只有明确同意后才能创建候选记忆。")
+        try:
+            path = propose_answer(root, data.topic, data.content)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope({"candidateId": profile.read_record(path)[0]["id"], "state": onboarding_state(root)})
 
     @app.post("/api/v1/shutdown", dependencies=[auth])
     def shutdown(background_tasks: BackgroundTasks) -> dict[str, Any]:

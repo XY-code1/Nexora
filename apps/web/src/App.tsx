@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ApiClient, ApiError, type Human3Trend, type Memory, type PrivacyAudit, type ProfileOverview, type TimelineItem } from './api'
+import { ApiClient, ApiError, type Human3Trend, type Memory, type OnboardingState, type OnboardingTopic, type PrivacyAudit, type ProfileOverview, type TimelineItem } from './api'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'review' | 'profile' | 'timeline' | 'privacy' | 'human3'
+type View = 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'human3'
 
 type TokenGateProps = {
   error: string
@@ -67,6 +67,7 @@ function App() {
   const [timelineView, setTimelineView] = useState<TimelineItem[] | null>(null)
   const [privacyView, setPrivacyView] = useState<PrivacyAudit | null>(null)
   const [human3View, setHuman3View] = useState<Human3Trend | null>(null)
+  const [onboardingView, setOnboardingView] = useState<OnboardingState | null>(null)
   const [visualLoading, setVisualLoading] = useState<View | null>(null)
   const sessionEpoch = useRef(0)
   const viewRequest = useRef(0)
@@ -97,7 +98,7 @@ function App() {
       if (epoch !== sessionEpoch.current) return
       setToken(nextToken)
       applyMemories(result)
-      setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null)
+      setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null); setOnboardingView(null)
       setNotice(null)
     } catch (error) {
       if (controller.signal.aborted || epoch !== sessionEpoch.current) return
@@ -147,7 +148,7 @@ function App() {
     setDraft('')
     setNotice(null)
     setView('review')
-    setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null)
+    setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null); setOnboardingView(null)
     setVisualLoading(null)
     setGateError(message)
   }
@@ -159,22 +160,25 @@ function App() {
     visualAbort.current?.abort()
     viewRequest.current += 1
     setVisualLoading(null)
-    if (next === 'review') return
+    if (next === 'review') { void loadCandidates(); return }
     const controller = new AbortController()
     visualAbort.current = controller
     const epoch = sessionEpoch.current
     const request = viewRequest.current
     if (next === 'profile') setProfileView(null)
+    if (next === 'onboarding') setOnboardingView(null)
     if (next === 'timeline') setTimelineView(null)
     if (next === 'privacy') setPrivacyView(null)
     if (next === 'human3') setHuman3View(null)
     setVisualLoading(next)
     try {
-      const result = next === 'profile' ? await client.profileOverview(controller.signal)
+      const result = next === 'onboarding' ? await client.onboarding(controller.signal)
+        : next === 'profile' ? await client.profileOverview(controller.signal)
         : next === 'timeline' ? await client.timeline(controller.signal)
           : next === 'privacy' ? await client.privacyAudit(controller.signal)
             : await client.human3Trend(controller.signal)
       if (epoch !== sessionEpoch.current || request !== viewRequest.current) return
+      if (next === 'onboarding') setOnboardingView(result as OnboardingState)
       if (next === 'profile') setProfileView(result as ProfileOverview)
       if (next === 'timeline') setTimelineView(result as TimelineItem[])
       if (next === 'privacy') setPrivacyView(result as PrivacyAudit)
@@ -186,6 +190,22 @@ function App() {
     } finally {
       if (epoch === sessionEpoch.current && request === viewRequest.current) setVisualLoading(null)
     }
+  }
+
+  async function saveOnboarding(topic: string, content: string) {
+    if (!client) return
+    const epoch = sessionEpoch.current
+    const signal = sessionAbort.current?.signal
+    setSaving(true)
+    try {
+      const result = await client.onboardingResponse(topic, content, signal)
+      if (epoch !== sessionEpoch.current || signal?.aborted) return
+      setOnboardingView(result.state)
+      setNotice({ kind: 'success', text: '回答已保存为候选记忆，确认前不会成为长期事实。' })
+    } catch (error) {
+      if (epoch !== sessionEpoch.current || signal?.aborted) return
+      setNotice({ kind: 'error', text: messageFor(error) })
+    } finally { if (epoch === sessionEpoch.current) setSaving(false) }
   }
 
   async function save() {
@@ -251,7 +271,7 @@ function App() {
     </header>
 
     <nav className="primary-nav" aria-label="档案功能">
-      {([['review', '记忆审核'], ['profile', '个人档案'], ['timeline', '记忆时间线'], ['privacy', '隐私审计'], ['human3', 'Human 3.0']] as [View, string][]).map(([key, label]) =>
+      {([['review', '记忆审核'], ['onboarding', '对话式引导'], ['profile', '个人档案'], ['timeline', '记忆时间线'], ['privacy', '隐私审计'], ['human3', 'Human 3.0']] as [View, string][]).map(([key, label]) =>
         <button key={key} className={view === key ? 'active' : ''} aria-current={view === key ? 'page' : undefined} onClick={() => void openView(key)}>{label}</button>
       )}
     </nav>
@@ -259,6 +279,7 @@ function App() {
     {view === 'review' && <section className="intro"><p>每一条候选记忆都需要你的决定。确认后，其他已授权 AI 才能检索它。</p><span>{memories.length} 条待审核</span></section>}
     {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
 
+    {view === 'onboarding' && <OnboardingPage value={onboardingView} loading={visualLoading === 'onboarding'} saving={saving} onSave={saveOnboarding} onReview={() => void openView('review')} />}
     {view === 'profile' && <ProfilePage value={profileView} loading={visualLoading === 'profile'} />}
     {view === 'timeline' && <TimelinePage value={timelineView} loading={visualLoading === 'timeline'} />}
     {view === 'privacy' && <PrivacyPage value={privacyView} loading={visualLoading === 'privacy'} />}
@@ -290,6 +311,31 @@ function App() {
 }
 
 function Loading() { return <div className="visual-panel" role="status">正在读取本地档案…</div> }
+
+function OnboardingPage({ value, loading, saving, onSave, onReview }: { value: OnboardingState | null; loading: boolean; saving: boolean; onSave: (topic: string, content: string) => Promise<void>; onReview: () => void }) {
+  const [answer, setAnswer] = useState('')
+  const [skipped, setSkipped] = useState<string[]>([])
+  if (loading || !value) return <Loading />
+  const topic = value.topics.find((item) => item.status === 'available' && !skipped.includes(item.key))
+  const pending = value.topics.filter((item) => item.status === 'pending').length
+  const confirmed = value.topics.filter((item) => item.status === 'confirmed').length
+  async function submit(item: OnboardingTopic) {
+    if (!answer.trim()) return
+    await onSave(item.key, answer.trim())
+    setAnswer('')
+  }
+  return <section className="visual-page onboarding-page"><header><p className="eyebrow">LOCAL ONBOARDING</p><h2>通过对话建立你的档案</h2><p>{value.notice}</p></header>
+    <div className="onboarding-progress" aria-label="引导进度"><span>{confirmed} 项已确认</span><span>{pending} 项待审核</span><span>{value.topics.length - confirmed - pending} 项可回答</span></div>
+    {!topic ? <div className="empty-card"><h3>{value.completed ? '本轮引导已完成' : '已跳过本轮剩余问题'}</h3><p>{pending ? `还有 ${pending} 条回答正在等待你的确认。` : '你可以随时回来继续补充。'}</p>{pending > 0 && <button className="primary-action" onClick={onReview}>前往记忆审核</button>}</div> : <article className="conversation-card">
+      <div className="assistant-message"><span>档案助手</span><p>{topic.prompt}</p></div>
+      <label htmlFor="onboarding-answer">你的回答</label>
+      <textarea id="onboarding-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={1000} placeholder="只填写你愿意保存为候选记忆的内容…" disabled={saving} />
+      <p className="privacy-hint">不会保存聊天过程；点击继续后只创建一条待你审核的候选记忆。请勿填写密码、Token、验证码或证件信息。</p>
+      <div className="onboarding-actions"><button className="secondary" onClick={() => { setSkipped((items) => [...items, topic.key]); setAnswer('') }} disabled={saving}>暂时跳过</button><button className="primary-action" onClick={() => void submit(topic)} disabled={saving || !answer.trim()}>{saving ? '正在保存…' : '保存为候选并继续'}</button></div>
+    </article>}
+    <div className="topic-status">{value.topics.map((item) => <div key={item.key}><span className={`topic-dot ${item.status}`} /><strong>{item.title}</strong><small>{item.status === 'confirmed' ? '已确认' : item.status === 'pending' ? '待审核' : skipped.includes(item.key) ? '本轮跳过' : '可回答'}</small></div>)}</div>
+  </section>
+}
 
 function ProfilePage({ value, loading }: { value: ProfileOverview | null; loading: boolean }) {
   if (loading || !value) return <Loading />

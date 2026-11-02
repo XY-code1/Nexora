@@ -1,9 +1,9 @@
 # Personal AI Profile — Agent 交接说明
 
-> 交接基线：`main`（Phase 7完成）
+> 交接基线：`main`（Phase 8完成）
 > 仓库：<https://github.com/XY-code1/personal-ai-profile>
 > 更新日期：2026-11-02
-> 当前阶段：Phase 0–7已完成；下一阶段为Phase 8。
+> 当前阶段：Phase 0–8已完成；下一阶段为Phase 9。
 
 ## 1. 项目目标
 
@@ -144,6 +144,7 @@ python tests/test_review_app.py
 python tests/test_core_contract.py
 python tests/test_local_api.py
 python tests/test_visualization.py
+python tests/test_onboarding.py
 python tests/test_vault_management.py
 python tests/test_release_gate.py
 python tests/test_launcher.py
@@ -207,22 +208,33 @@ git diff --check
 - 已增加Python权限负测试、React组件测试和Playwright可视化流程。
 - 完整隐私规则见`docs/VISUALIZATION_PRIVACY.md`。
 
-安全与隐私复审未发现阻断问题。下一阶段为Phase 8：对话式首次引导与渐进信息收集。
+安全与隐私复审未发现阻断问题。
 
-## 9. 推荐实施顺序
+## 9. Phase 8实现
+
+- `core/onboarding.py`定义五个固定引导主题和状态识别。
+- API新增`GET /api/v1/onboarding`与`POST /api/v1/onboarding/responses`。
+- React新增本地对话式引导页、进度、跳过和候选提交。
+- 只保存用户明确提交的candidate，不保存原始对话、草稿或跳过记录。
+- 输入经过秘密扫描；引导不能确认记忆或直接修改Profile。
+- Python、React和Playwright均覆盖引导闭环。
+
+Phase 8安全与隐私审计未发现阻断问题。下一阶段为Phase 9：Human 3.0对话式复盘闭环。
+
+## 10. 推荐实施顺序
 
 ```text
 1. 读取README、docs/BEHAVIOR_CONTRACT.md、docs/LOCAL_API.md
 2. 运行全部现有测试并确认基线
-3. 定义可视化只读API与隐私裁剪规则
-4. 先实现Profile与Timeline最小闭环
-5. 增加Privacy审计和Human 3.0趋势页
+3. 阅读`docs/CONVERSATIONAL_ONBOARDING.md`
+4. 定义Human 3.0复盘草稿与确认边界
+5. 复用candidate与审核闭环，不直接写正式评估
 6. 增加API、组件、权限负测试与E2E
 7. 运行Python、前端、Launcher与E2E完整门禁
 8. 更新README和可视化文档，等待用户确认后提交
 ```
 
-## 10. 交接给其他Agent的启动提示词
+## 11. 交接给其他Agent的启动提示词
 
 可将以下内容连同仓库地址直接发给下一位Agent：
 
@@ -235,7 +247,7 @@ git diff --check
 - docs/LOCAL_API.md
 - docs/ARCHITECTURE.md
 
-先运行全部现有测试，确认基线后再开发Phase 7：可视化档案、记忆时间线与隐私审计。
+先运行全部现有测试，确认基线后再开发Phase 9：Human 3.0对话式复盘闭环。
 
 必须遵守：
 1. 不访问、复制或提交任何真实私人Vault。
@@ -248,10 +260,10 @@ git diff --check
 8. 开发完成后运行Python、前端、E2E和git diff检查。
 9. 先给出改动和验证结果，等待确认后再提交推送。
 
-Phase 7验收标准以README_AGENT_HANDOFF.md第8节为准。
+Phase 9必须延续候选、用户确认、最小披露和非诊断边界。
 ```
 
-## 11. 提交规则
+## 12. 提交规则
 
 - 先检查`git status`，不要覆盖其他未提交工作。
 - 一个阶段使用一个聚焦提交，不混入私人数据或无关格式化。

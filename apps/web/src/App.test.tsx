@@ -135,4 +135,27 @@ describe('review workspace', () => {
     expect(screen.queryByText('旧 Vault 私密规则')).not.toBeInTheDocument()
     expect(screen.getByText('暂时没有候选记忆')).toBeInTheDocument()
   })
+
+  it('collects one onboarding answer as a reviewable candidate', async () => {
+    const onboarding = {
+      topics: [
+        { key: 'identity', title: '称呼与基本偏好', prompt: '我应该怎么称呼你？', status: 'available' },
+        { key: 'communication', title: '沟通方式', prompt: '希望如何沟通？', status: 'available' },
+      ], nextTopic: 'identity', completed: false, notice: '回答只会保存为候选记忆。',
+    }
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: onboarding, meta: { requestId: '2' } }))
+      .mockImplementationOnce(() => response({ data: { candidateId: 'mem-onboarding', state: { ...onboarding, topics: [{ ...onboarding.topics[0], status: 'pending' }, onboarding.topics[1]], nextTopic: 'communication' } }, meta: { requestId: '3' } }))
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByText('暂时没有候选记忆')
+    fireEvent.click(screen.getByRole('button', { name: '对话式引导' }))
+    await screen.findByText('我应该怎么称呼你？')
+    fireEvent.change(screen.getByLabelText('你的回答'), { target: { value: '请称呼我为小明' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存为候选并继续' }))
+    await screen.findByText('回答已保存为候选记忆，确认前不会成为长期事实。')
+    expect(screen.getByText('希望如何沟通？')).toBeInTheDocument()
+  })
 })
