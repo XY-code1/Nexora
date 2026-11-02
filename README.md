@@ -332,7 +332,7 @@ start-review.vbs
 1. **档案与记忆核心**：初始化、验证、候选、编辑、确认、拒绝、遗忘、替代、冲突检测、来源记录和Human 3.0草稿。
 2. **Core分层**：`core/profile.py`成为领域和Vault操作的权威实现，`core/access.py`统一AI读取策略；原`profile.py`保留为兼容CLI。
 3. **跨AI访问**：MCP支持档案、上下文、项目、确认记忆、待审核记忆和Human 3.0摘要；高风险确认、删除和发布能力不向AI开放。
-4. **本地审核**：现有无命令行页面可编辑、确认和拒绝候选记忆。
+4. **本地审核界面**：React + TypeScript + Vite 审核界面已上线，支持候选列表、详情、编辑、确认、拒绝与冲突刷新；旧 review_app.py 保留为兼容入口。
 5. **本地API**：`apps/api`提供`/api/v1`接口，覆盖候选创建、查询、编辑以及confirm、reject、forget、supersede生命周期。
 6. **一致性与恢复**：所有本地入口共用Vault文件锁；修改要求revision；关键多文件操作通过事务日志在异常后回滚。
 7. **安全边界**：API仅监听loopback，使用随机Bearer令牌、Host白名单、输入模型、记录ID寻址、秘密扫描和默认拒绝策略。
@@ -340,7 +340,6 @@ start-review.vbs
 
 ### 尚未完成
 
-- React + TypeScript + Vite产品界面；当前仍是Python服务端HTML原型。
 - 单实例Launcher、健康等待、浏览器安全会话交换和优雅关闭。
 - Windows安装、升级、卸载和离线打包。
 - Vault schema migration、版本升级备份和完整恢复向导。
@@ -354,13 +353,12 @@ start-review.vbs
 
 | 阶段 | 内容 | 验收标准 |
 |---|---|---|
-| Phase 3 | React + TypeScript + Vite审核界面 | 达到现有审核页面功能等价；类型检查、组件测试和Playwright通过；不产生外部请求 |
 | Phase 4 | Windows本地运行闭环 | 双击启动、单实例、自动选端口、健康检查、安全会话、正常关闭与崩溃恢复 |
 | Phase 5 | Vault隔离、Schema与恢复 | migration可回滚；自动备份；公共构建不包含私人路径或数据 |
 | Phase 6 | MCP统一测试与发布门禁 | 真实MCP协议测试、依赖锁定、SBOM、干净Windows离线运行 |
 | 后续 | 对话式引导、Human 3.0、同步和公开导出 | 每项功能继续遵守候选记忆、人工确认和最小披露边界 |
 
-当前最优先工作是**Phase 3 React审核界面**，不是继续扩充Python原型页面。
+当前最优先工作是**Phase 4 Windows本地运行闭环**。
 
 ## MVP成功标准
 
