@@ -309,6 +309,9 @@ Private Repository 不等于密码保险箱。秘密一旦进入Git历史，删�
 - [x] Vault跨进程文件锁
 - [x] 记忆生命周期事务日志与异常恢复
 - [x] API、并发和事务恢复自动化测试
+- [x] React + TypeScript + Vite 本地审核界面
+- [x] 候选记忆的列表、编辑、确认、拒绝与冲突刷新提示
+- [x] 浏览器端到端审核流程测试
 
 当前版本已经提供本地审核界面，但完整的一键安装、升级和故障修复体验仍待完善。
 
@@ -449,6 +452,20 @@ python -m apps.api.main --vault ../my-ai-profile
 ```
 
 本地API设计、认证和响应格式参见[`docs/LOCAL_API.md`](docs/LOCAL_API.md)，行为兼容契约参见[`docs/BEHAVIOR_CONTRACT.md`](docs/BEHAVIOR_CONTRACT.md)。
+
+### React审核界面（开发者）
+
+```powershell
+# 终端一：启动本地API，复制输出的Bearer token
+python -m apps.api.main --vault C:\absolute\path\my-ai-profile
+
+# 终端二：启动React审核界面
+cd apps/web
+npm install
+npm run dev
+```
+
+浏览器中填入本次启动显示的令牌后，即可审核候选记忆。令牌只保存在当前页面内存，不写入浏览器存储或构建产物。完整说明见[`docs/WEB_REVIEW_UI.md`](docs/WEB_REVIEW_UI.md)。
 
 其他命令：
 

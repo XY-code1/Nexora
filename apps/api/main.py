@@ -11,7 +11,7 @@ from typing import Annotated, Any
 import uvicorn
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -201,6 +201,18 @@ def create_app(vault: Path, token: str | None = None) -> FastAPI:
     @app.post("/api/v1/memories/{record_id}/supersede", dependencies=[auth])
     def supersede(record_id: str, data: ActionInput) -> dict[str, Any]:
         return lifecycle(record_id, data, "supersede")
+
+    web_dist = Path(__file__).parents[1] / "web" / "dist"
+    index = web_dist / "index.html"
+    if index.is_file():
+        @app.get("/{path:path}", include_in_schema=False)
+        def web(path: str) -> FileResponse:
+            candidate = (web_dist / path).resolve()
+            try:
+                candidate.relative_to(web_dist.resolve())
+            except ValueError:
+                candidate = index
+            return FileResponse(candidate if candidate.is_file() else index, headers={"Cache-Control": "no-store"})
 
     return app
 

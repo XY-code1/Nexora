@@ -1,0 +1,239 @@
+# Personal AI Profile — Agent 交接说明
+
+> 交接基线：`main` / `d90de41`
+> 仓库：<https://github.com/XY-code1/personal-ai-profile>
+> 更新日期：2026-11-02
+> 当前阶段：Phase 0、Phase 1、Phase 2 已完成；Phase 3 开发中。
+
+## 1. 项目目标
+
+把 Personal AI Profile 建设成一个：
+
+- 开源优先；
+- Local-first；
+- Model-agnostic；
+- Privacy-first；
+- 用户完全控制本地数据；
+- 可在不同 AI 之间共享经过授权的个人上下文；
+- 后续可扩展为 Windows 桌面产品。
+
+私人 Markdown/Obsidian Vault 是唯一数据事实源。公共仓库只能包含程序、空模板、测试合成数据和文档，不能包含任何真实私人档案。
+
+## 2. 当前技术架构
+
+```text
+profile.py CLI ------------------\
+review_app.py 本地旧审核界面 -----\
+apps/api FastAPI -------------------> core/profile.py ---> Private Markdown Vault
+mcp_server.py MCP stdio ----------/          |
+                                      core/access.py
+                                      AI访问策略
+```
+
+### 目录职责
+
+```text
+apps/api/                    FastAPI本地API
+core/profile.py              领域逻辑、Vault存储、文件锁、事务恢复
+core/access.py               ai_access唯一权威实现
+mcp_server.py                最小权限MCP适配器
+profile.py                   兼容CLI，不放领域逻辑
+review_app.py                迁移期旧审核界面
+template/                    公共空Vault模板
+docs/                        架构、隐私、生命周期和API文档
+tests/                       合成临时Vault测试
+```
+
+不要重新把业务逻辑写回`profile.py`、`mcp_server.py`、`review_app.py`或未来React组件。
+
+## 3. 已完成
+
+### Phase 0 — 行为冻结
+
+- 已建立[`docs/BEHAVIOR_CONTRACT.md`](docs/BEHAVIOR_CONTRACT.md)。
+- 已冻结CLI、MCP、记忆生命周期、目录状态和`ai_access`行为。
+- 已明确公共仓库与私人Vault边界。
+
+### Phase 1 — Core抽取
+
+- 档案和记忆逻辑已迁移到`core/profile.py`。
+- AI读取策略已集中到`core/access.py`。
+- `profile.py`保留原命令和Python导入兼容性。
+- MCP与旧审核界面已改为调用Core。
+- MCP中重复的frontmatter/权限实现已删除。
+
+### Phase 2 — 本地API与一致性
+
+- FastAPI版本化接口：`/api/v1`。
+- 服务入口：`python -m apps.api.main --vault <PRIVATE_VAULT>`。
+- 只监听`127.0.0.1`。
+- 健康检查以外均要求Bearer启动令牌。
+- Trusted Host仅允许`127.0.0.1`与`localhost`。
+- API只接受记忆ID，不接受客户端文件路径。
+- SHA-256 revision乐观并发控制。
+- 过期修改返回`409 REVISION_CONFLICT`。
+- Vault级跨进程文件锁，CLI、MCP、旧UI和API共用。
+- confirm、reject、forget、supersede具有事务日志和异常恢复。
+- 统一成功、错误和参数校验响应。
+- Lock、Transaction与Audit运行时目录不会进入私人Git历史。
+
+接口清单与响应格式见[`docs/LOCAL_API.md`](docs/LOCAL_API.md)。
+
+## 4. 现有API
+
+```text
+GET    /api/v1/health
+GET    /api/v1/capabilities
+GET    /api/v1/memories?status=candidate|confirmed|rejected|archived
+GET    /api/v1/memories/{id}
+POST   /api/v1/memories/candidates
+PATCH  /api/v1/memories/{id}
+POST   /api/v1/memories/{id}/confirm
+POST   /api/v1/memories/{id}/reject
+POST   /api/v1/memories/{id}/forget
+POST   /api/v1/memories/{id}/supersede
+```
+
+修改操作必须提交最近读取到的`expected_revision`。
+
+## 5. 不得破坏的安全边界
+
+1. 不读取、复制、提交或推送真实私人Vault。
+2. 所有测试使用`tempfile.TemporaryDirectory()`和合成数据。
+3. MCP只能读取授权信息和提出candidate，不能确认、拒绝、遗忘、替代、修改Profile或公开发布。
+4. 缺失或非法`ai_access`必须默认拒绝。
+5. `denied`和`local-only`不得通过MCP搜索或列表返回。
+6. `summary-only`只能返回显式`摘要/Summary`，不能由私密正文自动生成摘要。
+7. 本地HTTP服务不得监听`0.0.0.0`。
+8. 不把Bearer token、密码、API Key或私人路径编译进前端资源。
+9. 修改必须经过Core的文件锁和revision校验，不能让前端直接操作文件。
+10. 不删除`review_app.py`，直到React界面达到功能等价并经过一个兼容周期。
+
+## 6. 测试与验证
+
+安装：
+
+```powershell
+pip install -r requirements.txt
+```
+
+完整测试：
+
+```powershell
+python tests/test_smoke.py
+python tests/test_mcp_security.py
+python tests/test_memory_lifecycle.py
+python tests/test_review_app.py
+python tests/test_core_contract.py
+python tests/test_local_api.py
+python -m compileall -q .
+python -m pip check
+git diff --check
+```
+
+当前这些检查以及GitHub Actions均通过。GitHub Actions存在Node运行时弃用提示，但不影响当前测试结果；后续可在升级Actions版本时处理。
+
+## 7. 尚未完成
+
+- Phase 3 React + TypeScript + Vite审核界面已具备审核闭环，等待完整验收与提交。
+- Cookie/短期bootstrap会话；当前API令牌只适合开发入口。
+- `/shutdown`与优雅退出控制。
+- 单实例Launcher、自动端口选择、健康等待和浏览器打开。
+- Windows安装、升级、卸载和离线打包。
+- Schema migration、升级备份和恢复向导。
+- 可视化Profile、记忆时间线、隐私审计和Human 3.0趋势。
+- 对话式首次引导、渐进信息收集和月度复盘。
+- Git跨设备同步和冲突处理。
+- 公开内容白名单导出、脱敏预览和发布阻断。
+- 依赖锁文件、SBOM、签名与正式Release流程。
+
+## 8. 下一任务：Phase 3
+
+### 目标
+
+建立`apps/web/`，使用React + TypeScript + Vite替代Python字符串HTML作为主审核界面，但保留旧界面作为兼容入口。
+
+### 最小范围
+
+1. [x] 候选记忆列表。
+2. [x] 记忆详情。
+3. [x] 编辑候选记忆。
+4. [x] 确认与拒绝。
+5. [x] revision冲突提示与刷新。
+6. [x] 空状态、加载状态和统一错误状态。
+7. [x] 由FastAPI在生产模式托管Vite静态构建产物。
+
+### 暂时不要做
+
+- Electron或Tauri；
+- 云账户与远程API；
+- Redux等大型状态管理；
+- WebSocket；
+- 向量数据库；
+- Git同步；
+- 自动采集用户信息；
+- 完整自主Agent。
+
+### Phase 3验收标准
+
+- 达到`review_app.py`候选审核功能等价。
+- `npm run build`和`tsc --noEmit`通过。
+- 组件测试覆盖列表、编辑、确认、拒绝和409冲突。
+- Playwright完成至少一条创建候选→编辑→确认的真实浏览器流程。
+- 页面无外部网络请求。
+- 前端构建产物不包含Vault内容、Vault路径或Bearer token。
+- 支持键盘操作、焦点管理和基础可访问名称。
+- 原Python、MCP、API测试全部继续通过。
+
+## 9. 推荐实施顺序
+
+```text
+1. 读取README、docs/BEHAVIOR_CONTRACT.md、docs/LOCAL_API.md
+2. 运行全部现有测试并确认基线
+3. 创建最小apps/web Vite React TS项目
+4. 实现一个小型typed API client，不引入全局状态库
+5. 完成候选列表和详情
+6. 完成编辑、确认、拒绝与409处理
+7. 增加Vitest/Testing Library和Playwright
+8. FastAPI托管dist静态资源
+9. 运行Python+前端+E2E完整门禁
+10. 更新README和架构文档，等待用户确认后提交
+```
+
+## 10. 交接给其他Agent的启动提示词
+
+可将以下内容连同仓库地址直接发给下一位Agent：
+
+```text
+你接手的是 https://github.com/XY-code1/personal-ai-profile ，基线为main分支。
+
+先阅读：
+- README_AGENT_HANDOFF.md
+- docs/BEHAVIOR_CONTRACT.md
+- docs/LOCAL_API.md
+- docs/ARCHITECTURE.md
+
+先运行全部现有测试，确认基线后再开发Phase 3：React + TypeScript + Vite审核界面。
+
+必须遵守：
+1. 不访问、复制或提交任何真实私人Vault。
+2. Markdown Vault仍是唯一事实源。
+3. 所有文件操作和权限规则必须经过Core。
+4. MCP权限边界不得扩大。
+5. FastAPI只能监听loopback。
+6. 不删除旧review_app.py，直到React功能等价。
+7. 不引入Electron/Tauri、云服务、数据库、Redux或WebSocket。
+8. 开发完成后运行Python、前端、E2E和git diff检查。
+9. 先给出改动和验证结果，等待确认后再提交推送。
+
+Phase 3验收标准以README_AGENT_HANDOFF.md第8节为准。
+```
+
+## 11. 提交规则
+
+- 先检查`git status`，不要覆盖其他未提交工作。
+- 一个阶段使用一个聚焦提交，不混入私人数据或无关格式化。
+- 提交前运行完整门禁。
+- 未经用户明确要求，不提交、不推送、不创建Release。
+- 若API或行为发生变化，同步更新行为契约、API文档和测试。
+

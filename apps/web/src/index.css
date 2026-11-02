@@ -1,0 +1,6 @@
+:root { font-family: ui-sans-serif, system-ui, "Microsoft YaHei", sans-serif; color: #182623; background: #eef3ef; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100dvh; }
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #d0df45; outline-offset: 3px; }
