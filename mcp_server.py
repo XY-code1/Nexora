@@ -21,16 +21,13 @@ import re
 import stat
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
+from functools import wraps
 from pathlib import Path
-from typing import Literal
-
 from mcp.server.mcpserver import MCPServer
 
-import profile as profile_cli
+from core import profile as profile_cli
+from core.access import apply_access, extract_summary, get_access_level, is_readable_for_search
 
-AccessLevel = Literal["allowed", "summary-only", "local-only", "denied"]
-
-DEFAULT_ACCESS: AccessLevel = "denied"
 MAX_FILE_CHARS = 12_000
 MAX_LIST_ITEMS = 50
 MAX_RESPONSE_CHARS = 20_000
@@ -110,61 +107,12 @@ def read_limited(root: Path, candidate: Path, limit: int = MAX_FILE_CHARS) -> st
     return text
 
 
-def parse_frontmatter(text: str) -> dict[str, str]:
-    """Parse only the YAML-like frontmatter at the start of a Markdown file."""
-    if not text.startswith("---"):
-        return {}
-    end = text.find("\n---", 3)
-    if end == -1:
-        return {}
-    meta: dict[str, str] = {}
-    for line in text[3:end].splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or ":" not in line:
-            continue
-        key, _, value = line.partition(":")
-        meta[key.strip()] = value.strip()
-    return meta
-
-
-def get_access_level(text: str) -> AccessLevel:
-    meta = parse_frontmatter(text)
-    level = meta.get("ai_access", DEFAULT_ACCESS).lower().strip()
-    if level in ("allowed", "summary-only", "local-only", "denied"):
-        return level  # type: ignore[return-value]
-    return DEFAULT_ACCESS
-
-
-def extract_summary(text: str, max_chars: int = 800) -> str:
-    """Return only an explicit Summary section; never derive one from private body text."""
-    for pattern in (
-        r"(?ims)^##\s*Summary\s*\n(.+?)(?=\n##\s|\Z)",
-        r"(?ims)^##\s*摘要\s*\n(.+?)(?=\n##\s|\Z)",
-    ):
-        m = re.search(pattern, text)
-        if m:
-            body = m.group(1).strip()
-            if body:
-                return body[:max_chars]
-
-    return "（该记录没有显式摘要，正文未返回）"
-
-
-def apply_access(text: str, full_limit: int = 6000, summary_limit: int = 800) -> str:
-    """Return content according to ai_access, or a denial message."""
-    level = get_access_level(text)
-    if level == "denied":
-        return "（该内容被标记为 ai_access: denied，禁止读取）"
-    if level == "local-only":
-        return "（该内容被标记为 ai_access: local-only，当前 MCP 不返回正文）"
-    if level == "summary-only":
-        return extract_summary(text, max_chars=summary_limit)
-    return text[:full_limit]
-
-
-def is_readable_for_search(text: str) -> bool:
-    """denied and local-only are never returned by search/list tools."""
-    return get_access_level(text) in ("allowed", "summary-only")
+def vault_locked(function):
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        with profile_cli.vault_lock(get_vault()):
+            return function(*args, **kwargs)
+    return wrapper
 
 
 server = MCPServer(
@@ -185,6 +133,7 @@ server = MCPServer(
         "denied/local-only 不返回正文，summary-only 只返回摘要。"
     )
 )
+@vault_locked
 def get_profile() -> str:
     require_scope("profile:read")
     root = get_vault()
@@ -200,6 +149,7 @@ def get_profile() -> str:
         "denied/local-only 不返回正文，summary-only 只返回摘要。"
     )
 )
+@vault_locked
 def get_current_context() -> str:
     require_scope("context:read")
     root = get_vault()
@@ -216,6 +166,7 @@ def get_current_context() -> str:
         "summary-only 的条目只返回摘要。"
     )
 )
+@vault_locked
 def search_memory(query: str, limit: int = 8) -> list[dict[str, str]]:
     require_scope("memory:search")
     vault = get_vault()
@@ -247,6 +198,7 @@ def search_memory(query: str, limit: int = 8) -> list[dict[str, str]]:
         "summary-only 只返回摘要。"
     )
 )
+@vault_locked
 def list_projects() -> list[dict[str, str]]:
     require_scope("project:read")
     vault = get_vault()
@@ -311,6 +263,7 @@ def propose_memory(content: str, memory_type: str = "note", subject: str = "") -
         "这些内容仍是 candidate，模型不得当作已确认事实使用。"
     )
 )
+@vault_locked
 def list_pending() -> list[dict[str, str]]:
     require_scope("memory:pending")
     vault = get_vault()
@@ -336,6 +289,7 @@ def list_pending() -> list[dict[str, str]]:
         "尊重 ai_access：denied/local-only 不返回，summary-only 只返回摘要。"
     )
 )
+@vault_locked
 def get_human3_summary() -> str:
     require_scope("assessment:read")
     vault = get_vault()

@@ -13,5 +13,7 @@ jobs:
       - run: python tests/test_mcp_security.py
       - run: python tests/test_memory_lifecycle.py
       - run: python tests/test_review_app.py
+      - run: python tests/test_core_contract.py
+      - run: python tests/test_local_api.py
       - run: python -c "import mcp_server"
 

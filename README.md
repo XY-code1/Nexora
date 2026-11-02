@@ -301,6 +301,14 @@ Private Repository 不等于密码保险箱。秘密一旦进入Git历史，删�
 - [x] Human 3.0基础目录和问题模板
 - [x] 基础秘密扫描
 - [x] GitHub Actions冒烟测试
+- [x] Python Core抽取，CLI、MCP和Web入口共用领域逻辑
+- [x] 统一`ai_access`权限策略
+- [x] FastAPI版本化本地API
+- [x] Bearer启动会话、Host白名单和统一错误响应
+- [x] SHA-256 revision乐观并发控制
+- [x] Vault跨进程文件锁
+- [x] 记忆生命周期事务日志与异常恢复
+- [x] API、并发和事务恢复自动化测试
 
 当前版本已经提供本地审核界面，但完整的一键安装、升级和故障修复体验仍待完善。
 
@@ -313,6 +321,43 @@ start-review.vbs
 ```
 
 浏览器会打开本地审核界面，用于查看、修改、确认或拒绝候选记忆。服务只监听`127.0.0.1`，不会向局域网或公网开放。出现问题时可运行`start-review.cmd`查看诊断信息。
+
+## 工程进展报告（2026-11-02）
+
+### 已完成
+
+1. **档案与记忆核心**：初始化、验证、候选、编辑、确认、拒绝、遗忘、替代、冲突检测、来源记录和Human 3.0草稿。
+2. **Core分层**：`core/profile.py`成为领域和Vault操作的权威实现，`core/access.py`统一AI读取策略；原`profile.py`保留为兼容CLI。
+3. **跨AI访问**：MCP支持档案、上下文、项目、确认记忆、待审核记忆和Human 3.0摘要；高风险确认、删除和发布能力不向AI开放。
+4. **本地审核**：现有无命令行页面可编辑、确认和拒绝候选记忆。
+5. **本地API**：`apps/api`提供`/api/v1`接口，覆盖候选创建、查询、编辑以及confirm、reject、forget、supersede生命周期。
+6. **一致性与恢复**：所有本地入口共用Vault文件锁；修改要求revision；关键多文件操作通过事务日志在异常后回滚。
+7. **安全边界**：API仅监听loopback，使用随机Bearer令牌、Host白名单、输入模型、记录ID寻址、秘密扫描和默认拒绝策略。
+8. **自动化验证**：CLI、MCP权限、完整记忆生命周期、审核页面、Core契约、API认证、并发冲突和事务恢复均已进入CI。
+
+### 尚未完成
+
+- React + TypeScript + Vite产品界面；当前仍是Python服务端HTML原型。
+- 单实例Launcher、健康等待、浏览器安全会话交换和优雅关闭。
+- Windows安装、升级、卸载和离线打包。
+- Vault schema migration、版本升级备份和完整恢复向导。
+- 可视化档案、记忆时间线、隐私审计和Human 3.0趋势页面。
+- 对话式首次引导、渐进式信息收集和月度复盘。
+- Git跨设备同步、冲突解决和同步状态展示。
+- 公开内容白名单导出、脱敏预览和泄漏阻断流水线。
+- 完整依赖锁定、SBOM、发布签名和正式版本流程。
+
+### 接下来计划
+
+| 阶段 | 内容 | 验收标准 |
+|---|---|---|
+| Phase 3 | React + TypeScript + Vite审核界面 | 达到现有审核页面功能等价；类型检查、组件测试和Playwright通过；不产生外部请求 |
+| Phase 4 | Windows本地运行闭环 | 双击启动、单实例、自动选端口、健康检查、安全会话、正常关闭与崩溃恢复 |
+| Phase 5 | Vault隔离、Schema与恢复 | migration可回滚；自动备份；公共构建不包含私人路径或数据 |
+| Phase 6 | MCP统一测试与发布门禁 | 真实MCP协议测试、依赖锁定、SBOM、干净Windows离线运行 |
+| 后续 | 对话式引导、Human 3.0、同步和公开导出 | 每项功能继续遵守候选记忆、人工确认和最小披露边界 |
+
+当前最优先工作是**Phase 3 React审核界面**，不是继续扩充Python原型页面。
 
 ## MVP成功标准
 
@@ -398,7 +443,12 @@ python profile.py validate ../my-ai-profile
 # 启动本地MCP Gateway
 $env:PROFILE_VAULT="C:\absolute\path\my-ai-profile"
 python mcp_server.py
+
+# 启动开发者本地API（令牌会显示在当前终端）
+python -m apps.api.main --vault ../my-ai-profile
 ```
+
+本地API设计、认证和响应格式参见[`docs/LOCAL_API.md`](docs/LOCAL_API.md)，行为兼容契约参见[`docs/BEHAVIOR_CONTRACT.md`](docs/BEHAVIOR_CONTRACT.md)。
 
 其他命令：
 

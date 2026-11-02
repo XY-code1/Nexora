@@ -14,13 +14,13 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import profile as profile_cli
+from core import profile as profile_cli
 
 HOST = "127.0.0.1"
 MAX_BODY = 16_384
 
 
-def candidate_cards(vault: Path) -> str:
+def _candidate_cards(vault: Path) -> str:
     files = sorted((vault / "30 Memory" / "Inbox").glob("*.md"))
     if not files:
         return '<section class="empty"><h2>没有待确认记忆</h2><p>继续与已连接的AI对话，候选记忆会出现在这里。</p></section>'
@@ -43,6 +43,11 @@ def candidate_cards(vault: Path) -> str:
             '</article>'
         )
     return "".join(cards) or '<section class="empty"><h2>没有可审核的候选记忆</h2></section>'
+
+
+def candidate_cards(vault: Path) -> str:
+    with profile_cli.vault_lock(vault):
+        return _candidate_cards(vault)
 
 
 def shell(title: str, body: str, message: str = "") -> bytes:
@@ -118,8 +123,9 @@ class ReviewHandler(BaseHTTPRequestHandler):
         if parsed.path == "/candidate":
             filename = query.get("file", [""])[0]
             try:
-                path = profile_cli.safe_record(self.server.vault, "Inbox", filename)
-                metadata, body = profile_cli.read_record(path)
+                with profile_cli.vault_lock(self.server.vault):
+                    path = profile_cli.safe_record(self.server.vault, "Inbox", filename)
+                    metadata, body = profile_cli.read_record(path)
             except SystemExit as exc:
                 self.send_html(shell("未找到", f'<section class="panel"><p>{html.escape(str(exc))}</p></section>'), HTTPStatus.NOT_FOUND)
                 return
