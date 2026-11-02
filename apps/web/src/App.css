@@ -8,6 +8,7 @@ h2 { letter-spacing: -.045em; }
 .topbar-actions { display: flex; align-items: center; gap: 16px; }
 .local-badge, .status { color: #174c36; background: #dcebc8; border-radius: 999px; padding: 6px 10px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
 .text-button { color: #24453a; background: transparent; border: 0; border-bottom: 1px solid currentColor; padding: 3px 0; }
+.danger-link { color: #8b281f; }
 .intro { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; padding: 22px 0; color: #466056; }
 .intro p { max-width: 55ch; margin-bottom: 0; }
 .intro span { font: 700 .8rem ui-monospace, Consolas, monospace; color: #6a7d74; }
@@ -22,3 +23,5 @@ label { display: block; font-weight: 700; margin-bottom: 8px; } textarea, input 
 .gate { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: linear-gradient(135deg, #eaf2e4, #e7f0ee); }.gate-panel { width: min(100%, 510px); background: #fff; border: 1px solid #cbd8d0; padding: clamp(28px, 6vw, 56px); box-shadow: 14px 14px 0 #d6e4bb; }.gate-panel h1 { font-size: clamp(2rem, 7vw, 3.3rem); margin-bottom: 18px; }.gate-panel > p { color: #5e7368; line-height: 1.65; }.gate form { margin-top: 30px; }.gate button { width: 100%; margin-top: 18px; border: 1px solid #173d2e; border-radius: 8px; background: #173d2e; color: #fff; padding: 12px; font-weight: 700; }.field-error { color: #a42d23 !important; margin: 8px 0 0 !important; }.quiet { font-size: .8rem; margin-top: 22px; }code { font-family: ui-monospace, Consolas, monospace; }
 @media (max-width: 760px) { .app-shell { width: min(100% - 24px, 1280px); padding-top: 28px; }.topbar, .intro, .detail-footer { align-items: flex-start; flex-direction: column; }.topbar-actions { width: 100%; justify-content: space-between; }.workspace { grid-template-columns: 1fr; }.memory-list { border-right: 0; border-bottom: 1px solid #cbd8d0; max-height: 330px; overflow: auto; }.metadata { grid-template-columns: 1fr; }.detail-footer { gap: 14px; }.actions { width: 100%; }.actions button { flex: 1; }.notice { align-items: flex-start; flex-direction: column; } }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+.detail > label:not(:first-of-type) { margin-top: 18px; }

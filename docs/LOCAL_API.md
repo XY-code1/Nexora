@@ -21,6 +21,7 @@ POST   /api/v1/memories/{id}/confirm
 POST   /api/v1/memories/{id}/reject
 POST   /api/v1/memories/{id}/forget
 POST   /api/v1/memories/{id}/supersede
+POST   /api/v1/shutdown
 ```
 
 修改请求必须提交上一次读取到的`expected_revision`。记录已变化时返回`409 REVISION_CONFLICT`，不会覆盖其他进程的更新。
@@ -47,9 +48,12 @@ POST   /api/v1/memories/{id}/supersede
 {"error": {"code": "REVISION_CONFLICT", "message": "...", "details": {}}, "requestId": "..."}
 ```
 
+## Launcher集成
+
+`launcher.py`启动API时会注册优雅关闭回调，此时`POST /api/v1/shutdown`可用。直接通过`python -m apps.api.main`启动时，该端点返回`503 SHUTDOWN_UNAVAILABLE`。
+
 ## Phase 2 非目标
 
 - React 界面、Cookie 会话和 CSRF。
-- 单实例 Launcher、浏览器自动打开和优雅关闭。
 - Windows 安装包与桌面外壳。
 - 对外网络访问。

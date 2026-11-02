@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import uvicorn
-from fastapi import Depends, FastAPI, Header, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -84,7 +84,7 @@ def find(root: Path, folder: str, record_id: str) -> Path:
             raise domain_error(exc) from None
 
 
-def create_app(vault: Path, token: str | None = None) -> FastAPI:
+def create_app(vault: Path, token: str | None = None, web_dist: Path | None = None) -> FastAPI:
     root = vault.expanduser().resolve()
     missing = [name for name in profile.REQUIRED if not (root / name).is_file()]
     if missing:
@@ -94,6 +94,7 @@ def create_app(vault: Path, token: str | None = None) -> FastAPI:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
     app.state.vault = root
     app.state.token = token or secrets.token_urlsafe(32)
+    app.state.request_shutdown = None
 
     def authorize(authorization: Annotated[str | None, Header()] = None) -> None:
         scheme, _, credential = (authorization or "").partition(" ")
@@ -127,7 +128,15 @@ def create_app(vault: Path, token: str | None = None) -> FastAPI:
 
     @app.get("/api/v1/capabilities", dependencies=[auth])
     def capabilities() -> dict[str, Any]:
-        return envelope({"memoryLifecycle": True, "revisionControl": True, "fileLock": True})
+        return envelope({"memoryLifecycle": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
+
+    @app.post("/api/v1/shutdown", dependencies=[auth])
+    def shutdown(background_tasks: BackgroundTasks) -> dict[str, Any]:
+        callback = app.state.request_shutdown
+        if not callable(callback):
+            raise ApiError(503, "SHUTDOWN_UNAVAILABLE", "当前启动方式不支持远程关闭。")
+        background_tasks.add_task(callback)
+        return envelope({"status": "shutting-down"})
 
     @app.get("/api/v1/memories", dependencies=[auth])
     def list_memories(status: str = "candidate", limit: int = 50) -> dict[str, Any]:
@@ -202,7 +211,7 @@ def create_app(vault: Path, token: str | None = None) -> FastAPI:
     def supersede(record_id: str, data: ActionInput) -> dict[str, Any]:
         return lifecycle(record_id, data, "supersede")
 
-    web_dist = Path(__file__).parents[1] / "web" / "dist"
+    web_dist = web_dist or Path(__file__).parents[1] / "web" / "dist"
     index = web_dist / "index.html"
     if index.is_file():
         @app.get("/{path:path}", include_in_schema=False)

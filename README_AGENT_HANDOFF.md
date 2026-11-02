@@ -1,9 +1,9 @@
 # Personal AI Profile — Agent 交接说明
 
-> 交接基线：`main` / `d90de41`
+> 交接基线：`main`（Phase 4工作树，尚未提交）
 > 仓库：<https://github.com/XY-code1/personal-ai-profile>
 > 更新日期：2026-11-02
-> 当前阶段：Phase 0、Phase 1、Phase 2 已完成；Phase 3 开发中。
+> 当前阶段：Phase 0、Phase 1、Phase 2、Phase 3、Phase 4 已完成；下一步为 Phase 5。
 
 ## 1. 项目目标
 
@@ -34,6 +34,7 @@ mcp_server.py MCP stdio ----------/          |
 
 ```text
 apps/api/                    FastAPI本地API
+apps/web/                    React + TypeScript + Vite审核界面
 core/profile.py              领域逻辑、Vault存储、文件锁、事务恢复
 core/access.py               ai_access唯一权威实现
 mcp_server.py                最小权限MCP适配器
@@ -79,6 +80,20 @@ tests/                       合成临时Vault测试
 
 接口清单与响应格式见[`docs/LOCAL_API.md`](docs/LOCAL_API.md)。
 
+### Phase 3 — React审核界面
+
+- 已完成列表、编辑、确认、拒绝、拒绝原因和409冲突处理。
+- 已增加确认步骤、断开连接、错误令牌重试和静态SPA托管。
+- Vitest组件测试和Playwright真实浏览器闭环均已建立。
+
+### Phase 4 — Windows本地运行闭环
+
+- `launcher.py`提供单实例、自动端口、健康等待、浏览器启动与运行时清理。
+- 启动令牌通过URL fragment一次传递，页面立即清除URL并只在内存保留。
+- 已增加鉴权`POST /api/v1/shutdown`和正常退出。
+- `start-review.cmd` / `start-review.vbs`已切换到新Launcher。
+- 已增加启动、复用现有实例、健康检查、关闭和清理的集成测试。
+
 ## 4. 现有API
 
 ```text
@@ -92,6 +107,7 @@ POST   /api/v1/memories/{id}/confirm
 POST   /api/v1/memories/{id}/reject
 POST   /api/v1/memories/{id}/forget
 POST   /api/v1/memories/{id}/supersede
+POST   /api/v1/shutdown
 ```
 
 修改操作必须提交最近读取到的`expected_revision`。
@@ -126,6 +142,7 @@ python tests/test_memory_lifecycle.py
 python tests/test_review_app.py
 python tests/test_core_contract.py
 python tests/test_local_api.py
+python tests/test_launcher.py
 python -m compileall -q .
 python -m pip check
 git diff --check
@@ -135,10 +152,6 @@ git diff --check
 
 ## 7. 尚未完成
 
-- Phase 3 React + TypeScript + Vite审核界面已具备审核闭环，等待完整验收与提交。
-- Cookie/短期bootstrap会话；当前API令牌只适合开发入口。
-- `/shutdown`与优雅退出控制。
-- 单实例Launcher、自动端口选择、健康等待和浏览器打开。
 - Windows安装、升级、卸载和离线打包。
 - Schema migration、升级备份和恢复向导。
 - 可视化Profile、记忆时间线、隐私审计和Human 3.0趋势。
@@ -147,21 +160,19 @@ git diff --check
 - 公开内容白名单导出、脱敏预览和发布阻断。
 - 依赖锁文件、SBOM、签名与正式Release流程。
 
-## 8. 下一任务：Phase 3
+## 8. 下一任务：Phase 5
 
 ### 目标
 
-建立`apps/web/`，使用React + TypeScript + Vite替代Python字符串HTML作为主审核界面，但保留旧界面作为兼容入口。
+强化Vault与公共框架隔离，建立可演进的Schema、迁移、升级备份和恢复机制。
 
 ### 最小范围
 
-1. [x] 候选记忆列表。
-2. [x] 记忆详情。
-3. [x] 编辑候选记忆。
-4. [x] 确认与拒绝。
-5. [x] revision冲突提示与刷新。
-6. [x] 空状态、加载状态和统一错误状态。
-7. [x] 由FastAPI在生产模式托管Vite静态构建产物。
+1. 明确并校验Vault schema version。
+2. 启动前自动备份，迁移失败可回滚。
+3. 禁止把私人Vault放入公共框架Git根目录。
+4. 建立公开导出白名单staging，禁止直接复制私人目录。
+5. 增加旧schema升级、故障注入、备份恢复和泄漏阻断测试。
 
 ### 暂时不要做
 
@@ -174,29 +185,24 @@ git diff --check
 - 自动采集用户信息；
 - 完整自主Agent。
 
-### Phase 3验收标准
+### Phase 5验收标准
 
-- 达到`review_app.py`候选审核功能等价。
-- `npm run build`和`tsc --noEmit`通过。
-- 组件测试覆盖列表、编辑、确认、拒绝和409冲突。
-- Playwright完成至少一条创建候选→编辑→确认的真实浏览器流程。
-- 页面无外部网络请求。
-- 前端构建产物不包含Vault内容、Vault路径或Bearer token。
-- 支持键盘操作、焦点管理和基础可访问名称。
-- 原Python、MCP、API测试全部继续通过。
+- 每个migration可从上一版本升级，并在失败后恢复原始Vault。
+- 备份与恢复不会复制到公共仓库。
+- 框架拒绝使用位于公共仓库内部的私人Vault。
+- 合成敏感档案能够阻止公开导出或发布。
+- 所有现有Python、MCP、API、React、Launcher与E2E测试继续通过。
 
 ## 9. 推荐实施顺序
 
 ```text
 1. 读取README、docs/BEHAVIOR_CONTRACT.md、docs/LOCAL_API.md
 2. 运行全部现有测试并确认基线
-3. 创建最小apps/web Vite React TS项目
-4. 实现一个小型typed API client，不引入全局状态库
-5. 完成候选列表和详情
-6. 完成编辑、确认、拒绝与409处理
-7. 增加Vitest/Testing Library和Playwright
-8. FastAPI托管dist静态资源
-9. 运行Python+前端+E2E完整门禁
+3. 冻结当前schema并设计只支持相邻版本的最小migration
+4. 增加升级前备份和失败回滚
+5. 强制公共仓库与私人Vault路径隔离
+6. 建立公开导出白名单staging与泄漏阻断测试
+7. 运行Python、前端、Launcher与E2E完整门禁
 10. 更新README和架构文档，等待用户确认后提交
 ```
 
@@ -213,7 +219,7 @@ git diff --check
 - docs/LOCAL_API.md
 - docs/ARCHITECTURE.md
 
-先运行全部现有测试，确认基线后再开发Phase 3：React + TypeScript + Vite审核界面。
+先运行全部现有测试，确认基线后再开发Phase 5：Vault隔离、Schema与恢复。
 
 必须遵守：
 1. 不访问、复制或提交任何真实私人Vault。
@@ -226,7 +232,7 @@ git diff --check
 8. 开发完成后运行Python、前端、E2E和git diff检查。
 9. 先给出改动和验证结果，等待确认后再提交推送。
 
-Phase 3验收标准以README_AGENT_HANDOFF.md第8节为准。
+Phase 5验收标准以README_AGENT_HANDOFF.md第8节为准。
 ```
 
 ## 11. 提交规则

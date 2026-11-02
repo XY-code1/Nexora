@@ -1,10 +1,7 @@
 Option Explicit
-Dim shell, fso, root, vault, command
+Dim shell, fso, root, command
 Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 root = fso.GetParentFolderName(WScript.ScriptFullName)
-vault = shell.ExpandEnvironmentStrings("%PROFILE_VAULT%")
-If vault = "%PROFILE_VAULT%" Then vault = fso.BuildPath(fso.GetParentFolderName(root), "my-ai-profile")
-command = "pythonw.exe """ & fso.BuildPath(root, "review_app.py") & """ --vault """ & vault & """"
+command = "pythonw.exe """ & fso.BuildPath(root, "launcher.py") & """"
 shell.Run command, 0, False
-

@@ -29,6 +29,7 @@ jobs:
         working-directory: apps/web
       - run: npm run build
         working-directory: apps/web
+      - run: python tests/test_launcher.py
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
       - run: npm run e2e

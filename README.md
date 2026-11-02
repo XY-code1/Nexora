@@ -312,6 +312,7 @@ Private Repository 不等于密码保险箱。秘密一旦进入Git历史，删�
 - [x] React + TypeScript + Vite 本地审核界面
 - [x] 候选记忆的列表、编辑、确认、拒绝与冲突刷新提示
 - [x] 浏览器端到端审核流程测试
+- [x] Windows单实例Launcher、自动端口、浏览器连接与优雅关闭
 
 当前版本已经提供本地审核界面，但完整的一键安装、升级和故障修复体验仍待完善。
 
@@ -353,12 +354,12 @@ start-review.vbs
 
 | 阶段 | 内容 | 验收标准 |
 |---|---|---|
-| Phase 4 | Windows本地运行闭环 | 双击启动、单实例、自动选端口、健康检查、安全会话、正常关闭与崩溃恢复 |
+| Phase 4 ✅ | Windows本地运行闭环 | 双击启动、单实例、自动选端口、健康检查、安全会话、正常关闭与崩溃恢复 |
 | Phase 5 | Vault隔离、Schema与恢复 | migration可回滚；自动备份；公共构建不包含私人路径或数据 |
 | Phase 6 | MCP统一测试与发布门禁 | 真实MCP协议测试、依赖锁定、SBOM、干净Windows离线运行 |
 | 后续 | 对话式引导、Human 3.0、同步和公开导出 | 每项功能继续遵守候选记忆、人工确认和最小披露边界 |
 
-当前最优先工作是**Phase 4 Windows本地运行闭环**。
+当前最优先工作是**Phase 5 Vault隔离、Schema与恢复**。
 
 ## MVP成功标准
 
@@ -464,6 +465,8 @@ npm run dev
 ```
 
 浏览器中填入本次启动显示的令牌后，即可审核候选记忆。令牌只保存在当前页面内存，不写入浏览器存储或构建产物。完整说明见[`docs/WEB_REVIEW_UI.md`](docs/WEB_REVIEW_UI.md)。
+
+Windows用户可直接双击`start-review.vbs`进入React审核界面；Launcher会自动选择端口、传递本次会话并复用已有实例。详细机制见[`docs/WINDOWS_LAUNCHER.md`](docs/WINDOWS_LAUNCHER.md)。
 
 其他命令：
 

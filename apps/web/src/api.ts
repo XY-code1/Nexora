@@ -49,4 +49,5 @@ export class ApiClient {
   listCandidates() { return this.request<Memory[]>('/api/v1/memories?status=candidate') }
   edit(id: string, content: string, expected_revision: string) { return this.request<Memory>(`/api/v1/memories/${id}`, { method: 'PATCH', body: JSON.stringify({ content, expected_revision }) }) }
   action(id: string, action: 'confirm' | 'reject', expected_revision: string, reason = '') { return this.request<{ id: string; action: string; status: string }>(`/api/v1/memories/${id}/${action}`, { method: 'POST', body: JSON.stringify({ expected_revision, reason }) }) }
+  shutdown() { return this.request<{ status: string }>('/api/v1/shutdown', { method: 'POST' }) }
 }

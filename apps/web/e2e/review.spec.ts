@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('审核候选记忆：编辑后确认', async ({ page }) => {
+  page.on('dialog', (dialog) => dialog.accept())
   await page.goto('/')
   await page.getByLabel('本地启动令牌').fill('e2e-token')
   await page.getByRole('button', { name: '连接审核空间' }).click()

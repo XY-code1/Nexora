@@ -15,11 +15,19 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "vault"
         profile.init(str(vault))
-        app = create_app(vault, token="test-token")
+        web_dist = Path(tmp) / "web-dist"
+        (web_dist / "assets").mkdir(parents=True)
+        (web_dist / "index.html").write_text("<h1>review app</h1>", encoding="utf-8")
+        (web_dist / "assets" / "app.js").write_text("console.log('review')", encoding="utf-8")
+        app = create_app(vault, token="test-token", web_dist=web_dist)
         client = TestClient(app, base_url="http://localhost")
         headers = {"Authorization": "Bearer test-token"}
 
         assert client.get("/api/v1/health").status_code == 200
+        assert "review app" in client.get("/").text
+        assert "review app" in client.get("/client-route").text
+        assert "console.log" in client.get("/assets/app.js").text
+        assert client.get("/%2e%2e/secret.txt").status_code == 200
         assert client.get("/api/v1/memories").status_code == 401
         assert client.get("/api/v1/health", headers={"Host": "evil.example"}).status_code == 400
         invalid = client.post("/api/v1/memories/candidates", headers=headers, json={"content": ""})
