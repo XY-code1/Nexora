@@ -111,7 +111,7 @@ describe('review workspace', () => {
     expect(screen.getByText('回答先给结论。')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '隐私审计' }))
     await screen.findByText('所有统计仅在本机生成')
-    fireEvent.click(screen.getByRole('button', { name: 'Human 3.0' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Human 3.0趋势' }))
     await screen.findByText('还没有已确认的复盘')
     expect(fetchMock).toHaveBeenCalledTimes(5)
   })
@@ -157,5 +157,47 @@ describe('review workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存为候选并继续' }))
     await screen.findByText('回答已保存为候选记忆，确认前不会成为长期事实。')
     expect(screen.getByText('希望如何沟通？')).toBeInTheDocument()
+  })
+
+  it('starts a Human 3.0 reflection without diagnosing the user', async () => {
+    const session = {
+      id: 'h3-20261102-1234abcd', date: '2026-11-02', status: 'draft', summary: '', plan: '', readyToConfirm: false,
+      revision: 'a'.repeat(64), disclaimer: 'Human 3.0 仅用于自我反思，不是医学或心理诊断。',
+      dimensions: [{ key: 'mind', title: '心智与认知', prompt: '最近哪些事实改变了你的看法？', reflection: '', evidence: '', evidenceState: 'insufficient', score: null, answered: false }],
+    }
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: { session: null }, meta: { requestId: '2' } }))
+      .mockImplementationOnce(() => response({ data: { session }, meta: { requestId: '3' } }))
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByText('暂时没有候选记忆')
+    fireEvent.click(screen.getByRole('button', { name: '月度复盘' }))
+    await screen.findByRole('button', { name: '开始本月复盘' })
+    fireEvent.click(screen.getByRole('button', { name: '开始本月复盘' }))
+    await screen.findByText('最近哪些事实改变了你的看法？')
+    expect(screen.getByText(/不是医学或心理诊断/)).toBeInTheDocument()
+  })
+
+  it('requires saving the visible Human 3.0 conclusion before confirmation', async () => {
+    const dimension = (key: string) => ({ key, title: key, prompt: '', reflection: '事实', evidence: '', evidenceState: 'insufficient', score: 5, answered: true })
+    const session = {
+      id: 'h3-20261102-1234abcd', date: '2026-11-02', status: 'draft', summary: '已保存摘要', plan: '已保存计划', readyToConfirm: true,
+      revision: 'a'.repeat(64), disclaimer: '仅用于自我反思', dimensions: ['mind', 'body', 'spirit', 'vocation'].map(dimension),
+    }
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: { session }, meta: { requestId: '2' } }))
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByText('暂时没有候选记忆')
+    fireEvent.click(screen.getByRole('button', { name: '月度复盘' }))
+    const confirm = await screen.findByRole('button', { name: '确认正式复盘' })
+    expect(confirm).toBeEnabled()
+    fireEvent.change(screen.getByLabelText('复盘摘要'), { target: { value: '尚未保存的新摘要' } })
+    expect(confirm).toBeDisabled()
+    expect(screen.getByText(/先保存当前摘要/)).toBeInTheDocument()
   })
 })

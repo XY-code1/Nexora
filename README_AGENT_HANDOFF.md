@@ -1,9 +1,9 @@
 # Personal AI Profile — Agent 交接说明
 
-> 交接基线：`main`（Phase 8完成）
+> 交接基线：`main`（Phase 9完成）
 > 仓库：<https://github.com/XY-code1/personal-ai-profile>
 > 更新日期：2026-11-02
-> 当前阶段：Phase 0–8已完成；下一阶段为Phase 9。
+> 当前阶段：Phase 0–9已完成；下一阶段为Phase 10。
 
 ## 1. 项目目标
 
@@ -145,6 +145,7 @@ python tests/test_core_contract.py
 python tests/test_local_api.py
 python tests/test_visualization.py
 python tests/test_onboarding.py
+python tests/test_human3.py
 python tests/test_vault_management.py
 python tests/test_release_gate.py
 python tests/test_launcher.py
@@ -221,7 +222,19 @@ git diff --check
 
 Phase 8安全与隐私审计未发现阻断问题。下一阶段为Phase 9：Human 3.0对话式复盘闭环。
 
-## 10. 推荐实施顺序
+## 10. Phase 9实现
+
+- `core/human3.py`实现四维草稿、revision更新和事务化确认。
+- API新增Human 3.0 session、维度、总结及确认端点。
+- React新增月度复盘对话、信息状态、自评分、摘要和30天计划。
+- 草稿不进入趋势或MCP；确认后才移动到History。
+- 评分由用户填写，信息不足允许明确标记，系统不推断或诊断。
+- Python、React和Playwright覆盖完整确认闭环。
+- 详细边界见`docs/HUMAN3_LIFECYCLE.md`。
+
+Phase 9安全与隐私审计未发现阻断问题。下一阶段为Phase 10：跨设备同步、冲突处理与公开发布工作流。
+
+## 11. 推荐实施顺序
 
 ```text
 1. 读取README、docs/BEHAVIOR_CONTRACT.md、docs/LOCAL_API.md
@@ -234,7 +247,7 @@ Phase 8安全与隐私审计未发现阻断问题。下一阶段为Phase 9：Hum
 8. 更新README和可视化文档，等待用户确认后提交
 ```
 
-## 11. 交接给其他Agent的启动提示词
+## 12. 交接给其他Agent的启动提示词
 
 可将以下内容连同仓库地址直接发给下一位Agent：
 
@@ -247,7 +260,7 @@ Phase 8安全与隐私审计未发现阻断问题。下一阶段为Phase 9：Hum
 - docs/LOCAL_API.md
 - docs/ARCHITECTURE.md
 
-先运行全部现有测试，确认基线后再开发Phase 9：Human 3.0对话式复盘闭环。
+先运行全部现有测试，确认基线后再开发Phase 10：跨设备同步、冲突处理与公开发布工作流。
 
 必须遵守：
 1. 不访问、复制或提交任何真实私人Vault。
@@ -260,10 +273,10 @@ Phase 8安全与隐私审计未发现阻断问题。下一阶段为Phase 9：Hum
 8. 开发完成后运行Python、前端、E2E和git diff检查。
 9. 先给出改动和验证结果，等待确认后再提交推送。
 
-Phase 9必须延续候选、用户确认、最小披露和非诊断边界。
+Phase 10必须延续Vault隔离、用户确认、最小披露和冲突不覆盖边界。
 ```
 
-## 12. 提交规则
+## 13. 提交规则
 
 - 先检查`git status`，不要覆盖其他未提交工作。
 - 一个阶段使用一个聚焦提交，不混入私人数据或无关格式化。

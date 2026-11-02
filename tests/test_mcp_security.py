@@ -40,6 +40,13 @@ def main():
             raise AssertionError("scope check failed open")
         except PermissionError:
             pass
+
+        os.environ["PROFILE_SCOPES"] += ",assessment:read"
+        history = vault / "40 Reviews" / "Human3" / "History"
+        (history / "z-rejected.md").write_text("---\nstatus: rejected\nai_access: summary-only\n---\n\n## 摘要\n\n不得返回", encoding="utf-8")
+        (history / "a-confirmed.md").write_text("---\nstatus: confirmed\nai_access: summary-only\n---\n\n## 摘要\n\n已确认复盘", encoding="utf-8")
+        result = m.get_human3_summary()
+        assert result == "已确认复盘" and "不得返回" not in result
     print("MCP security tests passed")
 
 

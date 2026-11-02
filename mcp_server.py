@@ -299,12 +299,16 @@ def get_human3_summary() -> str:
     require_scope("assessment:read")
     vault = get_vault()
     history = vault / "40 Reviews" / "Human3" / "History"
-    files = sorted(history.glob("*.md"), reverse=True)[:MAX_LIST_ITEMS]
-    if not files:
+    confirmed = []
+    for file in sorted(history.glob("*.md"), reverse=True)[:MAX_LIST_ITEMS]:
+        text = read_limited(vault, file)
+        metadata, _ = profile_cli.parse_record(text)
+        if metadata.get("status") == "confirmed":
+            confirmed.append(text)
+    if not confirmed:
         audit("human3_read", {"agent": agent_id(), "results": "0"})
         return "暂无已确认的 Human3 复盘。"
-    text = read_limited(vault, files[0])
-    result = apply_access(text, full_limit=5000, summary_limit=1200)
+    result = apply_access(confirmed[0], full_limit=5000, summary_limit=1200)
     audit("human3_read", {"agent": agent_id(), "results": "1"})
     return result
 

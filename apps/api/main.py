@@ -18,6 +18,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from core import profile
 from core.access import extract_summary
 from core.onboarding import onboarding_state, propose_answer
+from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
 from core.visualization import human3_trend, privacy_audit, profile_overview, timeline
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
@@ -50,6 +51,24 @@ class OnboardingInput(BaseModel):
     topic: str = Field(min_length=1, max_length=40)
     content: str = Field(min_length=1, max_length=1000)
     consent: bool
+
+
+class Human3DimensionInput(BaseModel):
+    reflection: str = Field(min_length=1, max_length=2000)
+    evidence: str = Field(default="", max_length=1200)
+    evidence_state: str = Field(pattern=r"^(sufficient|limited|insufficient)$")
+    score: float = Field(ge=0, le=10)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class Human3ConclusionInput(BaseModel):
+    summary: str = Field(min_length=1, max_length=1600)
+    plan: str = Field(min_length=1, max_length=1600)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RevisionInput(BaseModel):
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 def envelope(data: Any, revision: str | None = None) -> dict[str, Any]:
@@ -142,7 +161,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
 
     @app.get("/api/v1/capabilities", dependencies=[auth])
     def capabilities() -> dict[str, Any]:
-        return envelope({"memoryLifecycle": True, "visualization": True, "onboarding": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
+        return envelope({"memoryLifecycle": True, "visualization": True, "onboarding": True, "human3Reflection": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
 
     @app.get("/api/v1/visualization/profile", dependencies=[auth])
     def visualization_profile() -> dict[str, Any]:
@@ -179,6 +198,46 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             raise domain_error(exc) from None
         with profile.vault_lock(root):
             return envelope({"candidateId": profile.read_record(path)[0]["id"], "state": onboarding_state(root)})
+
+    @app.get("/api/v1/human3/session", dependencies=[auth])
+    def get_human3_session() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope({"session": current_session(root)})
+
+    @app.post("/api/v1/human3/session", status_code=201, dependencies=[auth])
+    def create_human3_session() -> dict[str, Any]:
+        try:
+            path = start_session(str(root))
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope({"session": session_view(root, path)})
+
+    @app.put("/api/v1/human3/session/{session_id}/dimensions/{dimension}", dependencies=[auth])
+    def update_human3_dimension(session_id: str, dimension: str, data: Human3DimensionInput) -> dict[str, Any]:
+        try:
+            path = save_dimension(str(root), session_id, dimension, data.reflection, data.evidence, data.evidence_state, data.score, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope({"session": session_view(root, path)})
+
+    @app.put("/api/v1/human3/session/{session_id}/conclusion", dependencies=[auth])
+    def update_human3_conclusion(session_id: str, data: Human3ConclusionInput) -> dict[str, Any]:
+        try:
+            path = save_conclusion(str(root), session_id, data.summary, data.plan, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope({"session": session_view(root, path)})
+
+    @app.post("/api/v1/human3/session/{session_id}/confirm", dependencies=[auth])
+    def confirm_human3_session(session_id: str, data: RevisionInput) -> dict[str, Any]:
+        try:
+            destination = confirm_session(str(root), session_id, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        return envelope({"id": session_id, "status": "confirmed", "file": destination.name})
 
     @app.post("/api/v1/shutdown", dependencies=[auth])
     def shutdown(background_tasks: BackgroundTasks) -> dict[str, Any]:

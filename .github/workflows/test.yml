@@ -23,6 +23,7 @@ jobs:
       - run: python tests/test_local_api.py
       - run: python tests/test_visualization.py
       - run: python tests/test_onboarding.py
+      - run: python tests/test_human3.py
       - run: python tests/test_vault_management.py
       - run: python tests/test_release_gate.py
       - run: python -c "import mcp_server"
@@ -67,6 +68,7 @@ jobs:
       - run: python tests/test_mcp_protocol.py
       - run: python tests/test_visualization.py
       - run: python tests/test_onboarding.py
+      - run: python tests/test_human3.py
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "24"
