@@ -363,3 +363,50 @@ def stage_public_export(vault: Path, relative_files: list[str], staging: Path) -
             if owned_workspace:
                 shutil.rmtree(workspace, ignore_errors=True)
         return [output / relative for relative, _text in prepared]
+
+
+def redact_text(text: str) -> str:
+    """Mask secret-like substrings so a preview can be shared safely."""
+    redacted = text
+    for label, pattern in SECRET_PATTERNS.items():
+        redacted = pattern.sub(lambda _match: f"[已脱敏:{label}]", redacted)
+    return redacted
+
+
+def preview_public_export(vault: Path, relative_files: list[str]) -> dict[str, object]:
+    """Dry-run the public export: report eligibility, leak matches, and a redacted preview."""
+    root = vault.resolve()
+    assert_vault_isolated(root)
+    files: list[dict[str, object]] = []
+    for relative in relative_files:
+        source = (root / relative).resolve()
+        if (not _inside(source, root) or source.suffix.lower() != ".md"
+                or not source.is_file() or source.is_symlink()):
+            files.append({
+                "relative": relative,
+                "publishable": False,
+                "reasons": ["路径无效或不是Vault内的Markdown文件"],
+                "secret_matches": [],
+                "redacted_preview": "",
+            })
+            continue
+        text = source.read_text(encoding="utf-8")
+        metadata, _ = parse_record(text)
+        matches = [
+            {"label": label, "count": len(pattern.findall(text))}
+            for label, pattern in SECRET_PATTERNS.items()
+            if pattern.search(text)
+        ]
+        reasons: list[str] = []
+        if metadata.get("visibility") != "public":
+            reasons.append("未显式标记 visibility: public")
+        if matches:
+            reasons.append("包含疑似敏感信息")
+        files.append({
+            "relative": relative,
+            "publishable": not reasons,
+            "reasons": reasons,
+            "secret_matches": matches,
+            "redacted_preview": redact_text(text),
+        })
+    return {"files": files}

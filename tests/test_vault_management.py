@@ -127,6 +127,25 @@ with tempfile.TemporaryDirectory() as temporary:
     public.write_text("---\nvisibility: public\n---\n\napi_key: abcdefghijklmnop\n", encoding="utf-8")
     expect_failure(lambda: vm.stage_public_export(vault, ["10 Profile/Public.md"], staging), "敏感信息")
 
+    report = vm.preview_public_export(vault, ["10 Profile/Public.md"])
+    assert report["files"][0]["publishable"] is False
+    assert report["files"][0]["secret_matches"]
+    assert "已脱敏" in report["files"][0]["redacted_preview"]
+    assert "abcdefghijklmnop" not in report["files"][0]["redacted_preview"]
+
+    public.write_text("---\nvisibility: public\n---\n\n# Public\n\nHello world\n", encoding="utf-8")
+    report = vm.preview_public_export(vault, ["10 Profile/Public.md"])
+    assert report["files"][0]["publishable"] is True
+    assert report["files"][0]["secret_matches"] == []
+    assert "Hello world" in report["files"][0]["redacted_preview"]
+
+    report = vm.preview_public_export(vault, ["10 Profile/Private.md"])
+    assert report["files"][0]["publishable"] is False
+    assert any("visibility" in reason for reason in report["files"][0]["reasons"])
+
+    report = vm.preview_public_export(vault, ["../escape.md"])
+    assert report["files"][0]["publishable"] is False
+
     fake_framework = base / "public-framework"
     embedded = fake_framework / "private-vault"
     embedded.mkdir(parents=True)
