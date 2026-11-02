@@ -318,8 +318,9 @@ Private Repository 不等于密码保险箱。秘密一旦进入Git历史，删�
 - [x] Human 3.0四维对话式复盘、证据状态、自评、行动计划与确认闭环
 - [x] Git跨设备同步、冲突检测与同步状态展示
 - [x] 公开内容脱敏预览、泄露拦截与白名单导出
+- [x] Windows安装包、升级卸载、条件代码签名与GitHub Release
 
-当前版本已经提供本地审核界面，但完整的一键安装、升级和故障修复体验仍待完善。
+当前版本提供本地审核界面和一键 Windows 安装包，无需 Python 或 Node 环境。
 
 ### 无命令行审核
 
@@ -347,12 +348,11 @@ start-review.vbs
 10. **Human 3.0复盘**：四维反思草稿、信息充分度、用户自评、摘要、30天行动计划和显式确认已形成闭环，明确保持非诊断边界。
 11. **跨设备同步**：`core/sync.py`提供 sync-status/commit/pull/push，只操作私人Vault自己的Git仓库，fast-forward-only，分叉和脏状态拒绝。
 12. **公开发布**：逐文件 `visibility: public` 白名单、脱敏预览、敏感扫描拦截和独立staging导出已形成闭环。
+13. **Windows安装与发布**：PyInstaller + Inno Setup 打包为无需 Python/Node 的安装程序（安装/升级/卸载），条件代码签名，tag 触发 GitHub Release。
 
 ### 尚未完成
 
-- Windows安装、升级、卸载和离线打包。
 - 可视化备份与恢复向导。
-- 代码签名和正式版本流程。
 
 ### 接下来计划
 
@@ -365,13 +365,16 @@ start-review.vbs
 | Phase 8 ✅ | 对话式首次引导与渐进收集 | 五类渐进问题、明确同意、候选记忆、可跳过及不保存原始对话 |
 | Phase 9 ✅ | Human 3.0对话式复盘闭环 | 四维反思、依据状态、自评分、摘要、30天计划、用户确认与趋势展示 |
 | Phase 10 ✅ | 跨设备同步与公开发布 | Git同步子命令（fast-forward-only、冲突拒绝）、脱敏预览、泄露拦截和白名单导出已通过审计 |
-| 后续 | Windows安装与正式发布 | 每项功能继续遵守人工确认和最小披露边界 |
+| Phase 11 ✅ | Windows安装、签名与发布 | PyInstaller + Inno Setup 安装/升级/卸载、条件代码签名、tag 触发 GitHub Release |
+| 后续 | 可视化备份恢复向导与产品打磨 | 每项功能继续遵守人工确认和最小披露边界 |
 
-当前最优先工作是**Windows 安装与正式发布流程**。
+当前最优先工作是**可视化备份与恢复向导**。
 
 依赖锁定、SBOM、漏洞/泄漏扫描和干净Windows验证见[`docs/RELEASE_GATES.md`](docs/RELEASE_GATES.md)。
 
 跨设备同步和公开发布工作流见[`docs/SYNC_AND_PUBLISH.md`](docs/SYNC_AND_PUBLISH.md)。
+
+Windows安装包、代码签名和正式发布见[`docs/WINDOWS_INSTALLER.md`](docs/WINDOWS_INSTALLER.md)。
 
 ## MVP成功标准
 

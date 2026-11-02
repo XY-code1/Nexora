@@ -26,7 +26,7 @@ python launcher.py --vault C:\absolute\path\my-ai-profile
 ## 当前边界
 
 - 仅监听loopback，不接受LAN或公网连接。
-- Launcher仍依赖系统Python；缺少已构建前端时还需要Node.js。将Python和前端打包为无需开发环境的安装程序属于后续发布阶段。
+- 源码运行仍依赖系统Python；缺少已构建前端时还需要Node.js。无需开发环境的Windows安装包（PyInstaller + Inno Setup）见[`WINDOWS_INSTALLER.md`](WINDOWS_INSTALLER.md)。
 - `review_app.py`和旧审核界面继续保留一个兼容周期。
 
 ## 验证

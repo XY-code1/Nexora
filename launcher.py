@@ -68,6 +68,14 @@ def ensure_web_build() -> Path:
     return index.parent
 
 
+def ensure_vault(vault: Path) -> None:
+    """Create the Vault from the bundled template when the target is missing or empty."""
+    if vault.exists() and any(vault.iterdir()):
+        return
+    from core import profile
+    profile.init(str(vault))
+
+
 def read_runtime(path: Path) -> dict[str, object] | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -132,6 +140,7 @@ def launch(args: argparse.Namespace) -> int:
     sock: socket.socket | None = None
     try:
         vault = choose_vault(args.vault)
+        ensure_vault(vault)
         web_dist = ensure_web_build()
         token = secrets.token_urlsafe(32)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
