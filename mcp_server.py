@@ -277,7 +277,7 @@ def list_projects() -> list[dict[str, str]]:
         "内容会先经过秘密扫描；疑似密码/Token/私钥等将被拒绝写入。"
     )
 )
-def propose_memory(content: str) -> str:
+def propose_memory(content: str, memory_type: str = "note", subject: str = "") -> str:
     require_scope("memory:propose")
     content = content.strip()
     if not content:
@@ -294,7 +294,10 @@ def propose_memory(content: str) -> str:
 
     identity = agent_id()
     with redirect_stdout(io.StringIO()):
-        profile_cli.remember(str(get_vault()), content, source_agent=identity)
+        profile_cli.remember(
+            str(get_vault()), content, source_agent=identity,
+            memory_type=memory_type[:64], subject=subject[:200],
+        )
     audit("memory_proposed", {"agent": identity, "chars": str(len(content))})
     return (
         "候选记忆已进入 30 Memory/Inbox；它尚未成为长期记忆，"

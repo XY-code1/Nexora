@@ -27,6 +27,14 @@ def main():
         denied.write_text("---\nai_access: denied\n---\nsecret", encoding="utf-8")
         assert not m.list_pending()
 
+        m.propose_memory("跨AI共享候选记忆", memory_type="preference", subject="sharing")
+        pending = m.list_pending()
+        assert len(pending) == 1 and "跨AI共享" in pending[0]["content"]
+        candidate = next(file for file in (vault / "30 Memory" / "Inbox").glob("*.md") if file.name != "denied.md")
+        metadata, _ = profile_cli.read_record(candidate)
+        assert metadata["source_agent"] == "security-test"
+        assert metadata["type"] == "preference"
+
         try:
             m.get_current_context()
             raise AssertionError("scope check failed open")

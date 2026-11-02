@@ -331,10 +331,10 @@ Private Repository 不等于密码保险箱。秘密一旦进入Git历史，删�
 
 ### V0.3 记忆闭环
 
-- [ ] 候选记忆预览
-- [ ] 本地确认、修改和拒绝
-- [ ] 记忆来源查看与冲突处理
-- [ ] 遗忘和替代记录
+- [x] 候选记忆预览
+- [x] 本地确认、修改和拒绝
+- [x] 记忆来源查看与冲突处理
+- [x] 遗忘和替代记录
 
 ### V0.4 对话式引导
 
@@ -393,7 +393,14 @@ python mcp_server.py
 
 ```text
 remember PATH TEXT      创建候选记忆
-confirm PATH FILE       确认Inbox中的记忆
+list-pending PATH       列出待确认记忆
+preview PATH FILE       预览候选记忆和元数据
+edit PATH FILE TEXT     修改候选记忆
+confirm PATH FILE       确认候选记忆
+reject PATH FILE        拒绝并保留审计记录
+show-source PATH FILE   查看记忆来源
+forget PATH FILE        从有效记忆移除并归档
+supersede PATH FILE TEXT 用新事实替代旧记忆
 build-context PATH      生成最小AI上下文
 human3 PATH             创建Human 3.0复盘草稿
 ```
