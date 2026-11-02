@@ -17,6 +17,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from core import profile
 from core.access import extract_summary
+from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
 
 class ApiError(Exception):
@@ -61,7 +62,8 @@ def domain_error(exc: SystemExit) -> ApiError:
     return ApiError(400, "INVALID_REQUEST", message)
 
 
-def memory_view(path: Path) -> dict[str, Any]:
+def memory_view(root: Path, path: Path) -> dict[str, Any]:
+    path = profile.safe_vault_file(root, path)
     metadata, body = profile.read_record(path)
     return {
         "id": metadata["id"],
@@ -86,9 +88,13 @@ def find(root: Path, folder: str, record_id: str) -> Path:
 
 def create_app(vault: Path, token: str | None = None, web_dist: Path | None = None) -> FastAPI:
     root = vault.expanduser().resolve()
+    with vault_operation_lock(root):
+        recover_vault_swap(root)
     missing = [name for name in profile.REQUIRED if not (root / name).is_file()]
     if missing:
         raise RuntimeError(f"私人档案结构不完整：{', '.join(missing)}")
+    assert_vault_isolated(root)
+    require_current_schema(root)
 
     app = FastAPI(title="Personal AI Profile Local API", version="0.1.0")
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
@@ -145,14 +151,14 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             raise ApiError(400, "INVALID_STATUS", "不支持的记忆状态筛选。")
         with profile.vault_lock(root):
             files = sorted((root / profile.MEMORY_ROOT / folders[status]).glob("*.md"))[:max(1, min(limit, 100))]
-            return envelope([memory_view(path) for path in files])
+            return envelope([memory_view(root, path) for path in files])
 
     @app.get("/api/v1/memories/{record_id}", dependencies=[auth])
     def get_memory(record_id: str) -> dict[str, Any]:
         with profile.vault_lock(root):
             for folder in ("Inbox", "Confirmed", "Rejected", "Archived"):
                 try:
-                    return envelope(memory_view(profile.record_by_id(root, folder, record_id)))
+                    return envelope(memory_view(root, profile.record_by_id(root, folder, record_id)))
                 except SystemExit:
                     pass
         raise ApiError(404, "NOT_FOUND", f"未找到记忆：{record_id}")
@@ -164,7 +170,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         except SystemExit as exc:
             raise domain_error(exc) from None
         with profile.vault_lock(root):
-            view = memory_view(path)
+            view = memory_view(root, path)
             return envelope(view, view["revision"])
 
     @app.patch("/api/v1/memories/{record_id}", dependencies=[auth])
@@ -175,7 +181,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         except SystemExit as exc:
             raise domain_error(exc) from None
         path = find(root, "Inbox", record_id)
-        return envelope(memory_view(path), profile.revision(path))
+        return envelope(memory_view(root, path), profile.revision(path))
 
     def lifecycle(record_id: str, data: ActionInput, action: str) -> dict[str, Any]:
         folder = "Confirmed" if action in {"forget", "supersede"} else "Inbox"

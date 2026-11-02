@@ -355,11 +355,11 @@ start-review.vbs
 | 阶段 | 内容 | 验收标准 |
 |---|---|---|
 | Phase 4 ✅ | Windows本地运行闭环 | 双击启动、单实例、自动选端口、健康检查、安全会话、正常关闭与崩溃恢复 |
-| Phase 5 | Vault隔离、Schema与恢复 | migration可回滚；自动备份；公共构建不包含私人路径或数据 |
+| Phase 5 ✅ | Vault隔离、Schema与恢复 | migration回滚、自动备份、路径隔离、安全恢复和白名单公开导出已通过审计 |
 | Phase 6 | MCP统一测试与发布门禁 | 真实MCP协议测试、依赖锁定、SBOM、干净Windows离线运行 |
 | 后续 | 对话式引导、Human 3.0、同步和公开导出 | 每项功能继续遵守候选记忆、人工确认和最小披露边界 |
 
-当前最优先工作是**Phase 5 Vault隔离、Schema与恢复**。
+当前最优先工作是**Phase 6 MCP统一测试与发布门禁**。
 
 ## MVP成功标准
 

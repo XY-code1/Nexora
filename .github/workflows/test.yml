@@ -15,6 +15,7 @@ jobs:
       - run: python tests/test_review_app.py
       - run: python tests/test_core_contract.py
       - run: python tests/test_local_api.py
+      - run: python tests/test_vault_management.py
       - run: python -c "import mcp_server"
       - uses: actions/setup-node@v4
         with:

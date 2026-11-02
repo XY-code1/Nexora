@@ -27,6 +27,7 @@ from mcp.server.mcpserver import MCPServer
 
 from core import profile as profile_cli
 from core.access import apply_access, extract_summary, get_access_level, is_readable_for_search
+from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
 MAX_FILE_CHARS = 12_000
 MAX_LIST_ITEMS = 50
@@ -42,9 +43,13 @@ def get_vault() -> Path:
     if not value:
         raise RuntimeError("请设置 PROFILE_VAULT 为私人Obsidian Vault路径。")
     root = Path(value).expanduser().resolve()
+    with vault_operation_lock(root):
+        recover_vault_swap(root)
     missing = [name for name in profile_cli.REQUIRED if not (root / name).is_file()]
     if missing:
         raise RuntimeError(f"私人档案结构不完整：{', '.join(missing)}")
+    assert_vault_isolated(root)
+    require_current_schema(root)
     return root
 
 

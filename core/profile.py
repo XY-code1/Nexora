@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import tempfile
 import uuid
 from contextlib import contextmanager
@@ -45,9 +46,12 @@ def vault_lock(root: Path):
     """Serialize readers and writers across local processes for one Vault."""
     lock_path = root / "90 System" / "Locks" / "vault.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with FileLock(lock_path, timeout=10):
-        recover_transactions(root)
-        yield
+    from .vault_management import recover_vault_swap, vault_operation_lock
+    with vault_operation_lock(root):
+        recover_vault_swap(root)
+        with FileLock(lock_path, timeout=10):
+            recover_transactions(root)
+            yield
 
 
 def locked_write(function):
@@ -60,7 +64,15 @@ def locked_write(function):
 
 
 def vault(path: str) -> Path:
-    return Path(path).expanduser().resolve()
+    root = Path(path).expanduser().resolve()
+    from .vault_management import CURRENT_SCHEMA_VERSION, assert_vault_isolated, recover_vault_swap, schema_version, vault_operation_lock
+    with vault_operation_lock(root):
+        recover_vault_swap(root)
+    assert_vault_isolated(root)
+    version = schema_version(root)
+    if version != CURRENT_SCHEMA_VERSION:
+        raise SystemExit(f"Vault schema当前为 {version}，需要先执行 migrate 升级到 {CURRENT_SCHEMA_VERSION}。")
+    return root
 
 
 def now() -> str:
@@ -68,7 +80,9 @@ def now() -> str:
 
 
 def init(path: str) -> None:
-    target = vault(path)
+    target = Path(path).expanduser().resolve()
+    from .vault_management import assert_vault_isolated
+    assert_vault_isolated(target)
     if target.exists() and any(target.iterdir()):
         raise SystemExit(f"目标目录非空：{target}")
     shutil.copytree(ROOT / "template", target, dirs_exist_ok=True)
@@ -140,6 +154,7 @@ def record_by_id(root: Path, folder: str, record_id: str) -> Path:
         raise SystemExit("记忆ID无效。")
     base = root / MEMORY_ROOT / folder
     for path in base.glob("*.md"):
+        path = safe_vault_file(root, path)
         metadata, _ = read_record(path)
         if metadata.get("id") == record_id:
             return path
@@ -205,9 +220,27 @@ def safe_record(root: Path, folder: str, filename: str) -> Path:
         path.relative_to(base)
     except ValueError as exc:
         raise SystemExit("文件路径逃逸出记忆目录。") from exc
-    if not path.is_file() or path.is_symlink():
+    if not path.is_file():
         raise SystemExit(f"记忆文件不存在或不安全：{filename}")
-    return path
+    return safe_vault_file(root, path)
+
+
+def safe_vault_file(root: Path, path: Path) -> Path:
+    resolved_root = root.resolve(strict=True)
+    resolved = path.resolve(strict=True)
+    try:
+        resolved.relative_to(resolved_root)
+    except ValueError as exc:
+        raise SystemExit("文件路径逃逸出私人Vault。") from exc
+    current = path
+    reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    while True:
+        info = current.lstat()
+        if current.is_symlink() or getattr(info, "st_file_attributes", 0) & reparse:
+            raise SystemExit("不允许通过符号链接或重解析点读取档案。")
+        if current.resolve() == resolved_root:
+            return resolved
+        current = current.parent
 
 
 def read_record(path: Path) -> tuple[dict[str, str], str]:
@@ -218,8 +251,16 @@ def read_record(path: Path) -> tuple[dict[str, str], str]:
 
 
 def validate(path: str) -> None:
-    root = vault(path)
+    root = Path(path).expanduser().resolve()
     errors: list[str] = []
+    from .vault_management import CURRENT_SCHEMA_VERSION, assert_vault_isolated, schema_version
+    try:
+        assert_vault_isolated(root)
+    except RuntimeError as exc:
+        errors.append(str(exc))
+    version = schema_version(root)
+    if version != CURRENT_SCHEMA_VERSION:
+        errors.append(f"schema_version 应为 {CURRENT_SCHEMA_VERSION}，当前为 {version}")
     ids: dict[str, Path] = {}
     for name in REQUIRED:
         if not (root / name).is_file():
@@ -288,6 +329,7 @@ def list_pending(path: str) -> None:
         print("暂无待确认记忆。")
         return
     for file in files:
+        file = safe_vault_file(root, file)
         metadata, body = read_record(file)
         summary = re.search(r"(?ims)^##\s*摘要\s*\n(.+?)(?=\n##\s|\Z)", body)
         value = summary.group(1).strip() if summary else "（无摘要）"
@@ -320,6 +362,7 @@ def edit_candidate(path: str, file: str, text: str, expected_revision: str | Non
 
 def find_conflict(root: Path, metadata: dict[str, str]) -> tuple[str, str] | None:
     for file in sorted((root / MEMORY_ROOT / "Confirmed").glob("*.md")):
+        file = safe_vault_file(root, file)
         existing, _ = read_record(file)
         if existing.get("fingerprint") == metadata.get("fingerprint"):
             return "duplicate", file.name

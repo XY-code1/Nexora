@@ -1,9 +1,9 @@
 # Personal AI Profile — Agent 交接说明
 
-> 交接基线：`main`（Phase 4工作树，尚未提交）
+> 交接基线：`main` / `be5081d`（Phase 4已提交推送）
 > 仓库：<https://github.com/XY-code1/personal-ai-profile>
 > 更新日期：2026-11-02
-> 当前阶段：Phase 0、Phase 1、Phase 2、Phase 3、Phase 4 已完成；下一步为 Phase 5。
+> 当前阶段：Phase 0–4已完成并推送；Phase 5已完成审计，待本次提交。
 
 ## 1. 项目目标
 
@@ -142,6 +142,7 @@ python tests/test_memory_lifecycle.py
 python tests/test_review_app.py
 python tests/test_core_contract.py
 python tests/test_local_api.py
+python tests/test_vault_management.py
 python tests/test_launcher.py
 python -m compileall -q .
 python -m pip check
@@ -153,26 +154,26 @@ git diff --check
 ## 7. 尚未完成
 
 - Windows安装、升级、卸载和离线打包。
-- Schema migration、升级备份和恢复向导。
+- 可视化备份与恢复向导。
 - 可视化Profile、记忆时间线、隐私审计和Human 3.0趋势。
 - 对话式首次引导、渐进信息收集和月度复盘。
 - Git跨设备同步和冲突处理。
-- 公开内容白名单导出、脱敏预览和发布阻断。
+- 公开内容脱敏预览和发布工作流。
 - 依赖锁文件、SBOM、签名与正式Release流程。
 
-## 8. 下一任务：Phase 5
+## 8. 下一任务：Phase 6
 
 ### 目标
 
-强化Vault与公共框架隔离，建立可演进的Schema、迁移、升级备份和恢复机制。
+建立真实MCP协议级测试、可重复依赖与发布安全门禁。
 
 ### 最小范围
 
-1. 明确并校验Vault schema version。
-2. 启动前自动备份，迁移失败可回滚。
-3. 禁止把私人Vault放入公共框架Git根目录。
-4. 建立公开导出白名单staging，禁止直接复制私人目录。
-5. 增加旧schema升级、故障注入、备份恢复和泄漏阻断测试。
+1. 使用真实stdio MCP client验证initialize、tools/list和工具调用。
+2. 锁定Python与Node依赖，并验证干净环境安装。
+3. 生成SBOM与依赖安全扫描结果。
+4. 增加公共构建产物的私密数据和本机路径泄漏检查。
+5. 建立干净Windows环境启动验收脚本。
 
 ### 暂时不要做
 
@@ -185,25 +186,25 @@ git diff --check
 - 自动采集用户信息；
 - 完整自主Agent。
 
-### Phase 5验收标准
+### Phase 6验收标准
 
-- 每个migration可从上一版本升级，并在失败后恢复原始Vault。
-- 备份与恢复不会复制到公共仓库。
-- 框架拒绝使用位于公共仓库内部的私人Vault。
-- 合成敏感档案能够阻止公开导出或发布。
-- 所有现有Python、MCP、API、React、Launcher与E2E测试继续通过。
+- 真实MCP协议往返和权限负测试通过。
+- Python与Node依赖可从锁文件重现。
+- SBOM和泄漏扫描由CI生成，高危问题阻止发布。
+- 干净Windows环境能启动本地服务并正常关闭。
+- 所有既有测试继续通过。
 
 ## 9. 推荐实施顺序
 
 ```text
 1. 读取README、docs/BEHAVIOR_CONTRACT.md、docs/LOCAL_API.md
 2. 运行全部现有测试并确认基线
-3. 冻结当前schema并设计只支持相邻版本的最小migration
-4. 增加升级前备份和失败回滚
-5. 强制公共仓库与私人Vault路径隔离
-6. 建立公开导出白名单staging与泄漏阻断测试
+3. 增加真实stdio MCP协议往返与权限负测试
+4. 锁定Python和Node依赖并验证干净安装
+5. 生成SBOM并建立依赖安全门禁
+6. 增加构建产物的私密数据与本机路径泄漏扫描
 7. 运行Python、前端、Launcher与E2E完整门禁
-10. 更新README和架构文档，等待用户确认后提交
+8. 更新README和发布文档，等待用户确认后提交
 ```
 
 ## 10. 交接给其他Agent的启动提示词
@@ -219,7 +220,7 @@ git diff --check
 - docs/LOCAL_API.md
 - docs/ARCHITECTURE.md
 
-先运行全部现有测试，确认基线后再开发Phase 5：Vault隔离、Schema与恢复。
+先运行全部现有测试，确认基线后再开发Phase 6：MCP统一测试与发布门禁。
 
 必须遵守：
 1. 不访问、复制或提交任何真实私人Vault。
@@ -232,7 +233,7 @@ git diff --check
 8. 开发完成后运行Python、前端、E2E和git diff检查。
 9. 先给出改动和验证结果，等待确认后再提交推送。
 
-Phase 5验收标准以README_AGENT_HANDOFF.md第8节为准。
+Phase 6验收标准以README_AGENT_HANDOFF.md第8节为准。
 ```
 
 ## 11. 提交规则
