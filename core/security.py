@@ -188,8 +188,8 @@ def append_event(root: Path, *, client_id: str, event_type: str, resource_type: 
             "prevHash": integrity.get("lastHash", ""),
         }
         record["hash"] = _canonical_hash(record)
-        with (root / AUDIT_FILE).open("a", encoding="utf-8", newline="\n") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
+        with (root / AUDIT_FILE).open("ab") as handle:
+            handle.write((json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
             handle.flush()
             os.fsync(handle.fileno())
         return record
