@@ -11,7 +11,7 @@ ROOT = Path(SPECPATH).resolve().parents[1]  # packaging/windows -> repo root
 
 datas = [
     (str(ROOT / "template"), "template"),
-    (str(ROOT / "apps" / "web" / "dist"), str(Path("apps") / "web" / "dist")),
+    (str(ROOT / "apps" / "web" / "dist"), "apps/web/dist"),
 ]
 
 hiddenimports = [
