@@ -13,6 +13,11 @@ const memory = {
   created: '2026-11-02T10:00:00+00:00', updated: '2026-11-02T10:00:00+00:00', visibility: 'private', aiAccess: 'summary-only', tags: [], content: '回答先给结论。', revision: 'a'.repeat(64),
 }
 const stats = { candidateMemories: 1, pendingReview: 1, confirmedMemories: 0 }
+const securityOverview = {
+  diagnostics: { localService: 'ok', vault: 'ready', mcp: 'not-configured', authorizedClients: 0, recentDenied: 0, audit: { status: 'missing', events: 0, lastHash: '' } },
+  scopes: ['profile:read', 'memory:search'],
+}
+const emptyAudit = { items: [], page: 1, pageSize: 25, total: 0, integrity: { status: 'missing', events: 0 } }
 
 function response(data: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } }))
@@ -109,7 +114,10 @@ describe('review workspace', () => {
       .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { access: 'allowed', protected: false, sections: [{ title: 'Stable preferences', items: ['先给结论'] }] }, meta: { requestId: '2' } }))
       .mockImplementationOnce(() => response({ data: [{ ...memory, access: 'summary-only', previewAvailable: true, preview: '回答先给结论。' }], meta: { requestId: '3' } }))
-      .mockImplementationOnce(() => response({ data: { totalMemories: 1, byStatus: { confirmed: 1 }, byAccess: { 'summary-only': 1 }, bySource: {}, mcpEvents: {}, issues: [], rules: ['所有统计仅在本机生成'] }, meta: { requestId: '4' } }))
+      .mockImplementationOnce(() => response({ data: securityOverview, meta: { requestId: '4a' } }))
+      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '4b' } }))
+      .mockImplementationOnce(() => response({ data: emptyAudit, meta: { requestId: '4c' } }))
+      .mockImplementationOnce(() => response({ data: emptyAudit, meta: { requestId: '4d' } }))
       .mockImplementationOnce(() => response({ data: { disclaimer: '仅用于自我反思，不是医学或心理诊断。', dimensions: ['mind', 'body', 'spirit', 'vocation'], points: [] }, meta: { requestId: '5' } }))
     render(<App />)
     await connect()
@@ -123,10 +131,11 @@ describe('review workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看确认摘要' }))
     expect(screen.getByText('回答先给结论。')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '隐私审计' }))
-    await screen.findByText('所有统计仅在本机生成')
+    await screen.findByRole('heading', { name: 'Security Center' })
+    expect(screen.getAllByText('尚无审计记录').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: 'Human 3.0趋势' }))
     await screen.findByText('还没有已确认的复盘')
-    expect(fetchMock).toHaveBeenCalledTimes(6)
+    expect(fetchMock).toHaveBeenCalledTimes(9)
   })
 
   it('renders an honest empty profile without inventing relationships', async () => {
@@ -151,6 +160,9 @@ describe('review workspace', () => {
       .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
       .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => oldPrivacy)
+      .mockImplementationOnce(() => response({ data: [], meta: { requestId: 'security-clients' } }))
+      .mockImplementationOnce(() => response({ data: emptyAudit, meta: { requestId: 'security-audit' } }))
+      .mockImplementationOnce(() => response({ data: emptyAudit, meta: { requestId: 'security-lifecycle' } }))
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '3' } }))
       .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-2' } }))
     render(<App />)
@@ -160,9 +172,9 @@ describe('review workspace', () => {
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'new-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
     await screen.findByText('暂时没有候选记忆')
-    resolveOld(new Response(JSON.stringify({ data: { totalMemories: 1, byStatus: {}, byAccess: {}, bySource: {}, mcpEvents: {}, issues: [], rules: ['旧 Vault 私密规则'] }, meta: { requestId: '2' } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    resolveOld(new Response(JSON.stringify({ data: securityOverview, meta: { requestId: '2' } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     await Promise.resolve()
-    expect(screen.queryByText('旧 Vault 私密规则')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Security Center' })).not.toBeInTheDocument()
     expect(screen.getByText('暂时没有候选记忆')).toBeInTheDocument()
   })
 

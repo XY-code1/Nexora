@@ -15,27 +15,23 @@ runs secret scanning before write.
 from __future__ import annotations
 
 import io
-import json
 import os
 import re
 import stat
 from contextlib import redirect_stdout
-from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 from mcp.server.mcpserver import MCPServer
 
 from core import profile as profile_cli
 from core.access import apply_access, extract_summary, get_access_level, is_readable_for_search
+from core import security
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
 MAX_FILE_CHARS = 12_000
 MAX_LIST_ITEMS = 50
 MAX_RESPONSE_CHARS = 20_000
-KNOWN_SCOPES = {
-    "profile:read", "context:read", "memory:search", "memory:propose",
-    "memory:pending", "project:read", "assessment:read",
-}
+KNOWN_SCOPES = security.KNOWN_SCOPES
 
 
 def get_vault() -> Path:
@@ -55,33 +51,15 @@ def get_vault() -> Path:
 
 def agent_id() -> str:
     value = os.environ.get("PROFILE_AGENT_ID", "").strip()
-    if not value or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value):
-        raise PermissionError("PROFILE_AGENT_ID 缺失或无效；拒绝访问私人档案。")
-    return value
+    return value if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value) else "invalid-client"
 
 
-def scopes() -> set[str]:
-    values = {item.strip() for item in os.environ.get("PROFILE_SCOPES", "").split(",") if item.strip()}
-    unknown = values - KNOWN_SCOPES
-    if unknown:
-        raise PermissionError(f"存在未知权限Scope：{', '.join(sorted(unknown))}")
-    return values
+def client_token() -> str:
+    return os.environ.get("PROFILE_CLIENT_TOKEN", "").strip()
 
 
-def require_scope(scope: str) -> None:
-    identity = agent_id()
-    if scope not in scopes():
-        audit("scope_denied", {"agent": identity, "scope": scope})
-        raise PermissionError(f"Agent {identity} 没有 {scope} 权限。")
-
-
-def audit(event: str, details: dict[str, str]) -> None:
-    root = get_vault()
-    folder = root / "90 System" / "Audit"
-    folder.mkdir(parents=True, exist_ok=True)
-    record = {"time": datetime.now(timezone.utc).isoformat(), "event": event, **details}
-    with (folder / "mcp.jsonl").open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+def require_scope(scope: str, event_type: str, resource_type: str) -> None:
+    security.authorize(get_vault(), agent_id(), client_token(), scope, event_type=event_type, resource_type=resource_type)
 
 
 def safe_path(root: Path, candidate: Path) -> Path:
@@ -140,11 +118,10 @@ server = MCPServer(
 )
 @vault_locked
 def get_profile() -> str:
-    require_scope("profile:read")
+    require_scope("profile:read", "profile.read", "profile")
     root = get_vault()
     text = read_limited(root, root / "10 Profile" / "Profile.md")
     result = apply_access(text, full_limit=6000, summary_limit=1200)
-    audit("profile_read", {"agent": agent_id()})
     return result
 
 
@@ -156,11 +133,10 @@ def get_profile() -> str:
 )
 @vault_locked
 def get_current_context() -> str:
-    require_scope("context:read")
+    require_scope("context:read", "context.read", "context")
     root = get_vault()
     text = read_limited(root, root / "00 Dashboard" / "Current Context.md")
     result = apply_access(text, full_limit=6000, summary_limit=1200)
-    audit("context_read", {"agent": agent_id()})
     return result
 
 
@@ -173,7 +149,7 @@ def get_current_context() -> str:
 )
 @vault_locked
 def search_memory(query: str, limit: int = 8) -> list[dict[str, str]]:
-    require_scope("memory:search")
+    require_scope("memory:search", "memory.search", "memory")
     vault = get_vault()
     root = vault / "30 Memory" / "Confirmed"
     terms = [term.lower() for term in re.findall(r"\w+", query) if term.strip()]
@@ -193,7 +169,6 @@ def search_memory(query: str, limit: int = 8) -> list[dict[str, str]]:
     results.sort(key=lambda item: (-item[0], item[1].name))
     limit = max(1, min(limit, 20))
     output = [{"file": file.name, "content": content} for _, file, content in results[:limit]]
-    audit("memory_searched", {"agent": agent_id(), "results": str(len(output))})
     return output
 
 
@@ -205,7 +180,7 @@ def search_memory(query: str, limit: int = 8) -> list[dict[str, str]]:
 )
 @vault_locked
 def list_projects() -> list[dict[str, str]]:
-    require_scope("project:read")
+    require_scope("project:read", "project.list", "project")
     vault = get_vault()
     root = vault / "20 Projects" / "Active"
     out: list[dict[str, str]] = []
@@ -223,7 +198,6 @@ def list_projects() -> list[dict[str, str]]:
         if total > MAX_RESPONSE_CHARS:
             break
         out.append({"file": str(file.relative_to(root)), "content": content})
-    audit("projects_listed", {"agent": agent_id(), "results": str(len(out))})
     return out
 
 
@@ -235,7 +209,7 @@ def list_projects() -> list[dict[str, str]]:
     )
 )
 def propose_memory(content: str, memory_type: str = "note", subject: str = "") -> str:
-    require_scope("memory:propose")
+    require_scope("memory:propose", "memory.propose", "memory")
     content = content.strip()
     if not content:
         raise ValueError("候选记忆不能为空。")
@@ -255,7 +229,6 @@ def propose_memory(content: str, memory_type: str = "note", subject: str = "") -
             str(get_vault()), content, source_agent=identity,
             memory_type=memory_type[:64], subject=subject[:200],
         )
-    audit("memory_proposed", {"agent": identity, "chars": str(len(content))})
     return (
         "候选记忆已进入 30 Memory/Inbox；它尚未成为长期记忆，"
         "请让用户在 Obsidian 中审核确认。"
@@ -270,7 +243,7 @@ def propose_memory(content: str, memory_type: str = "note", subject: str = "") -
 )
 @vault_locked
 def list_pending() -> list[dict[str, str]]:
-    require_scope("memory:pending")
+    require_scope("memory:pending", "memory.pending_list", "memory")
     vault = get_vault()
     root = vault / "30 Memory" / "Inbox"
     out: list[dict[str, str]] = []
@@ -284,7 +257,6 @@ def list_pending() -> list[dict[str, str]]:
         if total > MAX_RESPONSE_CHARS:
             break
         out.append({"file": file.name, "content": content})
-    audit("pending_listed", {"agent": agent_id(), "results": str(len(out))})
     return out
 
 
@@ -296,7 +268,7 @@ def list_pending() -> list[dict[str, str]]:
 )
 @vault_locked
 def get_human3_summary() -> str:
-    require_scope("assessment:read")
+    require_scope("assessment:read", "assessment.read", "assessment")
     vault = get_vault()
     history = vault / "40 Reviews" / "Human3" / "History"
     confirmed = []
@@ -306,10 +278,8 @@ def get_human3_summary() -> str:
         if metadata.get("status") == "confirmed":
             confirmed.append(text)
     if not confirmed:
-        audit("human3_read", {"agent": agent_id(), "results": "0"})
         return "暂无已确认的 Human3 复盘。"
     result = apply_access(confirmed[0], full_limit=5000, summary_limit=1200)
-    audit("human3_read", {"agent": agent_id(), "results": "1"})
     return result
 
 

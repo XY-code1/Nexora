@@ -132,6 +132,13 @@ def assert_no_secret(content: str) -> None:
             raise SystemExit(f"内容疑似包含敏感信息（{label}），请脱敏后重试。")
 
 
+def _audit_lifecycle(root: Path, event_type: str, record_id: str, *, client_id: str = "local-user") -> None:
+    from .security import append_event, verify_audit
+    if verify_audit(root)["status"] == "invalid":
+        raise RuntimeError("安全审计链完整性失败；已停止记忆生命周期操作。")
+    append_event(root, client_id=client_id, event_type=event_type, resource_type="memory", scope="memory:lifecycle", result="allowed", reason_code="LIFECYCLE_COMPLETED", details={"resourceId": record_id})
+
+
 def atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
@@ -317,7 +324,11 @@ def remember(
         "source_agent": clean_meta(source_agent, 64) or "unknown",
         "fingerprint": fingerprint(content),
     }
+    from .security import verify_audit
+    if verify_audit(root)["status"] == "invalid":
+        raise RuntimeError("安全审计链完整性失败；已停止候选记忆创建。")
     atomic_write(destination, serialize_record(metadata, summary_body(content, "候选记忆")))
+    _audit_lifecycle(root, "memory.candidate_created", record_id, client_id=metadata["source_agent"])
     print(f"候选记忆已创建：{destination}")
     return destination
 
@@ -381,6 +392,9 @@ def confirm(path: str, file: str, expected_revision: str | None = None) -> None:
     source = safe_record(root, "Inbox", file)
     require_revision(source, expected_revision)
     metadata, body = read_record(source)
+    from .security import verify_audit
+    if verify_audit(root)["status"] == "invalid":
+        raise RuntimeError("安全审计链完整性失败；已停止记忆确认。")
     issue = find_conflict(root, metadata)
     if issue:
         kind, other = issue
@@ -403,6 +417,7 @@ def confirm(path: str, file: str, expected_revision: str | None = None) -> None:
     except BaseException:
         recover_transactions(root)
         raise
+    _audit_lifecycle(root, "memory.confirmed", metadata["id"])
     print(f"已确认：{destination}")
 
 
@@ -412,6 +427,9 @@ def reject(path: str, file: str, reason: str = "user-rejected", expected_revisio
     source = safe_record(root, "Inbox", file)
     require_revision(source, expected_revision)
     metadata, body = read_record(source)
+    from .security import verify_audit
+    if verify_audit(root)["status"] == "invalid":
+        raise RuntimeError("安全审计链完整性失败；已停止记忆拒绝。")
     metadata.update({"status": "rejected", "updated": now(), "rejected_at": now(), "reason": clean_meta(reason)})
     destination = root / MEMORY_ROOT / "Rejected" / source.name
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -425,6 +443,7 @@ def reject(path: str, file: str, reason: str = "user-rejected", expected_revisio
     except BaseException:
         recover_transactions(root)
         raise
+    _audit_lifecycle(root, "memory.rejected", metadata["id"])
     print(f"已拒绝并保留审计记录：{destination}")
 
 
@@ -449,6 +468,9 @@ def forget(path: str, file: str, reason: str = "user-forgot", expected_revision:
     source = safe_record(root, "Confirmed", file)
     require_revision(source, expected_revision)
     metadata, body = read_record(source)
+    from .security import verify_audit
+    if verify_audit(root)["status"] == "invalid":
+        raise RuntimeError("安全审计链完整性失败；已停止记忆归档。")
     metadata.update({"status": "forgotten", "updated": now(), "forgotten_at": now(), "reason": clean_meta(reason)})
     destination = root / MEMORY_ROOT / "Archived" / source.name
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -462,6 +484,7 @@ def forget(path: str, file: str, reason: str = "user-forgot", expected_revision:
     except BaseException:
         recover_transactions(root)
         raise
+    _audit_lifecycle(root, "memory.archived", metadata["id"])
     print(f"已从有效记忆中移除并归档：{destination}")
 
 
@@ -477,6 +500,9 @@ def supersede(path: str, file: str, text: str, expected_revision: str | None = N
     source = safe_record(root, "Confirmed", file)
     require_revision(source, expected_revision)
     old, old_body = read_record(source)
+    from .security import verify_audit
+    if verify_audit(root)["status"] == "invalid":
+        raise RuntimeError("安全审计链完整性失败；已停止记忆替代。")
     original = source.read_text(encoding="utf-8")
     day = date.today().isoformat()
     new_id = f"mem-{day.replace('-', '')}-{uuid.uuid4().hex[:8]}"
@@ -510,6 +536,8 @@ def supersede(path: str, file: str, text: str, expected_revision: str | None = N
     except BaseException:
         recover_transactions(root)
         raise
+    _audit_lifecycle(root, "memory.superseded", old["id"])
+    _audit_lifecycle(root, "memory.confirmed", new_id)
     print(f"旧记忆已归档：{archive.name}\n新记忆已确认：{destination.name}")
 
 

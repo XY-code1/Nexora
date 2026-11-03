@@ -17,6 +17,12 @@ GET    /api/v1/visualization/profile
 GET    /api/v1/visualization/timeline
 GET    /api/v1/visualization/privacy
 GET    /api/v1/visualization/human3
+GET    /api/v1/security/overview
+GET    /api/v1/security/clients
+POST   /api/v1/security/clients
+PUT    /api/v1/security/clients/{id}/scopes
+POST   /api/v1/security/clients/{id}/revoke
+GET    /api/v1/security/audit-events
 GET    /api/v1/onboarding
 POST   /api/v1/onboarding/responses
 GET    /api/v1/human3/session
@@ -34,6 +40,8 @@ POST   /api/v1/memories/{id}/forget
 POST   /api/v1/memories/{id}/supersede
 POST   /api/v1/shutdown
 ```
+
+Security Center 端点全部要求启动器 Bearer 会话。客户端凭据只在授权响应中显示一次；过滤、分页、哈希链与撤销语义见 [`SECURITY_CENTER.md`](SECURITY_CENTER.md)。
 
 可视化端点均为只读，并执行[`VISUALIZATION_PRIVACY.md`](VISUALIZATION_PRIVACY.md)定义的最小披露规则。
 

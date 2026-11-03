@@ -20,6 +20,11 @@ export type MemoryStats = { candidateMemories: number; pendingReview: number; co
 export type ProfileOverview = { access: string; protected: boolean; visibility?: string; hasConfirmedMemories?: boolean; sections: { title: string; items: string[] }[] }
 export type TimelineItem = Omit<Memory, 'content' | 'revision'> & { access: string; previewAvailable: boolean; preview: string }
 export type PrivacyAudit = { totalMemories: number; byStatus: Record<string, number>; byAccess: Record<string, number>; bySource: Record<string, number>; mcpEvents: Record<string, number>; issues: { id: string; issue: string }[]; rules: string[] }
+export type SecurityClient = { id: string; name: string; status: 'active' | 'revoked'; connectionStatus: 'recent' | 'inactive'; scopes: string[]; authorizedAt: string; lastAccessAt: string; revokedAt: string }
+export type AuditEvent = { eventId: string; timestamp: string; clientId: string; eventType: string; resourceType: string; scope: string; result: 'allowed' | 'denied'; reasonCode: string; correlationId: string; details: Record<string, unknown> }
+export type AuditPage = { items: AuditEvent[]; page: number; pageSize: number; total: number; integrity: { status: 'missing' | 'verified' | 'invalid'; events: number; line?: number } }
+export type SecurityOverview = { diagnostics: { localService: string; vault: string; mcp: string; authorizedClients: number; recentDenied: number; audit: AuditPage['integrity'] }; scopes: string[] }
+export type SecurityCenter = { overview: SecurityOverview; clients: SecurityClient[]; audit: AuditPage; lifecycle: AuditPage }
 export type Human3Trend = { disclaimer: string; dimensions: string[]; points: { date: string; scores: Record<string, number>; summary: string }[] }
 export type OnboardingTopic = { key: string; title: string; prompt: string; status: 'available' | 'pending' | 'confirmed' }
 export type OnboardingState = { topics: OnboardingTopic[]; nextTopic: string | null; completed: boolean; notice: string }
@@ -70,6 +75,11 @@ export class ApiClient {
   profileOverview(signal?: AbortSignal) { return this.request<ProfileOverview>('/api/v1/visualization/profile', { signal }) }
   timeline(signal?: AbortSignal) { return this.request<TimelineItem[]>('/api/v1/visualization/timeline', { signal }) }
   privacyAudit(signal?: AbortSignal) { return this.request<PrivacyAudit>('/api/v1/visualization/privacy', { signal }) }
+  async securityCenter(signal?: AbortSignal): Promise<SecurityCenter> { const [overview, clients, audit, lifecycle] = await Promise.all([this.request<SecurityOverview>('/api/v1/security/overview', { signal }), this.request<SecurityClient[]>('/api/v1/security/clients', { signal }), this.request<AuditPage>('/api/v1/security/audit-events', { signal }), this.request<AuditPage>('/api/v1/security/audit-events?resource_type=memory&page_size=100', { signal })]); return { overview, clients, audit, lifecycle } }
+  securityEvents(filters: { clientId?: string; eventType?: string; resourceType?: string; result?: string; since?: string; until?: string; page?: number; pageSize?: number }, signal?: AbortSignal) { const query = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== '') query.set(key === 'clientId' ? 'client_id' : key === 'eventType' ? 'event_type' : key === 'resourceType' ? 'resource_type' : key === 'pageSize' ? 'page_size' : key, String(value)) }); return this.request<AuditPage>(`/api/v1/security/audit-events?${query}`, { signal }) }
+  authorizeSecurityClient(name: string, scopes: string[], signal?: AbortSignal) { return this.request<{ client: SecurityClient; credential: string }>('/api/v1/security/clients', { method: 'POST', body: JSON.stringify({ name, scopes }), signal }) }
+  updateSecurityScopes(id: string, scopes: string[], signal?: AbortSignal) { return this.request<SecurityClient>(`/api/v1/security/clients/${id}/scopes`, { method: 'PUT', body: JSON.stringify({ scopes }), signal }) }
+  revokeSecurityClient(id: string, signal?: AbortSignal) { return this.request<SecurityClient>(`/api/v1/security/clients/${id}/revoke`, { method: 'POST', signal }) }
   human3Trend(signal?: AbortSignal) { return this.request<Human3Trend>('/api/v1/visualization/human3', { signal }) }
   onboarding(signal?: AbortSignal) { return this.request<OnboardingState>('/api/v1/onboarding', { signal }) }
   onboardingResponse(topic: string, content: string, signal?: AbortSignal) { return this.request<{ candidateId: string; state: OnboardingState }>('/api/v1/onboarding/responses', { method: 'POST', body: JSON.stringify({ topic, content, consent: true }), signal }) }

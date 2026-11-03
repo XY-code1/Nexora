@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 import mcp_server as m
 import profile as profile_cli
+from core import security
 
 
 def main():
@@ -19,8 +20,9 @@ def main():
         vault = Path(tmp) / "vault"
         profile_cli.init(str(vault))
         os.environ["PROFILE_VAULT"] = str(vault)
-        os.environ["PROFILE_AGENT_ID"] = "security-test"
-        os.environ["PROFILE_SCOPES"] = "profile:read,memory:pending,memory:propose"
+        client, credential = security.create_client(vault, "Security Test", ["profile:read", "memory:pending", "memory:propose"])
+        os.environ["PROFILE_AGENT_ID"] = client["id"]
+        os.environ["PROFILE_CLIENT_TOKEN"] = credential
         assert "Profile" in m.get_profile()
 
         denied = vault / "30 Memory" / "Inbox" / "denied.md"
@@ -32,7 +34,7 @@ def main():
         assert len(pending) == 1 and "跨AI共享" in pending[0]["content"]
         candidate = next(file for file in (vault / "30 Memory" / "Inbox").glob("*.md") if file.name != "denied.md")
         metadata, _ = profile_cli.read_record(candidate)
-        assert metadata["source_agent"] == "security-test"
+        assert metadata["source_agent"] == client["id"]
         assert metadata["type"] == "preference"
 
         try:
@@ -41,7 +43,7 @@ def main():
         except PermissionError:
             pass
 
-        os.environ["PROFILE_SCOPES"] += ",assessment:read"
+        security.update_scopes(vault, client["id"], ["profile:read", "memory:pending", "memory:propose", "assessment:read"])
         history = vault / "40 Reviews" / "Human3" / "History"
         (history / "z-rejected.md").write_text("---\nstatus: rejected\nai_access: summary-only\n---\n\n## 摘要\n\n不得返回", encoding="utf-8")
         (history / "a-confirmed.md").write_text("---\nstatus: confirmed\nai_access: summary-only\n---\n\n## 摘要\n\n已确认复盘", encoding="utf-8")

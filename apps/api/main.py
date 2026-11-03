@@ -20,6 +20,7 @@ from core.access import extract_summary
 from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
 from core import monthly_reflection
+from core import security
 from core.visualization import human3_trend, privacy_audit, profile_overview, timeline
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
@@ -99,6 +100,15 @@ class MonthlyGoalsInput(BaseModel):
 class MonthlySummaryInput(BaseModel):
     summary: str = Field(min_length=1, max_length=2400)
     expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class SecurityClientInput(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    scopes: list[str] = Field(min_length=1, max_length=20)
+
+
+class SecurityScopesInput(BaseModel):
+    scopes: list[str] = Field(min_length=1, max_length=20)
 
 
 def envelope(data: Any, revision: str | None = None) -> dict[str, Any]:
@@ -367,6 +377,48 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             raise domain_error(exc) from None
         with profile.vault_lock(root):
             return envelope(monthly_reflection.reflection_view(root, path))
+
+    @app.get("/api/v1/security/overview", dependencies=[auth])
+    def security_overview() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope({"diagnostics": security.diagnostics(root), "scopes": sorted(security.KNOWN_SCOPES)})
+
+    @app.get("/api/v1/security/clients", dependencies=[auth])
+    def security_clients() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(security.list_clients(root))
+
+    @app.post("/api/v1/security/clients", status_code=201, dependencies=[auth])
+    def security_authorize_client(data: SecurityClientInput) -> dict[str, Any]:
+        try:
+            with profile.vault_lock(root):
+                client, credential = security.create_client(root, data.name, data.scopes)
+                return envelope({"client": client, "credential": credential})
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+
+    @app.put("/api/v1/security/clients/{client_id}/scopes", dependencies=[auth])
+    def security_update_client(client_id: str, data: SecurityScopesInput) -> dict[str, Any]:
+        try:
+            with profile.vault_lock(root):
+                return envelope(security.update_scopes(root, client_id, data.scopes))
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+
+    @app.post("/api/v1/security/clients/{client_id}/revoke", dependencies=[auth])
+    def security_revoke_client(client_id: str) -> dict[str, Any]:
+        try:
+            with profile.vault_lock(root):
+                return envelope(security.revoke_client(root, client_id))
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+
+    @app.get("/api/v1/security/audit-events", dependencies=[auth])
+    def security_audit_events(client_id: str = "", event_type: str = "", resource_type: str = "", result: str = "", since: str = "", until: str = "", page: int = 1, page_size: int = 25) -> dict[str, Any]:
+        if result not in {"", "allowed", "denied"}:
+            raise ApiError(400, "INVALID_FILTER", "审计结果筛选无效。")
+        with profile.vault_lock(root):
+            return envelope(security.query_events(root, client_id=client_id, event_type=event_type, resource_type=resource_type, result=result, since=since, until=until, page=page, page_size=page_size))
 
     @app.post("/api/v1/shutdown", dependencies=[auth])
     def shutdown(background_tasks: BackgroundTasks) -> dict[str, Any]:

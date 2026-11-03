@@ -182,17 +182,17 @@ MCP 不向 Agent 提供任意文件写入、确认、删除或公开能力。高
       "args": ["ABSOLUTE_PATH_TO_FRAMEWORK/mcp_server.py"],
       "env": {
         "PROFILE_VAULT": "ABSOLUTE_PATH_TO_PRIVATE_VAULT",
-        "PROFILE_AGENT_ID": "my-agent",
-        "PROFILE_SCOPES": "profile:read,context:read,memory:search,memory:propose"
+        "PROFILE_AGENT_ID": "client-issued-by-security-center",
+        "PROFILE_CLIENT_TOKEN": "one-time-issued-credential"
       }
     }
   }
 }
 ```
 
-第一阶段使用本地 `stdio`，不把档案服务暴露到公网。远程访问以后再考虑 HTTPS、OAuth、权限 Scope、撤销机制和审计日志。
+当前使用本地 `stdio`，不把档案服务暴露到公网。客户端授权、最小权限 Scope、立即撤销和防篡改审计由本地 Security Center 管理。
 
-每个AI客户端必须配置独立的`PROFILE_AGENT_ID`和最小`PROFILE_SCOPES`；缺失身份或权限时，Gateway默认拒绝访问。
+每个 AI 客户端必须在 Security Center 中显式授权，并配置独立的 `PROFILE_AGENT_ID` 与 `PROFILE_CLIENT_TOKEN`。Gateway 每次调用都读取 Vault 内的持久授权；缺失、失效或已撤销凭据默认拒绝。详见 [`docs/SECURITY_CENTER.md`](docs/SECURITY_CENTER.md)。
 
 ## 记忆模型
 

@@ -11,14 +11,17 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).parents[1]
+sys.path.insert(0, str(ROOT))
+from core import security
 
 
 async def exercise(vault: Path) -> None:
+    client, credential = security.create_client(vault, "Protocol Test", sorted(security.KNOWN_SCOPES))
     env = os.environ.copy()
     env.update({
         "PROFILE_VAULT": str(vault),
-        "PROFILE_AGENT_ID": "protocol-test",
-        "PROFILE_SCOPES": "profile:read,context:read,memory:search,memory:propose,memory:pending,project:read,assessment:read",
+        "PROFILE_AGENT_ID": client["id"],
+        "PROFILE_CLIENT_TOKEN": credential,
     })
     parameters = StdioServerParameters(
         command=sys.executable,
@@ -53,11 +56,12 @@ async def exercise(vault: Path) -> None:
 
 
 async def denied_scope(vault: Path) -> None:
+    client, credential = security.create_client(vault, "Limited Agent", ["profile:read"])
     env = os.environ.copy()
     env.update({
         "PROFILE_VAULT": str(vault),
-        "PROFILE_AGENT_ID": "limited-agent",
-        "PROFILE_SCOPES": "profile:read",
+        "PROFILE_AGENT_ID": client["id"],
+        "PROFILE_CLIENT_TOKEN": credential,
     })
     parameters = StdioServerParameters(command=sys.executable, args=[str(ROOT / "mcp_server.py")], cwd=ROOT, env=env)
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as errlog:

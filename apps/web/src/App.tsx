@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Brain, CalendarDots, ChatCircleDots, CirclesFour, Database, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
-import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type OnboardingState, type PrivacyAudit, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type TimelineItem } from './api'
+import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type OnboardingState, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
 import ConversationalOnboardingPage from './ConversationalOnboardingPage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
+import SecurityCenterPage from './SecurityCenterPage'
 import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
@@ -71,7 +72,8 @@ function App() {
   const [view, setView] = useState<View>('review')
   const [profileView, setProfileView] = useState<ProfileOverview | null>(null)
   const [timelineView, setTimelineView] = useState<TimelineItem[] | null>(null)
-  const [privacyView, setPrivacyView] = useState<PrivacyAudit | null>(null)
+  const [securityView, setSecurityView] = useState<SecurityCenter | null>(null)
+  const [clientCredential, setClientCredential] = useState('')
   const [human3View, setHuman3View] = useState<Human3Trend | null>(null)
   const [onboardingView, setOnboardingView] = useState<OnboardingState | null>(null)
   const [monthlyView, setMonthlyView] = useState<MonthlyOverview | null>(null)
@@ -108,7 +110,7 @@ function App() {
       setToken(nextToken)
       applyMemories(result)
       setMemoryStats(stats)
-      setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null)
+      setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null)
       setNotice(null)
     } catch (error) {
       if (controller.signal.aborted || epoch !== sessionEpoch.current) return
@@ -160,7 +162,7 @@ function App() {
     setDraft('')
     setNotice(null)
     setView('review')
-    setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null)
+    setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null); setClientCredential('')
     setVisualLoading(null)
     setGateError(message)
   }
@@ -181,7 +183,7 @@ function App() {
     if (next === 'onboarding') setOnboardingView(null)
     if (next === 'reflection') { setReflectionView(null); setMonthlyView(null) }
     if (next === 'timeline') setTimelineView(null)
-    if (next === 'privacy') setPrivacyView(null)
+    if (next === 'privacy') setSecurityView(null)
     if (next === 'human3') setHuman3View(null)
     setVisualLoading(next)
     try {
@@ -189,14 +191,14 @@ function App() {
         : next === 'onboarding' ? await client.onboarding(controller.signal)
         : next === 'profile' ? await client.profileOverview(controller.signal)
         : next === 'timeline' ? await client.timeline(controller.signal)
-          : next === 'privacy' ? await client.privacyAudit(controller.signal)
+          : next === 'privacy' ? await client.securityCenter(controller.signal)
             : await client.human3Trend(controller.signal)
       if (epoch !== sessionEpoch.current || request !== viewRequest.current) return
       if (next === 'onboarding') setOnboardingView(result as OnboardingState)
       if (next === 'reflection') { const monthly = result as MonthlyOverview; setMonthlyView(monthly); setReflectionView(monthly.reflections.find((item) => item.month === monthly.currentMonth) ?? monthly.reflections[0] ?? null) }
       if (next === 'profile') setProfileView(result as ProfileOverview)
       if (next === 'timeline') setTimelineView(result as TimelineItem[])
-      if (next === 'privacy') setPrivacyView(result as PrivacyAudit)
+      if (next === 'privacy') setSecurityView(result as SecurityCenter)
       if (next === 'human3') setHuman3View(result as Human3Trend)
     } catch (error) {
       if (controller.signal.aborted || epoch !== sessionEpoch.current || request !== viewRequest.current) return
@@ -251,6 +253,12 @@ function App() {
   function generateReflectionSummary() { return reflectionView ? monthlyAction((api, signal) => api.generateMonthlySummary(reflectionView.id, reflectionView.revision, signal)) : Promise.resolve(false) }
   function saveReflectionSummary(summary: string) { return reflectionView ? monthlyAction((api, signal) => api.saveMonthlySummary(reflectionView.id, summary, reflectionView.revision, signal)) : Promise.resolve(false) }
   async function confirmReflection() { if (!reflectionView || !window.confirm('确认这份月度复盘？确认后会进入历史；后续修改将重新变为草稿。')) return false; const ok = await monthlyAction((api, signal) => api.confirmMonthly(reflectionView.id, reflectionView.revision, signal)); if (ok) setNotice({ kind: 'success', text: '月度复盘已由你确认并进入历史。' }); return Boolean(ok) }
+
+  async function refreshSecurity() { if (!client) return false; try { const result = await client.securityCenter(sessionAbort.current?.signal); setSecurityView(result); return true } catch (error) { handleMutationError(error); return false } }
+  async function authorizeSecurityClient(name: string, scopes: string[]) { if (!client) return false; setSaving(true); try { const result = await client.authorizeSecurityClient(name, scopes, sessionAbort.current?.signal); setClientCredential(result.credential); setNotice({ kind: 'success', text: '客户端已授权；凭据只显示一次。' }); await refreshSecurity(); return true } catch (error) { handleMutationError(error); return false } finally { setSaving(false) } }
+  async function updateSecurityScopes(id: string, scopes: string[]) { if (!client) return false; setSaving(true); try { await client.updateSecurityScopes(id, scopes, sessionAbort.current?.signal); setNotice({ kind: 'success', text: '最小权限已更新，后续请求立即使用新权限。' }); await refreshSecurity(); return true } catch (error) { handleMutationError(error); return false } finally { setSaving(false) } }
+  async function revokeSecurityClient(id: string) { if (!client) return false; setSaving(true); try { await client.revokeSecurityClient(id, sessionAbort.current?.signal); setNotice({ kind: 'success', text: '客户端授权已撤销，后续请求将被拒绝。' }); await refreshSecurity(); return true } catch (error) { handleMutationError(error); return false } finally { setSaving(false) } }
+  async function querySecurityEvents(filters: { clientId: string; eventType: string; result: string; since: string; until: string; page: number; pageSize: number }) { if (!client || !securityView) return false; try { const audit = await client.securityEvents(filters, sessionAbort.current?.signal); setSecurityView({ ...securityView, audit }); return true } catch (error) { handleMutationError(error); return false } }
 
   async function save() {
     if (!client || !selected || !draft.trim()) return false
@@ -344,7 +352,7 @@ function App() {
         {view === 'reflection' && <MonthlyReflectionPage overview={monthlyView} selected={reflectionView} loading={visualLoading === 'reflection'} saving={saving} onSelect={setReflectionView} onCreate={createReflection} onDimension={saveReflectionDimension} onAddEvent={addReflectionEvent} onDeleteEvent={deleteReflectionEvent} onGoals={saveReflectionGoals} onGenerateSummary={generateReflectionSummary} onSummary={saveReflectionSummary} onConfirm={confirmReflection} />}
         {view === 'profile' && <ProfilePage value={profileView} loading={visualLoading === 'profile'} relationshipMap={relationshipMap} onReview={() => void openView('review')} onTimeline={() => void openView('timeline')} />}
         {view === 'timeline' && <TimelinePage value={timelineView} loading={visualLoading === 'timeline'} />}
-        {view === 'privacy' && <PrivacyPage value={privacyView} loading={visualLoading === 'privacy'} />}
+        {view === 'privacy' && <SecurityCenterPage value={securityView} loading={visualLoading === 'privacy'} saving={saving} credential={clientCredential} onAuthorize={authorizeSecurityClient} onScopes={updateSecurityScopes} onRevoke={revokeSecurityClient} onQuery={querySecurityEvents} onClearCredential={() => setClientCredential('')} />}
         {view === 'human3' && <Human3Page value={human3View} loading={visualLoading === 'human3'} />}
         {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} />}
       </div>
@@ -373,16 +381,6 @@ function TimelinePage({ value, loading }: { value: TimelineItem[] | null; loadin
   if (loading || !value) return <Loading />
   return <section className="visual-page"><header><p className="eyebrow">MEMORY LIFECYCLE</p><h2>记忆时间线</h2><p>未确认、denied 和 local-only 记录只显示元数据，不显示正文。</p></header>
     <div className="timeline">{value.length === 0 ? <p className="muted">还没有记忆记录。</p> : value.map((item) => <article key={item.id}><span className={`dot status-${item.status}`} /><div><p className="timeline-meta">{displayTime(item.updated || item.created)} · {item.status} · {item.access}</p><h3>{item.subject || item.type}</h3><p>来源：{item.sourceAgent}</p>{item.previewAvailable && <button className="reveal" onClick={() => setOpen(open === item.id ? null : item.id)}>{open === item.id ? '收起摘要' : '查看确认摘要'}</button>}{open === item.id && <p className="preview">{item.preview}</p>}</div></article>)}</div>
-  </section>
-}
-
-function Counts({ values }: { values: Record<string, number> }) { return <div className="counts">{Object.entries(values).map(([key, count]) => <div key={key}><strong>{count}</strong><span>{key}</span></div>)}</div> }
-
-function PrivacyPage({ value, loading }: { value: PrivacyAudit | null; loading: boolean }) {
-  if (loading || !value) return <Loading />
-  return <section className="visual-page"><header><p className="eyebrow">PRIVACY AUDIT</p><h2>隐私审计</h2><p>{value.totalMemories} 条记录，仅统计本地元数据与 MCP 审计事件。</p></header>
-    <div className="audit-grid"><article><h3>访问级别</h3><Counts values={value.byAccess} /></article><article><h3>生命周期</h3><Counts values={value.byStatus} /></article><article><h3>MCP 事件</h3><Counts values={value.mcpEvents} /></article><article><h3>边界规则</h3><ul>{value.rules.map((rule) => <li key={rule}>{rule}</li>)}</ul></article></div>
-    <section className="issues"><h3>需要检查</h3>{value.issues.length ? value.issues.map((issue) => <p key={issue.id}><code>{issue.id}</code>：{issue.issue}</p>) : <p className="good">没有发现权限元数据问题。</p>}</section>
   </section>
 }
 

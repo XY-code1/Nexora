@@ -60,6 +60,35 @@
 
 final result: passed
 
+## Phase 7 — Privacy Audit & Security Center
+
+### Visual and responsive QA
+
+- The page preserves the Holographic Library shell and uses real API state for service, Vault, MCP, client, denial and audit indicators.
+- Desktop uses paired authorization/permission panels, a full access timeline, lifecycle audit and diagnostics without fake decoration.
+- At 390px the navigation collapses, controls stack, the event table scrolls inside its panel, and the document has no horizontal overflow.
+- Empty and missing states distinguish “not configured”, “no authorized client”, “audit not created” and a valid zero count.
+
+### Security QA
+
+- A synthetic client was authorized with one minimum scope; its credential appeared once and only its hash persisted.
+- A scope update was reflected by the real audit timeline.
+- Revocation changed the durable client state and subsequent protected calls were denied.
+- Event details expose audit metadata only; no credential, memory content or private path is rendered.
+- Formal memory confirmation remains absent from the MCP scope model and UI.
+- Audit tampering fails integrity verification and protected work fails closed.
+
+### Evidence and findings
+
+- `artifacts/security-center-qa/security-center-1440.png`
+- `artifacts/security-center-qa/security-center-narrow.png`
+- Unit 11/11, E2E 7/7, lint/build and all 17 Python regression scripts passed.
+- P0: none. P1: none. Blocking issues: none.
+- Known limitation: the local hash chain has no external transparency anchor; accepted for the Local-first release.
+- Private Vault was not accessed. No commit or push was made.
+
+final result: passed
+
 ---
 
 # Phase 4 — Memory Review Design QA

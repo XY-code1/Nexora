@@ -41,7 +41,7 @@ candidate -> confirmed -> forgotten
 | `local-only` | 拒绝正文 | 不可见 |
 | `denied`、缺失或非法值 | 默认拒绝 | 不可见 |
 
-MCP 还必须同时满足有效 `PROFILE_AGENT_ID` 和所需 `PROFILE_SCOPES`。MCP 不提供 confirm、reject、forget、supersede、Profile 修改或公开发布工具。
+MCP 还必须同时满足已授权的 `PROFILE_AGENT_ID`、有效 `PROFILE_CLIENT_TOKEN` 和 Vault 本地注册表中的所需 scope。环境变量 `PROFILE_SCOPES` 不再被信任。MCP 不提供 confirm、reject、forget、supersede、Profile 修改或公开发布工具。
 
 ## 信任边界
 
