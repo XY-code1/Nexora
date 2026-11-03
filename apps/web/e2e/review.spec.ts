@@ -1,4 +1,35 @@
 import { expect, test } from '@playwright/test'
+import { mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const shots = resolve(import.meta.dirname, '../../../artifacts/memory-review-qa')
+
+test.beforeAll(() => mkdirSync(shots, { recursive: true }))
+
+test('Memory Review search, filters and responsive layout', async ({ page }) => {
+  const errors: string[] = []
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.setViewportSize({ width: 1440, height: 1024 })
+  await page.goto('/')
+  await page.getByLabel('本地启动令牌').fill('e2e-token')
+  await page.getByRole('button', { name: '连接审核空间' }).click()
+  await expect(page.getByRole('heading', { name: 'Memory Review' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '回答风格' })).toBeVisible()
+  await expect(page.locator('.review-stats strong')).toHaveText(['1', '1', '0'])
+  await page.getByLabel('搜索候选记忆').fill('没有这条记忆')
+  await expect(page.getByText('没有匹配结果')).toBeVisible()
+  await page.getByLabel('搜索候选记忆').fill('')
+  await page.getByLabel('分类筛选').selectOption('preference')
+  await expect(page.getByRole('heading', { name: '回答风格' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: resolve(shots, 'memory-review-1440.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.waitForTimeout(250)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: resolve(shots, 'memory-review-narrow.png'), fullPage: true })
+  expect(errors).toEqual([])
+})
 
 test('审核候选记忆：编辑后确认', async ({ page }) => {
   page.on('dialog', (dialog) => dialog.accept())
@@ -6,10 +37,11 @@ test('审核候选记忆：编辑后确认', async ({ page }) => {
   await page.getByLabel('本地启动令牌').fill('e2e-token')
   await page.getByRole('button', { name: '连接审核空间' }).click()
   await expect(page.getByRole('heading', { name: '回答风格' })).toBeVisible()
+  await page.getByRole('button', { name: 'Edit Memory' }).click()
   await page.getByLabel('记忆内容').fill('回答先给结论，再说明原因。')
   await page.getByRole('button', { name: '保存修改' }).click()
   await expect(page.getByText('修改已保存。')).toBeVisible()
-  await page.getByRole('button', { name: '确认记忆' }).click()
+  await page.getByRole('button', { name: 'Confirm Memory' }).click()
   await expect(page.getByText('记忆已确认。')).toBeVisible()
   await expect(page.getByText('暂时没有候选记忆')).toBeVisible()
   await page.getByRole('button', { name: '记忆时间线' }).click()

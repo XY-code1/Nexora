@@ -100,9 +100,23 @@ def memory_view(root: Path, path: Path) -> dict[str, Any]:
         "sourceAgent": metadata.get("source_agent", "unknown"),
         "created": metadata.get("created", ""),
         "updated": metadata.get("updated", ""),
+        "visibility": metadata.get("visibility", "private"),
+        "aiAccess": metadata.get("ai_access", "denied"),
+        "tags": [item.strip() for item in metadata.get("tags", "").split(",") if item.strip()][:20],
         "content": extract_summary(body),
         "revision": profile.revision(path),
     }
+
+
+def memory_stats(root: Path) -> dict[str, int]:
+    counts = {"candidateMemories": 0, "pendingReview": 0, "confirmedMemories": 0}
+    for folder, target in (("Inbox", "pendingReview"), ("Confirmed", "confirmedMemories")):
+        for path in (root / profile.MEMORY_ROOT / folder).glob("*.md"):
+            metadata, _ = profile.read_record(profile.safe_vault_file(root, path))
+            counts[target] += 1
+            if folder == "Inbox" and metadata.get("status") == "candidate":
+                counts["candidateMemories"] += 1
+    return counts
 
 
 def find(root: Path, folder: str, record_id: str) -> Path:
@@ -255,6 +269,11 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         with profile.vault_lock(root):
             files = sorted((root / profile.MEMORY_ROOT / folders[status]).glob("*.md"))[:max(1, min(limit, 100))]
             return envelope([memory_view(root, path) for path in files])
+
+    @app.get("/api/v1/memory-stats", dependencies=[auth])
+    def get_memory_stats() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(memory_stats(root))
 
     @app.get("/api/v1/memories/{record_id}", dependencies=[auth])
     def get_memory(record_id: str) -> dict[str, Any]:

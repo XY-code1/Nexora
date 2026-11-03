@@ -10,8 +10,9 @@ beforeEach(() => vi.spyOn(window, 'confirm').mockReturnValue(true))
 
 const memory = {
   id: 'mem-20261102-12345678', status: 'candidate', type: 'preference', subject: '回答风格', sourceAgent: 'test-agent',
-  created: '2026-11-02T10:00:00+00:00', updated: '2026-11-02T10:00:00+00:00', content: '回答先给结论。', revision: 'a'.repeat(64),
+  created: '2026-11-02T10:00:00+00:00', updated: '2026-11-02T10:00:00+00:00', visibility: 'private', aiAccess: 'summary-only', tags: [], content: '回答先给结论。', revision: 'a'.repeat(64),
 }
+const stats = { candidateMemories: 1, pendingReview: 1, confirmedMemories: 0 }
 
 function response(data: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } }))
@@ -36,33 +37,40 @@ describe('review workspace', () => {
   it('loads, edits, confirms and removes a candidate', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { ...memory, content: '更新内容', revision: 'b'.repeat(64) }, meta: { requestId: '2' } }))
+      .mockImplementationOnce(() => response({ data: [{ ...memory, content: '更新内容', revision: 'b'.repeat(64) }], meta: { requestId: 'refresh-1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-refresh' } }))
       .mockImplementationOnce(() => response({ data: { id: memory.id, action: 'confirm', status: 'completed' }, meta: { requestId: '3' } }))
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '4' } }))
+      .mockImplementationOnce(() => response({ data: { ...stats, candidateMemories: 0, pendingReview: 0, confirmedMemories: 1 }, meta: { requestId: 'stats-2' } }))
 
     render(<App />)
     await connect()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Memory' }))
     fireEvent.change(screen.getByLabelText('记忆内容'), { target: { value: '更新内容' } })
     fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
     await screen.findByText('修改已保存。')
-    fireEvent.click(screen.getByRole('button', { name: '确认记忆' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Memory' }))
     await screen.findByText('记忆已确认。')
     await screen.findByText('暂时没有候选记忆')
     expect(window.confirm).toHaveBeenCalled()
-    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock).toHaveBeenCalledTimes(8)
   })
 
   it('sends a rejection reason and supports disconnect', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { id: memory.id, action: 'reject', status: 'completed' }, meta: { requestId: '2' } }))
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '3' } }))
+      .mockImplementationOnce(() => response({ data: { ...stats, candidateMemories: 0, pendingReview: 0 }, meta: { requestId: 'stats-2' } }))
     render(<App />)
     await connect()
     fireEvent.change(screen.getByLabelText('拒绝原因（可选）'), { target: { value: '不是长期信息' } })
-    fireEvent.click(screen.getByRole('button', { name: '拒绝' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reject Memory' }))
     await screen.findByText('候选记忆已拒绝。')
-    expect(fetchMock.mock.calls[1]?.[1]?.body).toContain('不是长期信息')
+    expect(fetchMock.mock.calls[2]?.[1]?.body).toContain('不是长期信息')
     fireEvent.click(screen.getByRole('button', { name: '断开连接' }))
     expect(screen.getByRole('button', { name: '连接审核空间' })).toBeInTheDocument()
   })
@@ -70,11 +78,12 @@ describe('review workspace', () => {
   it('shows a refreshable conflict message for 409', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ error: { code: 'REVISION_CONFLICT', message: 'stale', details: {} }, requestId: '2' }, 409))
 
     render(<App />)
     await connect()
-    fireEvent.click(screen.getByRole('button', { name: '确认记忆' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Memory' }))
     await waitFor(() => expect(screen.getByText(/刚刚被其他入口修改/)).toBeInTheDocument())
     expect(screen.getByRole('button', { name: '刷新数据' })).toBeInTheDocument()
   })
@@ -82,6 +91,7 @@ describe('review workspace', () => {
   it('consumes a launcher token from the fragment and closes the local service', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { status: 'shutting-down' }, meta: { requestId: '2' } }))
     window.history.replaceState(null, '', '/#token=launcher-token')
 
@@ -90,12 +100,13 @@ describe('review workspace', () => {
     expect(window.location.hash).toBe('')
     fireEvent.click(screen.getByRole('button', { name: '关闭服务' }))
     await screen.findByRole('heading', { name: '本地服务已关闭' })
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/v1/shutdown')
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/v1/shutdown')
   })
 
   it('shows privacy-trimmed visualization pages on demand', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { access: 'allowed', protected: false, sections: [{ title: 'Stable preferences', items: ['先给结论'] }] }, meta: { requestId: '2' } }))
       .mockImplementationOnce(() => response({ data: [{ ...memory, access: 'summary-only', previewAvailable: true, preview: '回答先给结论。' }], meta: { requestId: '3' } }))
       .mockImplementationOnce(() => response({ data: { totalMemories: 1, byStatus: { confirmed: 1 }, byAccess: { 'summary-only': 1 }, bySource: {}, mcpEvents: {}, issues: [], rules: ['所有统计仅在本机生成'] }, meta: { requestId: '4' } }))
@@ -115,12 +126,13 @@ describe('review workspace', () => {
     await screen.findByText('所有统计仅在本机生成')
     fireEvent.click(screen.getByRole('button', { name: 'Human 3.0趋势' }))
     await screen.findByText('还没有已确认的复盘')
-    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
   })
 
   it('renders an honest empty profile without inventing relationships', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { access: 'allowed', protected: false, sections: [], hasConfirmedMemories: false }, meta: { requestId: '2' } }))
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
@@ -137,8 +149,10 @@ describe('review workspace', () => {
     const oldPrivacy = new Promise<Response>((resolve) => { resolveOld = resolve })
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => oldPrivacy)
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '3' } }))
+      .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-2' } }))
     render(<App />)
     await connect()
     fireEvent.click(screen.getByRole('button', { name: '隐私审计' }))
@@ -161,6 +175,7 @@ describe('review workspace', () => {
     }
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: onboarding, meta: { requestId: '2' } }))
       .mockImplementationOnce(() => response({ data: { candidateId: 'mem-onboarding', state: { ...onboarding, topics: [{ ...onboarding.topics[0], status: 'pending' }, onboarding.topics[1]], nextTopic: 'communication' } }, meta: { requestId: '3' } }))
     render(<App />)
@@ -183,6 +198,7 @@ describe('review workspace', () => {
     }
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { session: null }, meta: { requestId: '2' } }))
       .mockImplementationOnce(() => response({ data: { session }, meta: { requestId: '3' } }))
     render(<App />)
@@ -204,6 +220,7 @@ describe('review workspace', () => {
     }
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { session }, meta: { requestId: '2' } }))
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })

@@ -8,9 +8,14 @@ export type Memory = {
   sourceAgent: string
   created: string
   updated: string
+  visibility: string
+  aiAccess: string
+  tags: string[]
   content: string
   revision: string
 }
+
+export type MemoryStats = { candidateMemories: number; pendingReview: number; confirmedMemories: number }
 
 export type ProfileOverview = { access: string; protected: boolean; visibility?: string; hasConfirmedMemories?: boolean; sections: { title: string; items: string[] }[] }
 export type TimelineItem = Omit<Memory, 'content' | 'revision'> & { access: string; previewAvailable: boolean; preview: string }
@@ -56,6 +61,7 @@ export class ApiClient {
   }
 
   listCandidates(signal?: AbortSignal) { return this.request<Memory[]>('/api/v1/memories?status=candidate', { signal }) }
+  memoryStats(signal?: AbortSignal) { return this.request<MemoryStats>('/api/v1/memory-stats', { signal }) }
   profileOverview(signal?: AbortSignal) { return this.request<ProfileOverview>('/api/v1/visualization/profile', { signal }) }
   timeline(signal?: AbortSignal) { return this.request<TimelineItem[]>('/api/v1/visualization/timeline', { signal }) }
   privacyAudit(signal?: AbortSignal) { return this.request<PrivacyAudit>('/api/v1/visualization/privacy', { signal }) }

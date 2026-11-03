@@ -41,6 +41,10 @@ def main():
         assert created.status_code == 201
         memory = created.json()["data"]
         revision = memory["revision"]
+        assert memory["aiAccess"] == "summary-only" and memory["visibility"] == "private"
+        assert client.get("/api/v1/memory-stats").status_code == 401
+        stats = client.get("/api/v1/memory-stats", headers=headers).json()["data"]
+        assert stats == {"candidateMemories": 1, "pendingReview": 1, "confirmedMemories": 0}
 
         edited = client.patch(
             f"/api/v1/memories/{memory['id']}",
@@ -64,6 +68,8 @@ def main():
             json={"expected_revision": current_revision},
         )
         assert confirmed.status_code == 200
+        stats = client.get("/api/v1/memory-stats", headers=headers).json()["data"]
+        assert stats == {"candidateMemories": 0, "pendingReview": 0, "confirmedMemories": 1}
 
         confirmed_view = client.get(f"/api/v1/memories/{memory['id']}", headers=headers).json()["data"]
         superseded = client.post(

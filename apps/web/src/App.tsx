@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Brain, CalendarDots, ChatCircleDots, CirclesFour, Database, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
-import { ApiClient, ApiError, type Human3Dimension, type Human3Session, type Human3Trend, type Memory, type OnboardingState, type OnboardingTopic, type PrivacyAudit, type ProfileOverview, type TimelineItem } from './api'
+import { ApiClient, ApiError, type Human3Dimension, type Human3Session, type Human3Trend, type Memory, type MemoryStats, type OnboardingState, type OnboardingTopic, type PrivacyAudit, type ProfileOverview, type TimelineItem } from './api'
+import MemoryReviewPage from './MemoryReviewPage'
 import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
@@ -57,6 +58,7 @@ function App() {
   const [gateError, setGateError] = useState('')
   const [connecting, setConnecting] = useState(false)
   const [memories, setMemories] = useState<Memory[]>([])
+  const [memoryStats, setMemoryStats] = useState<MemoryStats>({ candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [rejectionReason, setRejectionReason] = useState('')
@@ -99,10 +101,11 @@ function App() {
     setGateError('')
     try {
       const nextClient = new ApiClient(nextToken)
-      const result = await nextClient.listCandidates(controller.signal)
+      const [result, stats] = await Promise.all([nextClient.listCandidates(controller.signal), nextClient.memoryStats(controller.signal)])
       if (epoch !== sessionEpoch.current) return
       setToken(nextToken)
       applyMemories(result)
+      setMemoryStats(stats)
       setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null); setOnboardingView(null); setReflectionView(null); setReflectionLoaded(false)
       setNotice(null)
     } catch (error) {
@@ -129,11 +132,12 @@ function App() {
     const signal = sessionAbort.current?.signal
     setLoading(true)
     try {
-      const result = await client.listCandidates(signal)
-      if (epoch !== sessionEpoch.current || signal?.aborted) return
+      const [result, stats] = await Promise.all([client.listCandidates(signal), client.memoryStats(signal)])
+      if (epoch !== sessionEpoch.current || signal?.aborted) return false
       applyMemories(result)
+      setMemoryStats(stats)
     } catch (error) {
-      if (epoch !== sessionEpoch.current || signal?.aborted) return
+      if (epoch !== sessionEpoch.current || signal?.aborted) return false
       if (error instanceof ApiError && error.status === 401) {
         disconnect('会话已失效，请重新连接。')
       } else {
@@ -149,6 +153,7 @@ function App() {
     sessionAbort.current?.abort()
     setToken('')
     setMemories([])
+    setMemoryStats({ candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 })
     setSelectedId(null)
     setDraft('')
     setNotice(null)
@@ -264,31 +269,34 @@ function App() {
   }
 
   async function save() {
-    if (!client || !selected || !draft.trim()) return
+    if (!client || !selected || !draft.trim()) return false
     const epoch = sessionEpoch.current
     const signal = sessionAbort.current?.signal
     setSaving(true)
     try {
       const updated = await client.edit(selected.id, draft.trim(), selected.revision, signal)
-      if (epoch !== sessionEpoch.current || signal?.aborted) return
+      if (epoch !== sessionEpoch.current || signal?.aborted) return false
       setMemories((items) => items.map((item) => item.id === updated.id ? updated : item))
       setNotice({ kind: 'success', text: '修改已保存。' })
-    } catch (error) { if (epoch === sessionEpoch.current && !signal?.aborted) handleMutationError(error) } finally { if (epoch === sessionEpoch.current) setSaving(false) }
+      await loadCandidates()
+      return true
+    } catch (error) { if (epoch === sessionEpoch.current && !signal?.aborted) handleMutationError(error); return false } finally { if (epoch === sessionEpoch.current) setSaving(false) }
   }
 
   async function act(action: 'confirm' | 'reject') {
-    if (!client || !selected) return
+    if (!client || !selected) return false
     const label = action === 'confirm' ? '确认这条记忆并允许已授权 AI 检索？' : '拒绝这条候选记忆？拒绝记录会保留用于审计。'
-    if (!window.confirm(label)) return
+    if (!window.confirm(label)) return false
     const epoch = sessionEpoch.current
     const signal = sessionAbort.current?.signal
     setSaving(true)
     try {
       await client.action(selected.id, action, selected.revision, rejectionReason.trim(), signal)
-      if (epoch !== sessionEpoch.current || signal?.aborted) return
+      if (epoch !== sessionEpoch.current || signal?.aborted) return false
       setNotice({ kind: 'success', text: action === 'confirm' ? '记忆已确认。' : '候选记忆已拒绝。' })
       await loadCandidates()
-    } catch (error) { if (epoch === sessionEpoch.current && !signal?.aborted) handleMutationError(error) } finally { if (epoch === sessionEpoch.current) setSaving(false) }
+      return true
+    } catch (error) { if (epoch === sessionEpoch.current && !signal?.aborted) handleMutationError(error); return false } finally { if (epoch === sessionEpoch.current) setSaving(false) }
   }
 
   function handleMutationError(error: unknown) {
@@ -346,7 +354,6 @@ function App() {
     <section className="app-stage">
       <header className="topbar"><div><p className="eyebrow">HOLOGRAPHIC LIBRARY</p><h1>{titles[view]}</h1></div><div className="topbar-actions"><span className="service-status"><i />本地服务</span><span className="service-status"><i />Vault 已就绪</span><button className="icon-button" aria-label="同步候选记忆" title="同步候选记忆" onClick={() => void loadCandidates()} disabled={loading}><Database size={19} /></button><button className="text-button" onClick={() => disconnect()}>断开连接</button><button className="text-button danger-link" onClick={() => void shutdown()} disabled={saving}>关闭服务</button></div></header>
       <div className="content-shell">
-        {view === 'review' && <section className="intro"><p>每一条候选记忆都需要你的决定。确认后，其他已授权 AI 才能检索它。</p><span>{memories.length} 条待审核</span></section>}
         {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
 
         {view === 'onboarding' && <OnboardingPage value={onboardingView} loading={visualLoading === 'onboarding'} saving={saving} onSave={saveOnboarding} onReview={() => void openView('review')} />}
@@ -355,29 +362,7 @@ function App() {
         {view === 'timeline' && <TimelinePage value={timelineView} loading={visualLoading === 'timeline'} />}
         {view === 'privacy' && <PrivacyPage value={privacyView} loading={visualLoading === 'privacy'} />}
         {view === 'human3' && <Human3Page value={human3View} loading={visualLoading === 'human3'} />}
-        {view === 'review' && <section className="workspace" aria-label="候选记忆审核">
-      <aside className="memory-list" aria-label="候选记忆列表">
-        <div className="list-heading"><h2>待审核</h2><span>{loading ? '同步中' : `${memories.length} 条`}</span></div>
-        {loading && <div className="skeletons" aria-label="加载中"><i /><i /><i /></div>}
-        {!loading && memories.length === 0 && <div className="empty"><h2>暂时没有候选记忆</h2><p>继续与已连接的 AI 对话；新的候选记忆会在这里等待你的审核。</p></div>}
-        {!loading && memories.map((memory) => <button key={memory.id} className={`memory-row ${memory.id === selectedId ? 'selected' : ''}`} onClick={() => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }}>
-          <span className="memory-row-meta">{memory.type} · {memory.sourceAgent}</span><strong>{memory.subject || '未命名候选记忆'}</strong><span>{memory.content}</span>
-        </button>)}
-      </aside>
-
-      <section className="detail" aria-live="polite">
-        {!selected && !loading && <div className="detail-empty"><p>从左侧选择一条候选记忆开始审核。</p></div>}
-        {selected && <>
-          <div className="detail-header"><div><p className="eyebrow">CANDIDATE / {selected.type.toUpperCase()}</p><h2>{selected.subject || '未命名候选记忆'}</h2></div><span className="status">候选</span></div>
-          <dl className="metadata"><div><dt>来源</dt><dd>{selected.sourceAgent}</dd></div><div><dt>创建于</dt><dd>{displayTime(selected.created)}</dd></div><div><dt>隐私</dt><dd>待确认前不作为长期事实</dd></div></dl>
-          <label htmlFor="memory-content">记忆内容</label>
-          <textarea id="memory-content" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={4000} disabled={saving} />
-          <label htmlFor="rejection-reason">拒绝原因（可选）</label>
-          <input id="rejection-reason" value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} maxLength={200} placeholder="例如：不是长期信息" disabled={saving} />
-          <div className="detail-footer"><p>{draft.length}/4000</p><div className="actions"><button className="secondary" onClick={() => void save()} disabled={saving || !draft.trim()}>保存修改</button><button className="danger" onClick={() => void act('reject')} disabled={saving}>拒绝</button><button onClick={() => void act('confirm')} disabled={saving}>确认记忆</button></div></div>
-        </>}
-      </section>
-        </section>}
+        {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} />}
       </div>
     </section>
   </main>
