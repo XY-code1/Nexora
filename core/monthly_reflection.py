@@ -221,7 +221,10 @@ def generate_summary(path: str, reflection_id: str, expected_revision: str) -> P
         present = [(label, text) for label, text in sources if text]
         if not present:
             raise SystemExit("请先填写至少一个维度，再生成摘要草稿。")
-        excerpts = [f"{label}：{re.split(r'[。！？\n]', text, maxsplit=1)[0][:180]}" for label, text in present]
+        excerpts: list[str] = []
+        for label, text in present:
+            first = re.split(r"[。！？\n]", text, maxsplit=1)[0][:180]
+            excerpts.append(f"{label}：{first}")
         data["summary"] = "；".join(excerpts) + "。"
         data["summarySource"] = "local-extractive"
     return _mutate(root, reflection_id, expected_revision, change)
