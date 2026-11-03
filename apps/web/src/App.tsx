@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
+import { Brain, CalendarDots, ChatCircleDots, CirclesFour, Database, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
 import { ApiClient, ApiError, type Human3Dimension, type Human3Session, type Human3Trend, type Memory, type OnboardingState, type OnboardingTopic, type PrivacyAudit, type ProfileOverview, type TimelineItem } from './api'
+import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
@@ -71,6 +73,7 @@ function App() {
   const [reflectionView, setReflectionView] = useState<Human3Session | null>(null)
   const [reflectionLoaded, setReflectionLoaded] = useState(false)
   const [visualLoading, setVisualLoading] = useState<View | null>(null)
+  const [navigationOpen, setNavigationOpen] = useState(false)
   const sessionEpoch = useRef(0)
   const viewRequest = useRef(0)
   const visualAbort = useRef<AbortController | null>(null)
@@ -316,28 +319,43 @@ function App() {
   if (closed) return <main className="gate"><section className="gate-panel"><p className="eyebrow">PERSONAL AI PROFILE / CLOSED</p><h1>本地服务已关闭</h1><p>你的私人档案仍保存在本地。现在可以关闭此浏览器标签页。</p></section></main>
   if (!token) return <TokenGate error={gateError} connecting={connecting} onConnect={connect} />
 
+  const navigation: { label: string; view?: View; icon: typeof House }[] = [
+    { label: '概览', icon: House },
+    { label: '记忆审核', view: 'review', icon: Stack },
+    { label: '对话式引导', view: 'onboarding', icon: ChatCircleDots },
+    { label: '个人档案', view: 'profile', icon: UserCircle },
+    { label: '月度复盘', view: 'reflection', icon: CalendarDots },
+    { label: 'Human 3.0', view: 'human3', icon: Brain },
+    { label: '隐私审计', view: 'privacy', icon: ShieldCheck },
+    { label: 'AI 连接', icon: PlugsConnected },
+  ]
+  const titles: Record<View, string> = { review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0' }
+
   return <main className="app-shell">
-    <header className="topbar">
-      <div><p className="eyebrow">PERSONAL AI PROFILE / REVIEW</p><h1>记忆审核空间</h1></div>
-      <div className="topbar-actions"><span className="local-badge">仅限本机</span><button className="text-button" onClick={() => void loadCandidates()} disabled={loading}>刷新列表</button><button className="text-button" onClick={() => disconnect()}>断开连接</button><button className="text-button danger-link" onClick={() => void shutdown()} disabled={saving}>关闭服务</button></div>
-    </header>
+    <button className="mobile-menu" aria-label="打开导航" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}><List size={22} /></button>
+    {navigationOpen && <button className="navigation-scrim" aria-label="关闭导航" onClick={() => setNavigationOpen(false)} />}
+    <aside className={`sidebar ${navigationOpen ? 'open' : ''}`}>
+      <div className="brand"><span className="brand-mark"><CirclesFour weight="duotone" /></span><div><strong>Personal AI Profile</strong><small>INTELLIGENCE LIBRARY</small></div><button className="drawer-close" aria-label="关闭导航" onClick={() => setNavigationOpen(false)}><X /></button></div>
+      <nav aria-label="档案功能">
+        {navigation.map((item) => { const Icon = item.icon; const active = item.view === view || (item.view === 'profile' && view === 'timeline'); return <button key={item.label} className={active ? 'active' : ''} aria-label={item.view === 'human3' ? 'Human 3.0趋势' : undefined} aria-current={active ? 'page' : undefined} aria-disabled={!item.view} title={!item.view ? '后续阶段开放' : undefined} onClick={() => { if (item.view) { void openView(item.view); setNavigationOpen(false) } }}><Icon size={22} weight={active ? 'duotone' : 'regular'} /><span>{item.label}</span>{!item.view && <small>即将开放</small>}</button> })}
+      </nav>
+      <button className="timeline-shortcut" onClick={() => { void openView('timeline'); setNavigationOpen(false) }}><CalendarDots size={18} />记忆时间线</button>
+      <div className="sidebar-status"><p><Database size={17} /><span>本地服务</span><strong>已连接</strong></p><p><LockKey size={17} /><span>Vault</span><strong>受保护</strong></p></div>
+    </aside>
 
-    <nav className="primary-nav" aria-label="档案功能">
-      {([['review', '记忆审核'], ['onboarding', '对话式引导'], ['reflection', '月度复盘'], ['profile', '个人档案'], ['timeline', '记忆时间线'], ['privacy', '隐私审计'], ['human3', 'Human 3.0趋势']] as [View, string][]).map(([key, label]) =>
-        <button key={key} className={view === key ? 'active' : ''} aria-current={view === key ? 'page' : undefined} onClick={() => void openView(key)}>{label}</button>
-      )}
-    </nav>
+    <section className="app-stage">
+      <header className="topbar"><div><p className="eyebrow">HOLOGRAPHIC LIBRARY</p><h1>{titles[view]}</h1></div><div className="topbar-actions"><span className="service-status"><i />本地服务</span><span className="service-status"><i />Vault 已就绪</span><button className="icon-button" aria-label="同步候选记忆" title="同步候选记忆" onClick={() => void loadCandidates()} disabled={loading}><Database size={19} /></button><button className="text-button" onClick={() => disconnect()}>断开连接</button><button className="text-button danger-link" onClick={() => void shutdown()} disabled={saving}>关闭服务</button></div></header>
+      <div className="content-shell">
+        {view === 'review' && <section className="intro"><p>每一条候选记忆都需要你的决定。确认后，其他已授权 AI 才能检索它。</p><span>{memories.length} 条待审核</span></section>}
+        {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
 
-    {view === 'review' && <section className="intro"><p>每一条候选记忆都需要你的决定。确认后，其他已授权 AI 才能检索它。</p><span>{memories.length} 条待审核</span></section>}
-    {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
-
-    {view === 'onboarding' && <OnboardingPage value={onboardingView} loading={visualLoading === 'onboarding'} saving={saving} onSave={saveOnboarding} onReview={() => void openView('review')} />}
-    {view === 'reflection' && <ReflectionPage value={reflectionView} loaded={reflectionLoaded} loading={visualLoading === 'reflection'} saving={saving} onStart={startReflection} onSaveDimension={saveReflectionDimension} onSaveConclusion={saveReflectionConclusion} onConfirm={confirmReflection} />}
-    {view === 'profile' && <ProfilePage value={profileView} loading={visualLoading === 'profile'} />}
-    {view === 'timeline' && <TimelinePage value={timelineView} loading={visualLoading === 'timeline'} />}
-    {view === 'privacy' && <PrivacyPage value={privacyView} loading={visualLoading === 'privacy'} />}
-    {view === 'human3' && <Human3Page value={human3View} loading={visualLoading === 'human3'} />}
-    {view === 'review' && <section className="workspace" aria-label="候选记忆审核">
+        {view === 'onboarding' && <OnboardingPage value={onboardingView} loading={visualLoading === 'onboarding'} saving={saving} onSave={saveOnboarding} onReview={() => void openView('review')} />}
+        {view === 'reflection' && <ReflectionPage value={reflectionView} loaded={reflectionLoaded} loading={visualLoading === 'reflection'} saving={saving} onStart={startReflection} onSaveDimension={saveReflectionDimension} onSaveConclusion={saveReflectionConclusion} onConfirm={confirmReflection} />}
+        {view === 'profile' && <ProfilePage value={profileView} loading={visualLoading === 'profile'} relationshipMap={relationshipMap} onReview={() => void openView('review')} onTimeline={() => void openView('timeline')} />}
+        {view === 'timeline' && <TimelinePage value={timelineView} loading={visualLoading === 'timeline'} />}
+        {view === 'privacy' && <PrivacyPage value={privacyView} loading={visualLoading === 'privacy'} />}
+        {view === 'human3' && <Human3Page value={human3View} loading={visualLoading === 'human3'} />}
+        {view === 'review' && <section className="workspace" aria-label="候选记忆审核">
       <aside className="memory-list" aria-label="候选记忆列表">
         <div className="list-heading"><h2>待审核</h2><span>{loading ? '同步中' : `${memories.length} 条`}</span></div>
         {loading && <div className="skeletons" aria-label="加载中"><i /><i /><i /></div>}
@@ -359,7 +377,9 @@ function App() {
           <div className="detail-footer"><p>{draft.length}/4000</p><div className="actions"><button className="secondary" onClick={() => void save()} disabled={saving || !draft.trim()}>保存修改</button><button className="danger" onClick={() => void act('reject')} disabled={saving}>拒绝</button><button onClick={() => void act('confirm')} disabled={saving}>确认记忆</button></div></div>
         </>}
       </section>
-    </section>}
+        </section>}
+      </div>
+    </section>
   </main>
 }
 
@@ -426,10 +446,17 @@ function ConclusionForm({ session, saving, onSave, onConfirm }: { session: Human
   </article>
 }
 
-function ProfilePage({ value, loading }: { value: ProfileOverview | null; loading: boolean }) {
+function ProfilePage({ value, loading, relationshipMap, onReview, onTimeline }: { value: ProfileOverview | null; loading: boolean; relationshipMap: string; onReview: () => void; onTimeline: () => void }) {
   if (loading || !value) return <Loading />
-  return <section className="visual-page"><header><p className="eyebrow">LOCAL PROFILE</p><h2>个人档案</h2><p>只显示当前 Vault 中经过权限裁剪的结构化内容。</p></header>
-    {value.protected ? <div className="protected">此档案标记为 <code>{value.access}</code>，默认视图不显示内容。</div> : <div className="profile-grid">{value.sections.map((section) => <article key={section.title}><h3>{section.title}</h3>{section.items.length ? <ul>{section.items.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="muted">尚未填写</p>}</article>)}</div>}
+  return <section className="visual-page profile-page"><header className="profile-heading"><div><p className="eyebrow">PERSONAL INTELLIGENCE</p><h2>个人档案</h2><p>基础档案来自本地 Profile；长期记忆只有经过你的确认且允许展示后，才会参与这里的智能视图。</p></div><span className="boundary-badge"><ShieldCheck size={18} />确认边界已启用</span></header>
+    {value.protected ? <div className="protected"><LockKey size={20} />此档案标记为 <code>{value.access}</code>，当前视图不会显示受保护内容。</div> : <div className="profile-layout">
+      <section className="profile-library" aria-label="个人档案内容">
+        <div className="profile-summary"><span className="profile-avatar"><UserCircle size={42} weight="duotone" /></span><div><p className="eyebrow">PROFILE SUMMARY</p><h3>你的长期智能档案</h3><p>只显示本地 Profile 中明确保存且当前允许展示的内容。</p></div><button className="secondary-action" onClick={onTimeline}>查看生命周期</button></div>
+        <div className="profile-sections">{value.sections.length === 0 ? <div className="profile-empty"><Sparkle size={24} /><h3>档案还是空的</h3><p>完成对话式引导并确认候选记忆后，你可以逐步完善长期档案。</p><button className="primary-action" onClick={onReview}>前往记忆审核</button></div> : value.sections.map((section) => <article key={section.title}><span className="section-icon"><Sparkle size={20} /></span><div><h3>{section.title}</h3>{section.items.length ? <ul>{section.items.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="muted">尚未填写。</p>}</div></article>)}</div>
+      </section>
+      <aside className={`relationship-panel ${value.hasConfirmedMemories ? '' : 'inactive'}`}><div><p className="eyebrow">RELATIONSHIP MAP</p><h3>全息关系图谱</h3><p>用于呈现可见的已确认记忆空间，不会自动推断真实关系。</p></div><img src={relationshipMap} alt="全息关系图谱的视觉框架，当前不代表具体个人数据关系" /><div className="relationship-empty"><Network size={20} /><span>{value.hasConfirmedMemories ? '存在可展示的已确认记忆' : '暂无可展示的已确认记忆'}</span></div></aside>
+      <aside className="profile-inspector"><p className="eyebrow">ABOUT THIS PROFILE</p><h3>确认优先</h3><p>候选、拒绝和归档记忆不会进入智能视图；只有可访问的 confirmed memory 才有资格参与。</p><hr /><h3>本地优先</h3><p>档案内容保留在你的本地 Vault，页面不显示私人路径。</p><hr /><h3>下一步</h3><p>审核候选记忆，逐步完善你的长期档案。</p><button className="primary-action" onClick={onReview}><Stack size={18} />前往记忆审核</button></aside>
+    </div>}
   </section>
 }
 

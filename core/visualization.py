@@ -36,15 +36,27 @@ def _sections(body: str) -> list[dict[str, Any]]:
     return result
 
 
+def _has_visible_confirmed_memory(root: Path) -> bool:
+    for path in (root / profile.MEMORY_ROOT / "Confirmed").glob("*.md"):
+        text = _safe_text(root, path)
+        metadata, _ = profile.read_record(path)
+        if metadata.get("status") == "confirmed" and get_access_level(text) in {"allowed", "summary-only"}:
+            return True
+    return False
+
+
 def profile_overview(root: Path) -> dict[str, Any]:
     text = _safe_text(root, root / "10 Profile" / "Profile.md")
     metadata, body = profile.parse_record(text)
     access = get_access_level(text)
+    has_confirmed_memories = _has_visible_confirmed_memory(root)
     if access in {"denied", "local-only"}:
-        return {"access": access, "sections": [], "protected": True}
+        return {"access": access, "sections": [], "protected": True, "hasConfirmedMemories": False}
     if access == "summary-only":
-        return {"access": access, "sections": [{"title": "摘要", "items": [extract_summary(body)]}], "protected": False}
-    return {"access": access, "sections": _sections(body), "protected": False, "visibility": metadata.get("visibility", "private")}
+        return {"access": access, "sections": [{"title": "摘要", "items": [extract_summary(body)]}], "protected": False, "hasConfirmedMemories": has_confirmed_memories}
+    template = (profile.ROOT / "template" / "10 Profile" / "Profile.md").read_text(encoding="utf-8")
+    sections = _sections(body) if text != template else []
+    return {"access": access, "sections": sections, "protected": False, "visibility": metadata.get("visibility", "private"), "hasConfirmedMemories": has_confirmed_memories}
 
 
 def _memory_files(root: Path):

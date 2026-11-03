@@ -12,7 +12,7 @@ export type Memory = {
   revision: string
 }
 
-export type ProfileOverview = { access: string; protected: boolean; visibility?: string; sections: { title: string; items: string[] }[] }
+export type ProfileOverview = { access: string; protected: boolean; visibility?: string; hasConfirmedMemories?: boolean; sections: { title: string; items: string[] }[] }
 export type TimelineItem = Omit<Memory, 'content' | 'revision'> & { access: string; previewAvailable: boolean; preview: string }
 export type PrivacyAudit = { totalMemories: number; byStatus: Record<string, number>; byAccess: Record<string, number>; bySource: Record<string, number>; mcpEvents: Record<string, number>; issues: { id: string; issue: string }[]; rules: string[] }
 export type Human3Trend = { disclaimer: string; dimensions: string[]; points: { date: string; scores: Record<string, number>; summary: string }[] }

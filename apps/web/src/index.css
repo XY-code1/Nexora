@@ -1,6 +1,17 @@
-:root { font-family: ui-sans-serif, system-ui, "Microsoft YaHei", sans-serif; color: #182623; background: #eef3ef; font-synthesis: none; }
+:root {
+  font-family: Inter, "Segoe UI Variable", "Microsoft YaHei", system-ui, sans-serif;
+  color: #eaf2ff; background: #080d18; font-synthesis: none;
+  --bg-primary: #080d18; --bg-secondary: #111b2c; --bg-panel: #19263a;
+  --color-primary: #27bfff; --color-cyan: #20d9e8; --color-violet: #936bff;
+  --color-success: #36d69a; --color-danger: #ff7892;
+  --text-primary: #eaf2ff; --text-secondary: #91a3bc;
+  --border-subtle: rgba(130,170,220,.16); --border-active: rgba(39,191,255,.62);
+  --radius-sm: 8px; --radius-md: 14px; --radius-lg: 20px; --sidebar-width: 264px;
+}
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100dvh; }
-button, input, textarea { font: inherit; }
-button { cursor: pointer; }
-button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #d0df45; outline-offset: 3px; }
+html { color-scheme: dark; }
+body { margin: 0; min-width: 320px; min-height: 100dvh; background: var(--bg-primary); }
+button, input, textarea, select { font: inherit; } button { cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid var(--color-cyan); outline-offset: 3px; }
+::selection { color: var(--bg-primary); background: var(--color-cyan); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }

@@ -104,6 +104,8 @@ describe('review workspace', () => {
     await connect()
     fireEvent.click(screen.getByRole('button', { name: '个人档案' }))
     await screen.findByText('先给结论')
+    expect(screen.getByText('确认边界已启用')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /全息关系图谱的视觉框架/ })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '记忆时间线' }))
     await screen.findByRole('button', { name: '查看确认摘要' })
     expect(screen.queryByText('回答先给结论。')).not.toBeInTheDocument()
@@ -114,6 +116,20 @@ describe('review workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Human 3.0趋势' }))
     await screen.findByText('还没有已确认的复盘')
     expect(fetchMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('renders an honest empty profile without inventing relationships', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: { access: 'allowed', protected: false, sections: [], hasConfirmedMemories: false }, meta: { requestId: '2' } }))
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByText('暂时没有候选记忆')
+    fireEvent.click(screen.getByRole('button', { name: '个人档案' }))
+    await screen.findByText('档案还是空的')
+    expect(screen.getByText('暂无可展示的已确认记忆')).toBeInTheDocument()
+    expect(screen.queryByText(/已确认记忆 \([1-9]/)).not.toBeInTheDocument()
   })
 
   it('does not render a stale visualization response after reconnecting', async () => {

@@ -26,6 +26,8 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "vault"
         profile.init(str(root))
+        initial = profile_overview(root)
+        assert initial["sections"] == [] and initial["hasConfirmedMemories"] is False
         write_memory(root, "Confirmed", "allowed", status="confirmed", access="summary-only", summary="可见摘要")
         write_memory(root, "Confirmed", "private", status="confirmed", access="local-only", summary="不可见摘要")
         write_memory(root, "Inbox", "candidate", status="candidate", access="allowed", summary="未确认摘要")
@@ -49,7 +51,10 @@ def main():
 
         audit = privacy_audit(root)
         assert audit["totalMemories"] == 4 and audit["byAccess"]["local-only"] == 1
-        assert profile_overview(root)["sections"]
+        overview = profile_overview(root)
+        assert overview["sections"] == []  # Untouched template is an honest empty profile.
+        assert overview["hasConfirmedMemories"] is True
+        assert "未确认摘要" not in str(overview) and "不可见摘要" not in str(overview)
 
         human = root / "40 Reviews" / "Human3" / "History" / "2026-11.md"
         human.write_text(
@@ -70,7 +75,11 @@ def main():
         profile_file = root / "10 Profile" / "Profile.md"
         profile_file.write_text(profile_file.read_text(encoding="utf-8").replace("ai_access: allowed", "ai_access: denied"), encoding="utf-8")
         protected = client.get("/api/v1/visualization/profile", headers=headers).json()["data"]
-        assert protected == {"access": "denied", "sections": [], "protected": True}
+        assert protected == {"access": "denied", "sections": [], "protected": True, "hasConfirmedMemories": False}
+
+        profile_file.write_text(profile_file.read_text(encoding="utf-8").replace("ai_access: denied", "ai_access: local-only"), encoding="utf-8")
+        protected = client.get("/api/v1/visualization/profile", headers=headers).json()["data"]
+        assert protected == {"access": "local-only", "sections": [], "protected": True, "hasConfirmedMemories": False}
 
     print("visualization privacy tests passed")
 
