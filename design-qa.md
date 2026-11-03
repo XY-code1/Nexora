@@ -116,3 +116,59 @@ final result: passed
 - Git: Phase 4 remains uncommitted and unpushed for manual acceptance.
 
 final result: passed
+
+---
+
+# Phase 5 — Conversational Onboarding Design QA
+
+## Scope
+
+- Upgraded only Conversational Onboarding using the established Holographic Library system.
+- Preserved the existing onboarding API, Core topic model, candidate-memory lifecycle, MCP policy, global shell, and Windows launcher.
+- No private Vault was accessed; mutation coverage uses synthetic temporary Vaults.
+
+## Implemented behavior
+
+- Immersive dialogue surface with the next real Core-provided question, answer composer, character count, skip control, and topic signal map.
+- Real progress derived from API topic states: available, pending, and confirmed. No fabricated profile score or completion data.
+- Explicit consent checkbox gates every candidate-memory submission in addition to the existing backend `consent: true` validation.
+- A successful response creates only a candidate and advances using the server-returned onboarding state.
+- Failed submissions preserve the typed answer and consent state so users can retry.
+- Pending responses link directly to Memory Review; no onboarding answer enters Personal Profile without confirmation.
+- Completed, skipped, loading, and load-failure states are represented explicitly.
+
+## QA findings and fixes
+
+- P1: the previous UI sent consent implicitly when its action was clicked. Added a separate, unchecked-by-default consent control and disabled submission until consent is explicit.
+- P1: the previous component cleared the answer even when the API request failed. The save path now returns success/failure and clears input only after confirmed server success.
+- P2: the original onboarding surface felt like a form rather than a dialogue. Replaced it with a guide message, answer composer, topic signal map, and restrained holographic depth while retaining native accessible controls.
+- P2: a missing onboarding response could leave an indefinite loading panel. Added an explicit unavailable state after loading completes.
+- P2: narrow layouts now stack progress, dialogue, and topic map; Playwright verifies no horizontal overflow at 390px.
+- P3: skip remains session-local by design and does not create a record or silently alter Core state.
+
+## Privacy and lifecycle verification
+
+- The browser sends onboarding content only after explicit user consent.
+- The existing authenticated API and Core create a `candidate` record; no frontend Vault write exists.
+- Conversation text is not stored separately by this feature.
+- Password/Token/code/identity-document guidance remains visible next to the composer.
+- Pending onboarding records require the existing Memory Review confirmation path before becoming formal memories.
+- MCP access rules are unchanged: unconfirmed records are not searchable; denied/local-only boundaries remain enforced.
+- Counts and progress come only from the current local API response.
+
+## Screenshot evidence
+
+- `artifacts/onboarding-qa/onboarding-1440.png`
+- `artifacts/onboarding-qa/onboarding-narrow.png`
+
+## Verification
+
+- `npm test`: 11/11 passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run e2e`: 5/5 passed.
+- Python regression scripts: 15/15 passed, including onboarding lifecycle, local API, MCP protocol/security, Vault isolation, release gates, visualization privacy, and Windows launcher.
+- Browser E2E verifies consent gating, responsive layout, zero horizontal overflow, and no console/page errors in the covered onboarding flow.
+- Private Vault: not accessed.
+
+final result: passed

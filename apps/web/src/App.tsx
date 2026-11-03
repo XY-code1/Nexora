@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Brain, CalendarDots, ChatCircleDots, CirclesFour, Database, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
-import { ApiClient, ApiError, type Human3Dimension, type Human3Session, type Human3Trend, type Memory, type MemoryStats, type OnboardingState, type OnboardingTopic, type PrivacyAudit, type ProfileOverview, type TimelineItem } from './api'
+import { ApiClient, ApiError, type Human3Dimension, type Human3Session, type Human3Trend, type Memory, type MemoryStats, type OnboardingState, type PrivacyAudit, type ProfileOverview, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
+import ConversationalOnboardingPage from './ConversationalOnboardingPage'
 import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
@@ -206,18 +207,20 @@ function App() {
   }
 
   async function saveOnboarding(topic: string, content: string) {
-    if (!client) return
+    if (!client) return false
     const epoch = sessionEpoch.current
     const signal = sessionAbort.current?.signal
     setSaving(true)
     try {
       const result = await client.onboardingResponse(topic, content, signal)
-      if (epoch !== sessionEpoch.current || signal?.aborted) return
+      if (epoch !== sessionEpoch.current || signal?.aborted) return false
       setOnboardingView(result.state)
       setNotice({ kind: 'success', text: '回答已保存为候选记忆，确认前不会成为长期事实。' })
+      return true
     } catch (error) {
-      if (epoch !== sessionEpoch.current || signal?.aborted) return
+      if (epoch !== sessionEpoch.current || signal?.aborted) return false
       setNotice({ kind: 'error', text: messageFor(error) })
+      return false
     } finally { if (epoch === sessionEpoch.current) setSaving(false) }
   }
 
@@ -356,7 +359,7 @@ function App() {
       <div className="content-shell">
         {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
 
-        {view === 'onboarding' && <OnboardingPage value={onboardingView} loading={visualLoading === 'onboarding'} saving={saving} onSave={saveOnboarding} onReview={() => void openView('review')} />}
+        {view === 'onboarding' && <ConversationalOnboardingPage value={onboardingView} loading={visualLoading === 'onboarding'} saving={saving} onSave={saveOnboarding} onReview={() => void openView('review')} />}
         {view === 'reflection' && <ReflectionPage value={reflectionView} loaded={reflectionLoaded} loading={visualLoading === 'reflection'} saving={saving} onStart={startReflection} onSaveDimension={saveReflectionDimension} onSaveConclusion={saveReflectionConclusion} onConfirm={confirmReflection} />}
         {view === 'profile' && <ProfilePage value={profileView} loading={visualLoading === 'profile'} relationshipMap={relationshipMap} onReview={() => void openView('review')} onTimeline={() => void openView('timeline')} />}
         {view === 'timeline' && <TimelinePage value={timelineView} loading={visualLoading === 'timeline'} />}
@@ -369,31 +372,6 @@ function App() {
 }
 
 function Loading() { return <div className="visual-panel" role="status">正在读取本地档案…</div> }
-
-function OnboardingPage({ value, loading, saving, onSave, onReview }: { value: OnboardingState | null; loading: boolean; saving: boolean; onSave: (topic: string, content: string) => Promise<void>; onReview: () => void }) {
-  const [answer, setAnswer] = useState('')
-  const [skipped, setSkipped] = useState<string[]>([])
-  if (loading || !value) return <Loading />
-  const topic = value.topics.find((item) => item.status === 'available' && !skipped.includes(item.key))
-  const pending = value.topics.filter((item) => item.status === 'pending').length
-  const confirmed = value.topics.filter((item) => item.status === 'confirmed').length
-  async function submit(item: OnboardingTopic) {
-    if (!answer.trim()) return
-    await onSave(item.key, answer.trim())
-    setAnswer('')
-  }
-  return <section className="visual-page onboarding-page"><header><p className="eyebrow">LOCAL ONBOARDING</p><h2>通过对话建立你的档案</h2><p>{value.notice}</p></header>
-    <div className="onboarding-progress" aria-label="引导进度"><span>{confirmed} 项已确认</span><span>{pending} 项待审核</span><span>{value.topics.length - confirmed - pending} 项可回答</span></div>
-    {!topic ? <div className="empty-card"><h3>{value.completed ? '本轮引导已完成' : '已跳过本轮剩余问题'}</h3><p>{pending ? `还有 ${pending} 条回答正在等待你的确认。` : '你可以随时回来继续补充。'}</p>{pending > 0 && <button className="primary-action" onClick={onReview}>前往记忆审核</button>}</div> : <article className="conversation-card">
-      <div className="assistant-message"><span>档案助手</span><p>{topic.prompt}</p></div>
-      <label htmlFor="onboarding-answer">你的回答</label>
-      <textarea id="onboarding-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={1000} placeholder="只填写你愿意保存为候选记忆的内容…" disabled={saving} />
-      <p className="privacy-hint">不会保存聊天过程；点击继续后只创建一条待你审核的候选记忆。请勿填写密码、Token、验证码或证件信息。</p>
-      <div className="onboarding-actions"><button className="secondary" onClick={() => { setSkipped((items) => [...items, topic.key]); setAnswer('') }} disabled={saving}>暂时跳过</button><button className="primary-action" onClick={() => void submit(topic)} disabled={saving || !answer.trim()}>{saving ? '正在保存…' : '保存为候选并继续'}</button></div>
-    </article>}
-    <div className="topic-status">{value.topics.map((item) => <div key={item.key}><span className={`topic-dot ${item.status}`} /><strong>{item.title}</strong><small>{item.status === 'confirmed' ? '已确认' : item.status === 'pending' ? '待审核' : skipped.includes(item.key) ? '本轮跳过' : '可回答'}</small></div>)}</div>
-  </section>
-}
 
 function ReflectionPage({ value, loaded, loading, saving, onStart, onSaveDimension, onSaveConclusion, onConfirm }: { value: Human3Session | null; loaded: boolean; loading: boolean; saving: boolean; onStart: () => Promise<unknown>; onSaveDimension: (dimension: string, reflection: string, evidence: string, evidenceState: string, score: number) => Promise<unknown>; onSaveConclusion: (summary: string, plan: string) => Promise<unknown>; onConfirm: () => Promise<void> }) {
   if (loading || !loaded) return <Loading />

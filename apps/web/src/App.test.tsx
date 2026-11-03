@@ -185,6 +185,7 @@ describe('review workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '对话式引导' }))
     await screen.findByText('我应该怎么称呼你？')
     fireEvent.change(screen.getByLabelText('你的回答'), { target: { value: '请称呼我为小明' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: /我同意将这次回答创建为候选记忆/ }))
     fireEvent.click(screen.getByRole('button', { name: '保存为候选并继续' }))
     await screen.findByText('回答已保存为候选记忆，确认前不会成为长期事实。')
     expect(screen.getByText('希望如何沟通？')).toBeInTheDocument()
