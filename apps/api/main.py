@@ -19,6 +19,7 @@ from core import profile
 from core.access import extract_summary
 from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
+from core import monthly_reflection
 from core.visualization import human3_trend, privacy_audit, profile_overview, timeline
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
@@ -71,6 +72,35 @@ class RevisionInput(BaseModel):
     expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class MonthlyCreateInput(BaseModel):
+    month: str = Field(pattern=r"^\d{4}-(?:0[1-9]|1[0-2])$")
+
+
+class MonthlyDimensionInput(BaseModel):
+    content: str = Field(default="", max_length=5000)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class MonthlyEventInput(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    dimension: str = Field(pattern=r"^(mind|body|spirit|vocation)$")
+    description: str = Field(default="", max_length=1200)
+    feeling: str = Field(default="", max_length=500)
+    project: str = Field(default="", max_length=120)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class MonthlyGoalsInput(BaseModel):
+    goals: list[dict[str, Any]] = Field(max_length=30)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class MonthlySummaryInput(BaseModel):
+    summary: str = Field(min_length=1, max_length=2400)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 def envelope(data: Any, revision: str | None = None) -> dict[str, Any]:
     meta: dict[str, Any] = {"requestId": uuid.uuid4().hex}
     if revision:
@@ -84,7 +114,7 @@ def domain_error(exc: SystemExit) -> ApiError:
         return ApiError(404, "NOT_FOUND", message)
     if "其他进程修改" in message or "目标文件已存在" in message:
         return ApiError(409, "REVISION_CONFLICT", message)
-    if "冲突" in message or "相同" in message:
+    if "冲突" in message or "相同" in message or "已存在" in message:
         return ApiError(409, "MEMORY_CONFLICT", message)
     return ApiError(400, "INVALID_REQUEST", message)
 
@@ -252,6 +282,91 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         except SystemExit as exc:
             raise domain_error(exc) from None
         return envelope({"id": session_id, "status": "confirmed", "file": destination.name})
+
+    @app.get("/api/v1/monthly-reflections", dependencies=[auth])
+    def monthly_overview() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(monthly_reflection.overview(root))
+
+    @app.get("/api/v1/monthly-reflections/{reflection_id}", dependencies=[auth])
+    def monthly_get(reflection_id: str) -> dict[str, Any]:
+        with profile.vault_lock(root):
+            try:
+                return envelope(monthly_reflection.reflection_view(root, monthly_reflection._find(root, reflection_id)))
+            except SystemExit as exc:
+                raise domain_error(exc) from None
+
+    @app.post("/api/v1/monthly-reflections", status_code=201, dependencies=[auth])
+    def monthly_create(data: MonthlyCreateInput) -> dict[str, Any]:
+        try:
+            path = monthly_reflection.create(str(root), data.month)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(monthly_reflection.reflection_view(root, path))
+
+    @app.put("/api/v1/monthly-reflections/{reflection_id}/dimensions/{dimension}", dependencies=[auth])
+    def monthly_dimension(reflection_id: str, dimension: str, data: MonthlyDimensionInput) -> dict[str, Any]:
+        try:
+            path = monthly_reflection.save_dimension(str(root), reflection_id, dimension, data.content, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(monthly_reflection.reflection_view(root, path))
+
+    @app.post("/api/v1/monthly-reflections/{reflection_id}/events", dependencies=[auth])
+    def monthly_add_event(reflection_id: str, data: MonthlyEventInput) -> dict[str, Any]:
+        try:
+            path = monthly_reflection.add_event(str(root), reflection_id, data.model_dump(exclude={"expected_revision"}), data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(monthly_reflection.reflection_view(root, path))
+
+    @app.delete("/api/v1/monthly-reflections/{reflection_id}/events/{event_id}", dependencies=[auth])
+    def monthly_delete_event(reflection_id: str, event_id: str, expected_revision: str) -> dict[str, Any]:
+        try:
+            path = monthly_reflection.delete_event(str(root), reflection_id, event_id, expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(monthly_reflection.reflection_view(root, path))
+
+    @app.put("/api/v1/monthly-reflections/{reflection_id}/goals", dependencies=[auth])
+    def monthly_goals(reflection_id: str, data: MonthlyGoalsInput) -> dict[str, Any]:
+        try:
+            path = monthly_reflection.save_goals(str(root), reflection_id, data.goals, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(monthly_reflection.reflection_view(root, path))
+
+    @app.post("/api/v1/monthly-reflections/{reflection_id}/summary-draft", dependencies=[auth])
+    def monthly_summary_draft(reflection_id: str, data: RevisionInput) -> dict[str, Any]:
+        try:
+            path = monthly_reflection.generate_summary(str(root), reflection_id, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(monthly_reflection.reflection_view(root, path))
+
+    @app.put("/api/v1/monthly-reflections/{reflection_id}/summary", dependencies=[auth])
+    def monthly_summary(reflection_id: str, data: MonthlySummaryInput) -> dict[str, Any]:
+        try:
+            path = monthly_reflection.save_summary(str(root), reflection_id, data.summary, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(monthly_reflection.reflection_view(root, path))
+
+    @app.post("/api/v1/monthly-reflections/{reflection_id}/confirm", dependencies=[auth])
+    def monthly_confirm(reflection_id: str, data: RevisionInput) -> dict[str, Any]:
+        try:
+            path = monthly_reflection.confirm(str(root), reflection_id, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(monthly_reflection.reflection_view(root, path))
 
     @app.post("/api/v1/shutdown", dependencies=[auth])
     def shutdown(background_tasks: BackgroundTasks) -> dict[str, Any]:

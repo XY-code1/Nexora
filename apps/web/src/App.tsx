@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Brain, CalendarDots, ChatCircleDots, CirclesFour, Database, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
-import { ApiClient, ApiError, type Human3Dimension, type Human3Session, type Human3Trend, type Memory, type MemoryStats, type OnboardingState, type PrivacyAudit, type ProfileOverview, type TimelineItem } from './api'
+import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type OnboardingState, type PrivacyAudit, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
 import ConversationalOnboardingPage from './ConversationalOnboardingPage'
+import MonthlyReflectionPage from './MonthlyReflectionPage'
 import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
@@ -73,8 +74,8 @@ function App() {
   const [privacyView, setPrivacyView] = useState<PrivacyAudit | null>(null)
   const [human3View, setHuman3View] = useState<Human3Trend | null>(null)
   const [onboardingView, setOnboardingView] = useState<OnboardingState | null>(null)
-  const [reflectionView, setReflectionView] = useState<Human3Session | null>(null)
-  const [reflectionLoaded, setReflectionLoaded] = useState(false)
+  const [monthlyView, setMonthlyView] = useState<MonthlyOverview | null>(null)
+  const [reflectionView, setReflectionView] = useState<MonthlyReflection | null>(null)
   const [visualLoading, setVisualLoading] = useState<View | null>(null)
   const [navigationOpen, setNavigationOpen] = useState(false)
   const sessionEpoch = useRef(0)
@@ -107,7 +108,7 @@ function App() {
       setToken(nextToken)
       applyMemories(result)
       setMemoryStats(stats)
-      setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null); setOnboardingView(null); setReflectionView(null); setReflectionLoaded(false)
+      setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null)
       setNotice(null)
     } catch (error) {
       if (controller.signal.aborted || epoch !== sessionEpoch.current) return
@@ -159,7 +160,7 @@ function App() {
     setDraft('')
     setNotice(null)
     setView('review')
-    setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null); setOnboardingView(null); setReflectionView(null); setReflectionLoaded(false)
+    setProfileView(null); setTimelineView(null); setPrivacyView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null)
     setVisualLoading(null)
     setGateError(message)
   }
@@ -178,13 +179,13 @@ function App() {
     const request = viewRequest.current
     if (next === 'profile') setProfileView(null)
     if (next === 'onboarding') setOnboardingView(null)
-    if (next === 'reflection') { setReflectionView(null); setReflectionLoaded(false) }
+    if (next === 'reflection') { setReflectionView(null); setMonthlyView(null) }
     if (next === 'timeline') setTimelineView(null)
     if (next === 'privacy') setPrivacyView(null)
     if (next === 'human3') setHuman3View(null)
     setVisualLoading(next)
     try {
-      const result = next === 'reflection' ? await client.human3Session(controller.signal)
+      const result = next === 'reflection' ? await client.monthlyOverview(controller.signal)
         : next === 'onboarding' ? await client.onboarding(controller.signal)
         : next === 'profile' ? await client.profileOverview(controller.signal)
         : next === 'timeline' ? await client.timeline(controller.signal)
@@ -192,7 +193,7 @@ function App() {
             : await client.human3Trend(controller.signal)
       if (epoch !== sessionEpoch.current || request !== viewRequest.current) return
       if (next === 'onboarding') setOnboardingView(result as OnboardingState)
-      if (next === 'reflection') { setReflectionView((result as { session: Human3Session | null }).session); setReflectionLoaded(true) }
+      if (next === 'reflection') { const monthly = result as MonthlyOverview; setMonthlyView(monthly); setReflectionView(monthly.reflections.find((item) => item.month === monthly.currentMonth) ?? monthly.reflections[0] ?? null) }
       if (next === 'profile') setProfileView(result as ProfileOverview)
       if (next === 'timeline') setTimelineView(result as TimelineItem[])
       if (next === 'privacy') setPrivacyView(result as PrivacyAudit)
@@ -224,7 +225,7 @@ function App() {
     } finally { if (epoch === sessionEpoch.current) setSaving(false) }
   }
 
-  async function human3Action<T>(action: (client: ApiClient, signal?: AbortSignal) => Promise<T>, apply: (result: T) => void) {
+  async function monthlyAction(action: (client: ApiClient, signal?: AbortSignal) => Promise<MonthlyReflection>) {
     if (!client) return false
     const epoch = sessionEpoch.current
     const signal = sessionAbort.current?.signal
@@ -232,44 +233,24 @@ function App() {
     try {
       const result = await action(client, signal)
       if (epoch !== sessionEpoch.current || signal?.aborted) return false
-      apply(result)
+      setReflectionView(result)
+      setMonthlyView((current) => current ? { ...current, reflections: [result, ...current.reflections.filter((item) => item.id !== result.id)].sort((a, b) => b.month.localeCompare(a.month)) } : current)
       return true
     } catch (error) {
-      if (epoch !== sessionEpoch.current || signal?.aborted) return
+      if (epoch !== sessionEpoch.current || signal?.aborted) return false
       handleMutationError(error)
       return false
     } finally { if (epoch === sessionEpoch.current) setSaving(false) }
   }
 
-  function startReflection() {
-    return human3Action((api, signal) => api.startHuman3(signal), (result) => setReflectionView(result.session))
-  }
-
-  function saveReflectionDimension(dimension: string, reflection: string, evidence: string, evidenceState: string, score: number) {
-    if (!reflectionView) return Promise.resolve()
-    return human3Action(
-      (api, signal) => api.saveHuman3Dimension(reflectionView.id, dimension, { reflection, evidence, evidence_state: evidenceState, score, expected_revision: reflectionView.revision }, signal),
-      (result) => setReflectionView(result.session),
-    )
-  }
-
-  function saveReflectionConclusion(summary: string, plan: string) {
-    if (!reflectionView) return Promise.resolve()
-    return human3Action(
-      (api, signal) => api.saveHuman3Conclusion(reflectionView.id, summary, plan, reflectionView.revision, signal),
-      (result) => setReflectionView(result.session),
-    )
-  }
-
-  async function confirmReflection() {
-    if (!reflectionView || !window.confirm('确认本次Human 3.0复盘？确认后将进入历史记录，并可用于本地趋势展示。')) return
-    const id = reflectionView.id
-    const revision = reflectionView.revision
-    const confirmed = await human3Action((api, signal) => api.confirmHuman3(id, revision, signal), () => { setReflectionView(null); setReflectionLoaded(true) })
-    if (!confirmed) return
-    await openView('human3')
-    setNotice({ kind: 'success', text: 'Human 3.0复盘已由你确认并进入历史。' })
-  }
+  async function createReflection(month: string) { const ok = await monthlyAction((api, signal) => api.createMonthly(month, signal)); if (ok) setNotice({ kind: 'success', text: '本月复盘草稿已创建并保存在本地。' }); return Boolean(ok) }
+  function saveReflectionDimension(dimension: ReflectionDimension, content: string) { return reflectionView ? monthlyAction((api, signal) => api.saveMonthlyDimension(reflectionView.id, dimension, content, reflectionView.revision, signal)) : Promise.resolve(false) }
+  function addReflectionEvent(event: Omit<ReflectionEvent, 'id'>) { return reflectionView ? monthlyAction((api, signal) => api.addMonthlyEvent(reflectionView.id, event, reflectionView.revision, signal)) : Promise.resolve(false) }
+  function deleteReflectionEvent(eventId: string) { return reflectionView ? monthlyAction((api, signal) => api.deleteMonthlyEvent(reflectionView.id, eventId, reflectionView.revision, signal)) : Promise.resolve(false) }
+  function saveReflectionGoals(goals: ReflectionGoal[]) { return reflectionView ? monthlyAction((api, signal) => api.saveMonthlyGoals(reflectionView.id, goals, reflectionView.revision, signal)) : Promise.resolve(false) }
+  function generateReflectionSummary() { return reflectionView ? monthlyAction((api, signal) => api.generateMonthlySummary(reflectionView.id, reflectionView.revision, signal)) : Promise.resolve(false) }
+  function saveReflectionSummary(summary: string) { return reflectionView ? monthlyAction((api, signal) => api.saveMonthlySummary(reflectionView.id, summary, reflectionView.revision, signal)) : Promise.resolve(false) }
+  async function confirmReflection() { if (!reflectionView || !window.confirm('确认这份月度复盘？确认后会进入历史；后续修改将重新变为草稿。')) return false; const ok = await monthlyAction((api, signal) => api.confirmMonthly(reflectionView.id, reflectionView.revision, signal)); if (ok) setNotice({ kind: 'success', text: '月度复盘已由你确认并进入历史。' }); return Boolean(ok) }
 
   async function save() {
     if (!client || !selected || !draft.trim()) return false
@@ -306,7 +287,7 @@ function App() {
     if (error instanceof ApiError && error.status === 401) {
       disconnect('会话已失效，请重新连接。')
     } else if (error instanceof ApiError && error.status === 409) {
-      setNotice({ kind: 'error', text: '这条记忆刚刚被其他入口修改。已保留你的草稿，请刷新后核对再提交。' })
+      setNotice({ kind: 'error', text: '这条记录刚刚被其他入口修改。已保留你的草稿，请刷新后核对再提交。' })
     } else {
       setNotice({ kind: 'error', text: messageFor(error) })
     }
@@ -360,7 +341,7 @@ function App() {
         {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
 
         {view === 'onboarding' && <ConversationalOnboardingPage value={onboardingView} loading={visualLoading === 'onboarding'} saving={saving} onSave={saveOnboarding} onReview={() => void openView('review')} />}
-        {view === 'reflection' && <ReflectionPage value={reflectionView} loaded={reflectionLoaded} loading={visualLoading === 'reflection'} saving={saving} onStart={startReflection} onSaveDimension={saveReflectionDimension} onSaveConclusion={saveReflectionConclusion} onConfirm={confirmReflection} />}
+        {view === 'reflection' && <MonthlyReflectionPage overview={monthlyView} selected={reflectionView} loading={visualLoading === 'reflection'} saving={saving} onSelect={setReflectionView} onCreate={createReflection} onDimension={saveReflectionDimension} onAddEvent={addReflectionEvent} onDeleteEvent={deleteReflectionEvent} onGoals={saveReflectionGoals} onGenerateSummary={generateReflectionSummary} onSummary={saveReflectionSummary} onConfirm={confirmReflection} />}
         {view === 'profile' && <ProfilePage value={profileView} loading={visualLoading === 'profile'} relationshipMap={relationshipMap} onReview={() => void openView('review')} onTimeline={() => void openView('timeline')} />}
         {view === 'timeline' && <TimelinePage value={timelineView} loading={visualLoading === 'timeline'} />}
         {view === 'privacy' && <PrivacyPage value={privacyView} loading={visualLoading === 'privacy'} />}
@@ -372,42 +353,6 @@ function App() {
 }
 
 function Loading() { return <div className="visual-panel" role="status">正在读取本地档案…</div> }
-
-function ReflectionPage({ value, loaded, loading, saving, onStart, onSaveDimension, onSaveConclusion, onConfirm }: { value: Human3Session | null; loaded: boolean; loading: boolean; saving: boolean; onStart: () => Promise<unknown>; onSaveDimension: (dimension: string, reflection: string, evidence: string, evidenceState: string, score: number) => Promise<unknown>; onSaveConclusion: (summary: string, plan: string) => Promise<unknown>; onConfirm: () => Promise<void> }) {
-  if (loading || !loaded) return <Loading />
-  if (!value) return <section className="visual-page reflection-page"><header><p className="eyebrow">HUMAN 3.0 / MONTHLY REFLECTION</p><h2>开始一次月度复盘</h2><p>用具体事实回顾心智、身体、意义与关系、工作与创造。所有内容先保存在本地草稿中，只有你能确认正式记录。</p></header><div className="empty-card"><h3>这不是诊断或自动评分</h3><p>评分、依据、摘要和行动计划都由你填写。系统不会根据活动数据推断情绪或发展等级。</p><button className="primary-action" onClick={() => void onStart()} disabled={saving}>{saving ? '正在创建…' : '开始本月复盘'}</button></div></section>
-  const current = value.dimensions.find((item) => !item.answered)
-  return <section className="visual-page reflection-page"><header><p className="eyebrow">HUMAN 3.0 / DRAFT</p><h2>月度复盘</h2><p className="disclaimer">{value.disclaimer}</p></header>
-    <div className="reflection-progress">{value.dimensions.map((item) => <span key={item.key} className={item.answered ? 'done' : ''}>{item.answered ? '✓ ' : ''}{item.title}</span>)}</div>
-    {current ? <DimensionForm key={`${current.key}:${value.revision}`} dimension={current} saving={saving} onSave={onSaveDimension} /> : <ConclusionForm key={value.revision} session={value} saving={saving} onSave={onSaveConclusion} onConfirm={onConfirm} />}
-  </section>
-}
-
-function DimensionForm({ dimension, saving, onSave }: { dimension: Human3Dimension; saving: boolean; onSave: (dimension: string, reflection: string, evidence: string, evidenceState: string, score: number) => Promise<unknown> }) {
-  const [reflection, setReflection] = useState(dimension.reflection)
-  const [evidence, setEvidence] = useState(dimension.evidence)
-  const [evidenceState, setEvidenceState] = useState(dimension.evidenceState)
-  const [score, setScore] = useState(dimension.score?.toString() ?? '5')
-  const needsEvidence = evidenceState !== 'insufficient'
-  return <article className="conversation-card reflection-card"><div className="assistant-message"><span>{dimension.title}</span><p>{dimension.prompt}</p></div>
-    <label htmlFor="reflection-answer">你的反思</label><textarea id="reflection-answer" value={reflection} onChange={(event) => setReflection(event.target.value)} maxLength={2000} disabled={saving} />
-    <label htmlFor="reflection-evidence">具体依据{needsEvidence ? '' : '（可留空）'}</label><textarea id="reflection-evidence" value={evidence} onChange={(event) => setEvidence(event.target.value)} maxLength={1200} disabled={saving} />
-    <div className="reflection-controls"><label>信息状态<select aria-label="信息状态" value={evidenceState} onChange={(event) => setEvidenceState(event.target.value as Human3Dimension['evidenceState'])}><option value="sufficient">依据充分</option><option value="limited">依据有限</option><option value="insufficient">信息不足</option></select></label><label>自评分（0–10）<input aria-label="自评分" type="number" min="0" max="10" step="0.5" value={score} onChange={(event) => setScore(event.target.value)} /></label></div>
-    <p className="privacy-hint">请记录可观察事实；“信息不足”是有效答案，不需要为了完整而猜测。</p><div className="onboarding-actions"><button className="primary-action" onClick={() => void onSave(dimension.key, reflection.trim(), evidence.trim(), evidenceState, Number(score))} disabled={saving || !reflection.trim() || (needsEvidence && !evidence.trim()) || Number.isNaN(Number(score))}>{saving ? '保存中…' : '保存并进入下一维度'}</button></div>
-  </article>
-}
-
-function ConclusionForm({ session, saving, onSave, onConfirm }: { session: Human3Session; saving: boolean; onSave: (summary: string, plan: string) => Promise<unknown>; onConfirm: () => Promise<void> }) {
-  const [summary, setSummary] = useState(session.summary)
-  const [plan, setPlan] = useState(session.plan)
-  const dirty = summary.trim() !== session.summary || plan.trim() !== session.plan
-  return <article className="conversation-card reflection-card"><div className="assistant-message"><span>总结</span><p>四个维度已完成。请用自己的话总结本月，并写下未来30天可执行的行动。</p></div>
-    <label htmlFor="reflection-summary">复盘摘要</label><textarea id="reflection-summary" value={summary} onChange={(event) => setSummary(event.target.value)} maxLength={1600} disabled={saving} />
-    <label htmlFor="reflection-plan">未来30天行动计划</label><textarea id="reflection-plan" value={plan} onChange={(event) => setPlan(event.target.value)} maxLength={1600} disabled={saving} />
-    <div className="onboarding-actions"><button className="secondary" onClick={() => void onSave(summary.trim(), plan.trim())} disabled={saving || !summary.trim() || !plan.trim() || !dirty}>保存草稿</button><button className="primary-action" onClick={() => void onConfirm()} disabled={saving || !session.readyToConfirm || dirty}>确认正式复盘</button></div>
-    {(!session.readyToConfirm || dirty) && <p className="privacy-hint">先保存当前摘要和行动计划，再由你明确确认正式复盘。</p>}
-  </article>
-}
 
 function ProfilePage({ value, loading, relationshipMap, onReview, onTimeline }: { value: ProfileOverview | null; loading: boolean; relationshipMap: string; onReview: () => void; onTimeline: () => void }) {
   if (loading || !value) return <Loading />

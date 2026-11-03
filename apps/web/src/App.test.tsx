@@ -191,47 +191,43 @@ describe('review workspace', () => {
     expect(screen.getByText('希望如何沟通？')).toBeInTheDocument()
   })
 
-  it('starts a Human 3.0 reflection without diagnosing the user', async () => {
-    const session = {
-      id: 'h3-20261102-1234abcd', date: '2026-11-02', status: 'draft', summary: '', plan: '', readyToConfirm: false,
-      revision: 'a'.repeat(64), disclaimer: 'Human 3.0 仅用于自我反思，不是医学或心理诊断。',
-      dimensions: [{ key: 'mind', title: '心智与认知', prompt: '最近哪些事实改变了你的看法？', reflection: '', evidence: '', evidenceState: 'insufficient', score: null, answered: false }],
+  it('creates a persistent monthly reflection draft', async () => {
+    const reflection = {
+      id: 'mr-2026-11-1234abcd', month: '2026-11', status: 'draft', dimensions: { mind: '', body: '', spirit: '', vocation: '' },
+      events: [], summary: '', summarySource: '', goals: [], completedDimensions: 0, readyToConfirm: false, revision: 'a'.repeat(64), updated: '2026-11-03T10:00:00Z',
     }
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
       .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: { session: null }, meta: { requestId: '2' } }))
-      .mockImplementationOnce(() => response({ data: { session }, meta: { requestId: '3' } }))
+      .mockImplementationOnce(() => response({ data: { currentMonth: '2026-11', reflections: [] }, meta: { requestId: '2' } }))
+      .mockImplementationOnce(() => response({ data: reflection, meta: { requestId: '3' } }))
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
     await screen.findByText('暂时没有候选记忆')
     fireEvent.click(screen.getByRole('button', { name: '月度复盘' }))
-    await screen.findByRole('button', { name: '开始本月复盘' })
-    fireEvent.click(screen.getByRole('button', { name: '开始本月复盘' }))
-    await screen.findByText('最近哪些事实改变了你的看法？')
-    expect(screen.getByText(/不是医学或心理诊断/)).toBeInTheDocument()
+    const create = await screen.findAllByRole('button', { name: /创建 2026-11 复盘/ })
+    fireEvent.click(create[0])
+    await screen.findByText('本月复盘草稿已创建并保存在本地。')
+    expect(screen.getByText('继续整理这个月')).toBeInTheDocument()
   })
 
-  it('requires saving the visible Human 3.0 conclusion before confirmation', async () => {
-    const dimension = (key: string) => ({ key, title: key, prompt: '', reflection: '事实', evidence: '', evidenceState: 'insufficient', score: 5, answered: true })
-    const session = {
-      id: 'h3-20261102-1234abcd', date: '2026-11-02', status: 'draft', summary: '已保存摘要', plan: '已保存计划', readyToConfirm: true,
-      revision: 'a'.repeat(64), disclaimer: '仅用于自我反思', dimensions: ['mind', 'body', 'spirit', 'vocation'].map(dimension),
+  it('keeps formal monthly confirmation disabled until four dimensions and summary exist', async () => {
+    const reflection = {
+      id: 'mr-2026-11-1234abcd', month: '2026-11', status: 'draft', dimensions: { mind: '事实', body: '', spirit: '', vocation: '' },
+      events: [], summary: '', summarySource: '', goals: [], completedDimensions: 1, readyToConfirm: false, revision: 'a'.repeat(64), updated: '2026-11-03T10:00:00Z',
     }
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
       .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: { session }, meta: { requestId: '2' } }))
+      .mockImplementationOnce(() => response({ data: { currentMonth: '2026-11', reflections: [reflection] }, meta: { requestId: '2' } }))
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
     await screen.findByText('暂时没有候选记忆')
     fireEvent.click(screen.getByRole('button', { name: '月度复盘' }))
     const confirm = await screen.findByRole('button', { name: '确认正式复盘' })
-    expect(confirm).toBeEnabled()
-    fireEvent.change(screen.getByLabelText('复盘摘要'), { target: { value: '尚未保存的新摘要' } })
     expect(confirm).toBeDisabled()
-    expect(screen.getByText(/先保存当前摘要/)).toBeInTheDocument()
+    expect(screen.getByText(/不会自动评分或生成成长标签/)).toBeInTheDocument()
   })
 })

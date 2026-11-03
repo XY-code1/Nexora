@@ -25,6 +25,11 @@ export type OnboardingTopic = { key: string; title: string; prompt: string; stat
 export type OnboardingState = { topics: OnboardingTopic[]; nextTopic: string | null; completed: boolean; notice: string }
 export type Human3Dimension = { key: string; title: string; prompt: string; reflection: string; evidence: string; evidenceState: 'sufficient' | 'limited' | 'insufficient'; score: number | null; answered: boolean }
 export type Human3Session = { id: string; date: string; status: 'draft'; dimensions: Human3Dimension[]; summary: string; plan: string; readyToConfirm: boolean; revision: string; disclaimer: string }
+export type ReflectionDimension = 'mind' | 'body' | 'spirit' | 'vocation'
+export type ReflectionEvent = { id: string; title: string; date: string; dimension: ReflectionDimension; description: string; feeling: string; project: string }
+export type ReflectionGoal = { id: string; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string }
+export type MonthlyReflection = { id: string; month: string; status: 'draft' | 'confirmed'; dimensions: Record<ReflectionDimension, string>; events: ReflectionEvent[]; summary: string; summarySource: string; goals: ReflectionGoal[]; completedDimensions: number; readyToConfirm: boolean; revision: string; updated: string }
+export type MonthlyOverview = { currentMonth: string; reflections: MonthlyReflection[] }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
 type ErrorEnvelope = { error: { code: string; message: string; details: unknown }; requestId: string }
@@ -73,6 +78,15 @@ export class ApiClient {
   saveHuman3Dimension(id: string, dimension: string, value: { reflection: string; evidence: string; evidence_state: string; score: number; expected_revision: string }, signal?: AbortSignal) { return this.request<{ session: Human3Session }>(`/api/v1/human3/session/${id}/dimensions/${dimension}`, { method: 'PUT', body: JSON.stringify(value), signal }) }
   saveHuman3Conclusion(id: string, summary: string, plan: string, expected_revision: string, signal?: AbortSignal) { return this.request<{ session: Human3Session }>(`/api/v1/human3/session/${id}/conclusion`, { method: 'PUT', body: JSON.stringify({ summary, plan, expected_revision }), signal }) }
   confirmHuman3(id: string, expected_revision: string, signal?: AbortSignal) { return this.request<{ id: string; status: string; file: string }>(`/api/v1/human3/session/${id}/confirm`, { method: 'POST', body: JSON.stringify({ expected_revision }), signal }) }
+  monthlyOverview(signal?: AbortSignal) { return this.request<MonthlyOverview>('/api/v1/monthly-reflections', { signal }) }
+  createMonthly(month: string, signal?: AbortSignal) { return this.request<MonthlyReflection>('/api/v1/monthly-reflections', { method: 'POST', body: JSON.stringify({ month }), signal }) }
+  saveMonthlyDimension(id: string, dimension: ReflectionDimension, content: string, revision: string, signal?: AbortSignal) { return this.request<MonthlyReflection>(`/api/v1/monthly-reflections/${id}/dimensions/${dimension}`, { method: 'PUT', body: JSON.stringify({ content, expected_revision: revision }), signal }) }
+  addMonthlyEvent(id: string, event: Omit<ReflectionEvent, 'id'>, revision: string, signal?: AbortSignal) { return this.request<MonthlyReflection>(`/api/v1/monthly-reflections/${id}/events`, { method: 'POST', body: JSON.stringify({ ...event, expected_revision: revision }), signal }) }
+  deleteMonthlyEvent(id: string, eventId: string, revision: string, signal?: AbortSignal) { return this.request<MonthlyReflection>(`/api/v1/monthly-reflections/${id}/events/${eventId}?expected_revision=${revision}`, { method: 'DELETE', signal }) }
+  saveMonthlyGoals(id: string, goals: ReflectionGoal[], revision: string, signal?: AbortSignal) { return this.request<MonthlyReflection>(`/api/v1/monthly-reflections/${id}/goals`, { method: 'PUT', body: JSON.stringify({ goals, expected_revision: revision }), signal }) }
+  generateMonthlySummary(id: string, revision: string, signal?: AbortSignal) { return this.request<MonthlyReflection>(`/api/v1/monthly-reflections/${id}/summary-draft`, { method: 'POST', body: JSON.stringify({ expected_revision: revision }), signal }) }
+  saveMonthlySummary(id: string, summary: string, revision: string, signal?: AbortSignal) { return this.request<MonthlyReflection>(`/api/v1/monthly-reflections/${id}/summary`, { method: 'PUT', body: JSON.stringify({ summary, expected_revision: revision }), signal }) }
+  confirmMonthly(id: string, revision: string, signal?: AbortSignal) { return this.request<MonthlyReflection>(`/api/v1/monthly-reflections/${id}/confirm`, { method: 'POST', body: JSON.stringify({ expected_revision: revision }), signal }) }
   edit(id: string, content: string, expected_revision: string, signal?: AbortSignal) { return this.request<Memory>(`/api/v1/memories/${id}`, { method: 'PATCH', body: JSON.stringify({ content, expected_revision }), signal }) }
   action(id: string, action: 'confirm' | 'reject', expected_revision: string, reason = '', signal?: AbortSignal) { return this.request<{ id: string; action: string; status: string }>(`/api/v1/memories/${id}/${action}`, { method: 'POST', body: JSON.stringify({ expected_revision, reason }), signal }) }
   shutdown(signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/shutdown', { method: 'POST', signal }) }

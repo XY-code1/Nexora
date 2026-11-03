@@ -172,3 +172,123 @@ final result: passed
 - Private Vault: not accessed.
 
 final result: passed
+
+---
+
+# Phase 6 — Monthly Reflection Design QA
+
+## Scope
+
+- Added an independent monthly-reflection domain model, local API, and Holographic Library page.
+- Preserved Memory Review, onboarding, Personal Profile, Human 3.0, MCP access rules, and the global application shell.
+- Used synthetic temporary Vaults for tests; the private Vault was not accessed.
+
+## Implemented behavior
+
+- Current-month creation, persistent drafts, month archive, historical selection, and refresh recovery.
+- Four independently saved user-authored dimensions: MIND, BODY, SPIRIT, and VOCATION.
+- Important-event creation and deletion with title, date, dimension, description, feeling, and optional project.
+- Next-month goals with action, priority, due date, completion state, and previous-goal linkage in the stored model.
+- Local extractive summary draft, editable summary, explicit final confirmation, and summary provenance.
+- Confirmed history returns to draft when edited and requires a new confirmation.
+- Loading, empty, failure, conflict, saving, draft, and confirmed states.
+
+## QA findings and fixes
+
+- P1: the legacy Monthly Reflection navigation reused the Human 3.0 assessment draft. Fixed with an independent `monthly-reflection` model and storage tree.
+- P1: rapid dimension navigation could race an in-flight save and reset the next editor. Navigation is disabled while a mutation is pending, and dimension drafts are no longer overwritten by unrelated record refreshes.
+- P1: historical edits could otherwise change a formal record without renewed consent. Any confirmed-record mutation transactionally moves it back to Drafts.
+- P1: external provider use had no existing authorization mechanism. The summary action is explicitly local/extractive and never sends content off device.
+- P2: important-event and goal dates now validate real calendar dates; events must belong to the selected reflection month.
+- P2: all mutations use current revision hashes and surface conflicts through the existing error path.
+- P2: narrow navigation remains horizontally scrollable inside its panel without causing document overflow.
+
+## Privacy and lifecycle verification
+
+- Records are `visibility: private` and `ai_access: local-only`.
+- No reflection is copied into the memory lifecycle or exposed through MCP.
+- The summary helper uses only persisted user text, creates no events, scores, diagnoses, or labels, and records its provenance.
+- Formal confirmation requires four completed dimensions and a user-editable summary.
+- All writes use Core file locks, atomic writes, revision checks, secret scanning, and transactional moves.
+- API errors do not expose the Vault root.
+
+## Screenshot evidence
+
+- `artifacts/monthly-reflection-qa/monthly-reflection-1440.png`
+- `artifacts/monthly-reflection-qa/monthly-reflection-narrow.png`
+
+## Verification
+
+- `npm test`: 11/11 passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run e2e`: 6/6 passed.
+- Python regression scripts: 16/16 passed, including the complete monthly creation/edit/event/goal/summary/confirmation/history lifecycle.
+- Desktop and 390px captures have no document-level horizontal overflow; covered browser flows report no console or page errors.
+- Private Vault: not accessed.
+- Git: Phase 6 remains uncommitted and unpushed for manual acceptance.
+
+## Phase 6 acceptance classification
+
+### Completed
+
+- Independent persistent monthly-reflection model and authenticated local API.
+- Current-month creation, manual dimension saves, refresh recovery, month selection, and historical editing.
+- Important-event add/delete and next-month goal create/update/delete flows.
+- Local extractive summary draft, user editing, provenance, and explicit formal confirmation.
+- Confirmed-history edits return the record to draft and require renewed confirmation.
+- Local-only access metadata, revision conflicts, file locking, atomic writes, transactional moves, and regression coverage.
+
+### Known limitations
+
+- The summary helper is deterministic and local rather than powered by an external model. This is the accepted Local-first behavior for Phase 6.
+- The page uses explicit manual save. Unsaved edits are not automatically persisted, and the current UI has no leave warning.
+
+### Future roadmap
+
+- AI Provider is a separate future module. Any implementation must include per-request consent, exact outbound-content preview, data minimization, and a local audit log.
+- An unsaved-change leave warning may be added later, but it must not silently write either draft or formal content.
+- Human 3.0 cross-month aggregation and comparison belong to Phase 8. Phase 6 stores only the required query fields and generates no growth score.
+
+### Blocking issues
+
+- None. The audit found no unresolved P0 or P1 defect affecting the Phase 6 core workflow.
+
+### Deliberate deferrals
+
+- External/cloud model integration was deliberately deferred; no reflection content is transmitted off device.
+- Background autosave was deliberately not added; explicit writes preserve user control.
+- Human 3.0 aggregation was deliberately deferred to Phase 8 rather than being coupled to the monthly editor.
+
+## Phase 6 specialist acceptance preparation
+
+- API contract: every Monthly Reflection route was exercised through real FastAPI `TestClient` HTTP requests and parsed response envelopes.
+- Authentication: list, get, create, dimension update, event add/delete, goal update, summary draft/update, and confirmation all return `401` without the local Bearer session.
+- Persistence: all four saved dimensions survive a new overview request and browser reload.
+- Lifecycle: `draft -> confirmed` moves the Markdown record from `Drafts` to `History`; editing confirmed history transactionally returns it to `Drafts` and removes the old history file.
+- Concurrency: stale SHA-256 revisions return `409 REVISION_CONFLICT` and do not overwrite the current record.
+- Events: invalid calendar dates and dates outside the reflection month are rejected; valid events can be added and deleted.
+- Goals: create, edit, completion-state update, and deletion were verified through persisted API responses.
+- Summary provenance: the local draft contains only excerpts found in the four saved user inputs; checks reject invented diagnosis/score text in the covered fixture. Static inspection found no external provider or network client in the summary path.
+- Data integrity: progress, event counts, goal counts, archive state, and summary state are computed from API records. No product mock statistics or non-functional Phase 6 button remains.
+- Compatibility: MCP stdio protocol, MCP security, and Windows launcher integration tests pass unchanged.
+- Screenshot QA: 1440px initial, completed-dimensions, summary-edit, confirmed-history, and 390px confirmed states were captured from a synthetic temporary Vault. No private data appears. State examples are synthetic acceptance input, not hard-coded product content.
+- Layout QA: no document-level horizontal overflow at 1440px or 390px. The narrow tab strip intentionally scrolls within its own panel.
+
+### Screenshot set
+
+- `artifacts/monthly-reflection-qa/monthly-reflection-1440.png`
+- `artifacts/monthly-reflection-qa/monthly-reflection-narrow.png`
+- `artifacts/monthly-reflection-qa/monthly-reflection-filled.png`
+- `artifacts/monthly-reflection-qa/monthly-reflection-summary-edit.png`
+- `artifacts/monthly-reflection-qa/monthly-reflection-confirmed.png`
+
+### Acceptance findings
+
+- P0: none.
+- P1: none.
+- Blocking issues: none.
+- Known limitation: explicit manual save has no leave warning; intentionally deferred without enabling implicit writes.
+- Future roadmap: optional AI Provider authorization controls and Phase 8 Human 3.0 aggregation remain deliberately deferred.
+
+final result: passed
