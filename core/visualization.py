@@ -130,3 +130,35 @@ def human3_trend(root: Path) -> dict[str, Any]:
                 scores[key] = float(value)
         points.append({"date": metadata.get("date", path.stem), "scores": scores, "summary": extract_summary(body)})
     return {"disclaimer": "Human 3.0 仅用于自我反思，不是医学或心理诊断。", "dimensions": ["mind", "body", "spirit", "vocation"], "points": points}
+
+
+def monthly_trend(root: Path) -> dict[str, Any]:
+    """Cross-month Human 3.0 aggregation over confirmed monthly reflections.
+
+    Read-only and local: shows the user's own confirmed monthly records as a
+    time series with objective counts. It never infers a growth score.
+    """
+    from . import monthly_reflection
+    points: list[dict[str, Any]] = []
+    for item in monthly_reflection.overview(root)["reflections"]:
+        if item["status"] != "confirmed":
+            continue
+        goals = item["goals"]
+        points.append({
+            "month": item["month"],
+            "dimensions": item["dimensions"],
+            "completedDimensions": item["completedDimensions"],
+            "events": item["events"],
+            "eventCount": len(item["events"]),
+            "goals": goals,
+            "goalTotal": len(goals),
+            "goalCompleted": sum(1 for goal in goals if goal.get("completed")),
+            "summary": item["summary"],
+            "updated": item["updated"],
+        })
+    points.sort(key=lambda point: point["month"])
+    return {
+        "disclaimer": "月度复盘仅用于自我反思，不推断成长分数。",
+        "dimensions": [{"key": key, "title": title} for key, title in monthly_reflection.DIMENSIONS.items()],
+        "points": points,
+    }

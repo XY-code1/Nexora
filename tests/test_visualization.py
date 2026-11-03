@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from apps.api import create_app
 from core import profile
-from core.visualization import human3_trend, privacy_audit, profile_overview, timeline
+from core import monthly_reflection
+from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
 
 
 def write_memory(root: Path, folder: str, name: str, *, status: str, access: str, summary: str) -> None:
@@ -65,10 +66,37 @@ def main():
         assert trend["points"][0]["scores"]["body"] == 6.5
         assert trend["points"][0]["summary"] == "本月保持稳定。"
 
+        def write_reflection(month: str, *, confirmed: bool, goals: list[dict]) -> None:
+            data = monthly_reflection._empty(month)
+            data["dimensions"] = {key: f"{key}-{month}" for key in monthly_reflection.DIMENSIONS}
+            data["summary"] = f"{month} 摘要"
+            data["summarySource"] = "user-edited"
+            data["goals"] = goals
+            folder = "History" if confirmed else "Drafts"
+            meta = {"record_type": "monthly-reflection", "id": f"mr-{month}-00000001", "month": month, "status": "confirmed" if confirmed else "draft", "visibility": "private", "ai_access": "local-only", "created": f"{month}-01T00:00:00+00:00", "updated": f"{month}-01T00:00:00+00:00"}
+            profile.atomic_write(root / monthly_reflection.BASE / folder / f"mr-{month}-00000001.md", profile.serialize_record(meta, monthly_reflection._body(data)))
+
+        goals = [
+            {"id": "goal-1", "title": "读一本书", "action": "", "priority": "medium", "due": "", "completed": True, "previousGoalId": ""},
+            {"id": "goal-2", "title": "跑步", "action": "", "priority": "high", "due": "", "completed": False, "previousGoalId": ""},
+        ]
+        write_reflection("2026-10", confirmed=True, goals=goals)
+        write_reflection("2026-11", confirmed=True, goals=[])
+        write_reflection("2026-12", confirmed=False, goals=[])  # draft is excluded
+
+        trend = monthly_trend(root)
+        assert [point["month"] for point in trend["points"]] == ["2026-10", "2026-11"]
+        assert trend["points"][0]["goalTotal"] == 2 and trend["points"][0]["goalCompleted"] == 1
+        assert trend["points"][0]["eventCount"] == 0 and trend["points"][0]["completedDimensions"] == 4
+        assert trend["points"][1]["summary"] == "2026-11 摘要"
+        assert len(trend["dimensions"]) == 4 and trend["dimensions"][0]["key"] == "mind"
+        for point in trend["points"]:
+            assert "score" not in point and "growthScore" not in point
+
         client = TestClient(create_app(root, token="visual-token"), base_url="http://localhost")
         headers = {"Authorization": "Bearer visual-token"}
         assert client.get("/api/v1/visualization/profile").status_code == 401
-        for endpoint in ("profile", "timeline", "privacy", "human3"):
+        for endpoint in ("profile", "timeline", "privacy", "human3", "monthly"):
             response = client.get(f"/api/v1/visualization/{endpoint}", headers=headers)
             assert response.status_code == 200 and "data" in response.json()
 

@@ -138,6 +138,18 @@ describe('review workspace', () => {
     expect(fetchMock).toHaveBeenCalledTimes(9)
   })
 
+  it('shows the monthly trend view with an honest empty state', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
+      .mockImplementationOnce(() => response({ data: { disclaimer: '月度复盘仅用于自我反思，不推断成长分数。', dimensions: [{ key: 'mind', title: 'MIND — 认知与思维' }, { key: 'body', title: 'BODY — 身体与精力' }, { key: 'spirit', title: 'SPIRIT — 意义与关系' }, { key: 'vocation', title: 'VOCATION — 工作与创造' }], points: [] }, meta: { requestId: '2' } }))
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: '月度趋势' }))
+    await screen.findByText('还没有已确认的月度复盘')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('renders an honest empty profile without inventing relationships', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))

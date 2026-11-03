@@ -35,6 +35,9 @@ export type ReflectionEvent = { id: string; title: string; date: string; dimensi
 export type ReflectionGoal = { id: string; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string }
 export type MonthlyReflection = { id: string; month: string; status: 'draft' | 'confirmed'; dimensions: Record<ReflectionDimension, string>; events: ReflectionEvent[]; summary: string; summarySource: string; goals: ReflectionGoal[]; completedDimensions: number; readyToConfirm: boolean; revision: string; updated: string }
 export type MonthlyOverview = { currentMonth: string; reflections: MonthlyReflection[] }
+export type MonthlyTrendDimension = { key: ReflectionDimension; title: string }
+export type MonthlyTrendPoint = { month: string; dimensions: Record<ReflectionDimension, string>; completedDimensions: number; events: ReflectionEvent[]; eventCount: number; goals: ReflectionGoal[]; goalTotal: number; goalCompleted: number; summary: string; updated: string }
+export type MonthlyTrend = { disclaimer: string; dimensions: MonthlyTrendDimension[]; points: MonthlyTrendPoint[] }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
 type ErrorEnvelope = { error: { code: string; message: string; details: unknown }; requestId: string }
@@ -81,6 +84,7 @@ export class ApiClient {
   updateSecurityScopes(id: string, scopes: string[], signal?: AbortSignal) { return this.request<SecurityClient>(`/api/v1/security/clients/${id}/scopes`, { method: 'PUT', body: JSON.stringify({ scopes }), signal }) }
   revokeSecurityClient(id: string, signal?: AbortSignal) { return this.request<SecurityClient>(`/api/v1/security/clients/${id}/revoke`, { method: 'POST', signal }) }
   human3Trend(signal?: AbortSignal) { return this.request<Human3Trend>('/api/v1/visualization/human3', { signal }) }
+  monthlyTrend(signal?: AbortSignal) { return this.request<MonthlyTrend>('/api/v1/visualization/monthly', { signal }) }
   onboarding(signal?: AbortSignal) { return this.request<OnboardingState>('/api/v1/onboarding', { signal }) }
   onboardingResponse(topic: string, content: string, signal?: AbortSignal) { return this.request<{ candidateId: string; state: OnboardingState }>('/api/v1/onboarding/responses', { method: 'POST', body: JSON.stringify({ topic, content, consent: true }), signal }) }
   human3Session(signal?: AbortSignal) { return this.request<{ session: Human3Session | null }>('/api/v1/human3/session', { signal }) }

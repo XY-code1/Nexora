@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, CalendarDots, ChatCircleDots, CirclesFour, Database, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
-import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type OnboardingState, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
+import { Brain, CalendarDots, ChartLineUp, ChatCircleDots, CirclesFour, Database, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
+import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type MonthlyTrend, type OnboardingState, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
 import ConversationalOnboardingPage from './ConversationalOnboardingPage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
 import SecurityCenterPage from './SecurityCenterPage'
+import MonthlyTrendPage from './MonthlyTrendPage'
 import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3'
+type View = 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly'
 
 type TokenGateProps = {
   error: string
@@ -78,6 +79,7 @@ function App() {
   const [onboardingView, setOnboardingView] = useState<OnboardingState | null>(null)
   const [monthlyView, setMonthlyView] = useState<MonthlyOverview | null>(null)
   const [reflectionView, setReflectionView] = useState<MonthlyReflection | null>(null)
+  const [monthlyTrendView, setMonthlyTrendView] = useState<MonthlyTrend | null>(null)
   const [visualLoading, setVisualLoading] = useState<View | null>(null)
   const [navigationOpen, setNavigationOpen] = useState(false)
   const sessionEpoch = useRef(0)
@@ -110,7 +112,7 @@ function App() {
       setToken(nextToken)
       applyMemories(result)
       setMemoryStats(stats)
-      setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null)
+      setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null); setMonthlyTrendView(null)
       setNotice(null)
     } catch (error) {
       if (controller.signal.aborted || epoch !== sessionEpoch.current) return
@@ -185,6 +187,7 @@ function App() {
     if (next === 'timeline') setTimelineView(null)
     if (next === 'privacy') setSecurityView(null)
     if (next === 'human3') setHuman3View(null)
+    if (next === 'monthly') setMonthlyTrendView(null)
     setVisualLoading(next)
     try {
       const result = next === 'reflection' ? await client.monthlyOverview(controller.signal)
@@ -192,7 +195,8 @@ function App() {
         : next === 'profile' ? await client.profileOverview(controller.signal)
         : next === 'timeline' ? await client.timeline(controller.signal)
           : next === 'privacy' ? await client.securityCenter(controller.signal)
-            : await client.human3Trend(controller.signal)
+            : next === 'monthly' ? await client.monthlyTrend(controller.signal)
+              : await client.human3Trend(controller.signal)
       if (epoch !== sessionEpoch.current || request !== viewRequest.current) return
       if (next === 'onboarding') setOnboardingView(result as OnboardingState)
       if (next === 'reflection') { const monthly = result as MonthlyOverview; setMonthlyView(monthly); setReflectionView(monthly.reflections.find((item) => item.month === monthly.currentMonth) ?? monthly.reflections[0] ?? null) }
@@ -200,6 +204,7 @@ function App() {
       if (next === 'timeline') setTimelineView(result as TimelineItem[])
       if (next === 'privacy') setSecurityView(result as SecurityCenter)
       if (next === 'human3') setHuman3View(result as Human3Trend)
+      if (next === 'monthly') setMonthlyTrendView(result as MonthlyTrend)
     } catch (error) {
       if (controller.signal.aborted || epoch !== sessionEpoch.current || request !== viewRequest.current) return
       if (error instanceof ApiError && error.status === 401) disconnect('会话已失效，请重新连接。')
@@ -325,11 +330,12 @@ function App() {
     { label: '对话式引导', view: 'onboarding', icon: ChatCircleDots },
     { label: '个人档案', view: 'profile', icon: UserCircle },
     { label: '月度复盘', view: 'reflection', icon: CalendarDots },
+    { label: '月度趋势', view: 'monthly', icon: ChartLineUp },
     { label: 'Human 3.0', view: 'human3', icon: Brain },
     { label: '隐私审计', view: 'privacy', icon: ShieldCheck },
     { label: 'AI 连接', icon: PlugsConnected },
   ]
-  const titles: Record<View, string> = { review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0' }
+  const titles: Record<View, string> = { review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势' }
 
   return <main className="app-shell">
     <button className="mobile-menu" aria-label="打开导航" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}><List size={22} /></button>
@@ -354,6 +360,7 @@ function App() {
         {view === 'timeline' && <TimelinePage value={timelineView} loading={visualLoading === 'timeline'} />}
         {view === 'privacy' && <SecurityCenterPage value={securityView} loading={visualLoading === 'privacy'} saving={saving} credential={clientCredential} onAuthorize={authorizeSecurityClient} onScopes={updateSecurityScopes} onRevoke={revokeSecurityClient} onQuery={querySecurityEvents} onClearCredential={() => setClientCredential('')} />}
         {view === 'human3' && <Human3Page value={human3View} loading={visualLoading === 'human3'} />}
+        {view === 'monthly' && <MonthlyTrendPage value={monthlyTrendView} loading={visualLoading === 'monthly'} />}
         {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} />}
       </div>
     </section>

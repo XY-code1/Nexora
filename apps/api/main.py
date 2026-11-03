@@ -21,7 +21,7 @@ from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
 from core import monthly_reflection
 from core import security
-from core.visualization import human3_trend, privacy_audit, profile_overview, timeline
+from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
 
@@ -236,6 +236,11 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     def visualization_human3() -> dict[str, Any]:
         with profile.vault_lock(root):
             return envelope(human3_trend(root))
+
+    @app.get("/api/v1/visualization/monthly", dependencies=[auth])
+    def visualization_monthly() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(monthly_trend(root))
 
     @app.get("/api/v1/onboarding", dependencies=[auth])
     def get_onboarding() -> dict[str, Any]:
