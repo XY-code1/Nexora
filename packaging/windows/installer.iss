@@ -26,7 +26,10 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; Chocolatey's Inno Setup package does not ship optional translation files.
+; Keep the Simplified Chinese messages beside this script so release builds are
+; reproducible on GitHub-hosted Windows runners.
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 
 [Files]
 Source: "..\..\dist\personal-ai-profile\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
