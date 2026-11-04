@@ -9,11 +9,14 @@ Set-Location $Root
 Write-Host "==> Building React frontend"
 Push-Location "$Root\apps\web"
 npm ci
+if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
 npm run build
+if ($LASTEXITCODE -ne 0) { throw "npm run build failed with exit code $LASTEXITCODE" }
 Pop-Location
 
 Write-Host "==> Building backend with PyInstaller"
 python -m PyInstaller --clean --noconfirm packaging\windows\personal-ai-profile.spec
+if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
 $AppExe = "$Root\dist\personal-ai-profile\personal-ai-profile.exe"
 if (-not (Test-Path $AppExe)) { throw "PyInstaller did not produce $AppExe" }
 
@@ -47,15 +50,20 @@ Sign-File $AppExe
 
 Write-Host "==> Compiling installer with Inno Setup"
 $iscc = Get-Command iscc -ErrorAction SilentlyContinue
-if (-not $iscc) {
-    $inno = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-    if (-not (Test-Path $inno)) { throw "Inno Setup (iscc) not found" }
-    $iscc = $inno
-} else {
+if ($iscc) {
     $iscc = $iscc.Source
+} else {
+    $candidates = @(
+        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        "C:\Program Files\Inno Setup 6\ISCC.exe",
+        "C:\Program Files (x86)\Inno Setup 5\ISCC.exe"
+    )
+    $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $iscc) { throw "Inno Setup (iscc) not found. Install with: choco install innosetup" }
 }
+Write-Host "==> Using iscc: $iscc"
 & $iscc "/DMyAppVersion=$Version" "packaging\windows\installer.iss"
-if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
+if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE" }
 
 $SetupExe = "$Root\artifacts\personal-ai-profile-setup-$Version.exe"
 if (-not (Test-Path $SetupExe)) { throw "Inno Setup did not produce $SetupExe" }
@@ -68,5 +76,6 @@ if ($LASTEXITCODE -ne 0) { throw "release privacy gate failed" }
 
 Write-Host "==> Generating checksums"
 python scripts\release_checksums.py $SetupExe --output artifacts\SHA256SUMS.txt
+if ($LASTEXITCODE -ne 0) { throw "checksums failed with exit code $LASTEXITCODE" }
 
 Write-Host "==> Done: $SetupExe"
