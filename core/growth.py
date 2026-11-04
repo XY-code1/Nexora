@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import uuid
 from datetime import date
@@ -30,6 +31,21 @@ GOALS_FILE = BASE / "goals.jsonl"
 GOAL_HORIZONS = ("long-term", "quarterly", "monthly")
 GOAL_PRIORITIES = ("low", "medium", "high")
 DATA_RE = re.compile(r"(?s)<!-- growth-assessment-data\n(.*?)\n-->")
+
+
+def _record_revision(record: dict[str, Any]) -> str:
+    payload = {key: value for key, value in record.items() if key != "revision"}
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _record_view(record: dict[str, Any]) -> dict[str, Any]:
+    return {**record, "revision": _record_revision(record)}
+
+
+def _require_record_revision(record: dict[str, Any], expected_revision: str) -> None:
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_revision or "") or _record_revision(record) != expected_revision:
+        raise SystemExit("Revision conflict：记录已被其他进程修改，请刷新后重试。")
 
 
 def _latest_confirmed_monthly(root: Path) -> dict[str, Any] | None:
@@ -244,9 +260,10 @@ def confirm(path: str, assessment_id: str, expected_revision: str) -> Path:
 
 
 @profile.locked_write
-def delete(path: str, assessment_id: str) -> Path:
+def delete(path: str, assessment_id: str, expected_revision: str) -> Path:
     root = profile.vault(path)
     source = _find(root, assessment_id)
+    profile.require_revision(source, expected_revision)
     archived = root / BASE / "Archived" / source.name
     metadata, body = profile.parse_record(source.read_text(encoding="utf-8"))
     metadata.update({"status": "archived", "updated": profile.now()})
@@ -334,14 +351,13 @@ def _load_associations(root: Path) -> list[dict[str, Any]]:
 def _rewrite_associations(root: Path, records: list[dict[str, Any]]) -> None:
     path = root / ASSOCIATIONS_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as handle:
-        for record in records:
-            handle.write((json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+    content = "".join(json.dumps({k: v for k, v in record.items() if k != "revision"}, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n" for record in records)
+    profile.atomic_write(path, content)
 
 
 def list_associations(root: Path) -> list[dict[str, Any]]:
     with _associations_lock(root):
-        return _load_associations(root)
+        return [_record_view(record) for record in _load_associations(root)]
 
 
 @profile.locked_write
@@ -374,16 +390,20 @@ def add_association(path: str, from_dimension: str, from_event_id: str, to_dimen
         records = _load_associations(root)
         records.append(record)
         _rewrite_associations(root, records)
-    return record
+    return _record_view(record)
 
 
 @profile.locked_write
-def delete_association(path: str, association_id: str) -> str:
+def delete_association(path: str, association_id: str, expected_revision: str) -> str:
     root = profile.vault(path)
     if not re.fullmatch(r"assoc-[a-f0-9]{8}", association_id):
         raise SystemExit("关联ID无效。")
     with _associations_lock(root):
         records = _load_associations(root)
+        target = next((record for record in records if record.get("id") == association_id), None)
+        if not target:
+            raise SystemExit("未找到跨维关联。")
+        _require_record_revision(target, expected_revision)
         before = len(records)
         records = [record for record in records if record.get("id") != association_id]
         if len(records) == before:
@@ -416,9 +436,8 @@ def _load_goals(root: Path) -> list[dict[str, Any]]:
 def _rewrite_goals(root: Path, records: list[dict[str, Any]]) -> None:
     path = root / GOALS_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as handle:
-        for record in records:
-            handle.write((json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+    content = "".join(json.dumps({k: v for k, v in record.items() if k != "revision"}, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n" for record in records)
+    profile.atomic_write(path, content)
 
 
 def list_goals(root: Path, horizon: str | None = None) -> list[dict[str, Any]]:
@@ -429,7 +448,7 @@ def list_goals(root: Path, horizon: str | None = None) -> list[dict[str, Any]]:
             raise SystemExit("目标层级无效。")
         records = [record for record in records if record.get("horizon") == horizon]
     records.sort(key=lambda record: (record.get("horizon", ""), record.get("due", "") or "9999", record.get("createdAt", "")))
-    return records
+    return [_record_view(record) for record in records]
 
 
 @profile.locked_write
@@ -466,11 +485,11 @@ def add_goal(path: str, horizon: str, title: str, action: str, priority: str, du
         records = _load_goals(root)
         records.append(record)
         _rewrite_goals(root, records)
-    return record
+    return _record_view(record)
 
 
 @profile.locked_write
-def update_goal(path: str, goal_id: str, *, title: str, action: str, priority: str, due: str, completed: bool, previous_goal_id: str) -> dict[str, Any]:
+def update_goal(path: str, goal_id: str, *, title: str, action: str, priority: str, due: str, completed: bool, previous_goal_id: str, expected_revision: str) -> dict[str, Any]:
     root = profile.vault(path)
     if not re.fullmatch(r"goal-[a-f0-9]{8}", goal_id):
         raise SystemExit("目标ID无效。")
@@ -492,18 +511,23 @@ def update_goal(path: str, goal_id: str, *, title: str, action: str, priority: s
         target = next((record for record in records if record.get("id") == goal_id), None)
         if not target:
             raise SystemExit("未找到成长目标。")
+        _require_record_revision(target, expected_revision)
         target.update({"title": title, "action": action, "priority": priority, "due": due, "completed": bool(completed), "previousGoalId": previous_goal_id, "updatedAt": profile.now()})
         _rewrite_goals(root, records)
-        return target
+        return _record_view(target)
 
 
 @profile.locked_write
-def delete_goal(path: str, goal_id: str) -> str:
+def delete_goal(path: str, goal_id: str, expected_revision: str) -> str:
     root = profile.vault(path)
     if not re.fullmatch(r"goal-[a-f0-9]{8}", goal_id):
         raise SystemExit("目标ID无效。")
     with _goals_lock(root):
         records = _load_goals(root)
+        target = next((record for record in records if record.get("id") == goal_id), None)
+        if not target:
+            raise SystemExit("未找到成长目标。")
+        _require_record_revision(target, expected_revision)
         before = len(records)
         records = [record for record in records if record.get("id") != goal_id]
         if len(records) == before:

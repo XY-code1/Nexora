@@ -54,6 +54,12 @@ export default function GrowthDashboard({ client }: { client: ApiClient }) {
     months: timeline?.months.length ?? 0,
   }), [assessments, goals, associations, timeline])
 
+  async function refreshDerivedViews() {
+    const [dim, tl] = await Promise.all([client.growthDimensions(), client.growthTimeline()])
+    setDimensions(dim)
+    setTimeline(tl)
+  }
+
   if (loading) return <div className="skeletons" aria-label="加载中"><i /><i /><i /></div>
   if (error) return <div className="profile-empty"><h3>无法加载成长数据</h3><p>{error}</p></div>
 
@@ -73,7 +79,7 @@ export default function GrowthDashboard({ client }: { client: ApiClient }) {
 
     {tab === 'overview' && <OverviewPane timeline={timeline} dimensions={dimensions} />}
     {tab === 'dimensions' && <DimensionsPane dimensions={dimensions} />}
-    {tab === 'assessment' && <AssessmentPane client={client} assessments={assessments} setAssessments={setAssessments} />}
+    {tab === 'assessment' && <AssessmentPane client={client} assessments={assessments} setAssessments={setAssessments} onConfirmed={refreshDerivedViews} />}
     {tab === 'timeline' && <TimelinePane timeline={timeline} />}
     {tab === 'map' && <MapPane client={client} associations={associations} setAssociations={setAssociations} />}
     {tab === 'goals' && <GoalsPane client={client} goals={goals} setGoals={setGoals} />}
@@ -132,9 +138,12 @@ function MapPane({ client, associations, setAssociations }: { client: ApiClient;
       setAssociations([...associations, record]); setNote('')
     } catch (err) { setError(err instanceof Error ? err.message : '添加失败。') }
   }
-  async function remove(id: string) {
-    await client.deleteGrowthAssociation(id)
-    setAssociations(associations.filter((a) => a.id !== id))
+  async function remove(record: GrowthAssociation) {
+    setError('')
+    try {
+      await client.deleteGrowthAssociation(record.id, record.revision)
+      setAssociations(associations.filter((a) => a.id !== record.id))
+    } catch (err) { setError(err instanceof Error ? err.message : '删除失败。') }
   }
 
   return <div className="growth-pane">
@@ -147,7 +156,7 @@ function MapPane({ client, associations, setAssociations }: { client: ApiClient;
     </div>
     {error && <p className="field-error" role="alert">{error}</p>}
     {associations.length === 0 ? <p className="muted">还没有跨维关联。</p> : <ul className="assoc-list">
-      {associations.map((a) => <li key={a.id}><span className={`assoc-type ${a.relationType}`}>{a.relationType}</span>{a.fromDimension.toUpperCase()} → {a.toDimension.toUpperCase()}{a.note && <em>：{a.note}</em>}<button className="text-button danger-link" onClick={() => void remove(a.id)}>删除</button></li>)}
+      {associations.map((a) => <li key={a.id}><span className={`assoc-type ${a.relationType}`}>{a.relationType}</span>{a.fromDimension.toUpperCase()} → {a.toDimension.toUpperCase()}{a.note && <em>：{a.note}</em>}<button className="text-button danger-link" onClick={() => void remove(a)}>删除</button></li>)}
     </ul>}
   </div>
 }
@@ -169,12 +178,18 @@ function GoalsPane({ client, goals, setGoals }: { client: ApiClient; goals: Grow
     } catch (err) { setError(err instanceof Error ? err.message : '添加失败。') }
   }
   async function toggle(goal: GrowthGoal) {
-    const record = await client.updateGrowthGoal(goal.id, { title: goal.title, action: goal.action, priority: goal.priority, due: goal.due, completed: !goal.completed, previous_goal_id: goal.previousGoalId })
-    setGoals(goals.map((g) => (g.id === goal.id ? record : g)))
+    setError('')
+    try {
+      const record = await client.updateGrowthGoal(goal.id, { title: goal.title, action: goal.action, priority: goal.priority, due: goal.due, completed: !goal.completed, previous_goal_id: goal.previousGoalId, expected_revision: goal.revision })
+      setGoals(goals.map((g) => (g.id === goal.id ? record : g)))
+    } catch (err) { setError(err instanceof Error ? err.message : '更新失败。') }
   }
-  async function remove(id: string) {
-    await client.deleteGrowthGoal(id)
-    setGoals(goals.filter((g) => g.id !== id))
+  async function remove(goal: GrowthGoal) {
+    setError('')
+    try {
+      await client.deleteGrowthGoal(goal.id, goal.revision)
+      setGoals(goals.filter((g) => g.id !== goal.id))
+    } catch (err) { setError(err instanceof Error ? err.message : '删除失败。') }
   }
 
   const visible = goals.filter((g) => g.horizon === horizon)
@@ -194,13 +209,13 @@ function GoalsPane({ client, goals, setGoals }: { client: ApiClient; goals: Grow
         <button className="goal-check" aria-label={g.completed ? '标记未完成' : '标记完成'} onClick={() => void toggle(g)}>{g.completed ? '✓' : '○'}</button>
         <div><strong>{g.title}</strong>{g.action && <p>{g.action}</p>}</div>
         <span className="goal-meta">{g.priority}{g.due ? ` · ${g.due}` : ''}</span>
-        <button className="text-button danger-link" onClick={() => void remove(g.id)}>删除</button>
+        <button className="text-button danger-link" onClick={() => void remove(g)}>删除</button>
       </article>)}
     </div>
   </div>
 }
 
-function AssessmentPane({ client, assessments, setAssessments }: { client: ApiClient; assessments: GrowthAssessment[]; setAssessments: (value: GrowthAssessment[]) => void }) {
+function AssessmentPane({ client, assessments, setAssessments, onConfirmed }: { client: ApiClient; assessments: GrowthAssessment[]; setAssessments: (value: GrowthAssessment[]) => void; onConfirmed: () => Promise<void> }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [month, setMonth] = useState('')
   const [draft, setDraft] = useState<Record<GrowthDimensionKey, GrowthDimensionContent>>({ mind: emptyDimension(), body: emptyDimension(), spirit: emptyDimension(), vocation: emptyDimension() })
@@ -241,11 +256,15 @@ function AssessmentPane({ client, assessments, setAssessments }: { client: ApiCl
     try {
       const record = await client.confirmGrowthAssessment(selected.id, selected.revision)
       setAssessments(assessments.map((a) => (a.id === selected.id ? record : a))); setSelectedId(record.id)
+      await onConfirmed()
     } catch (err) { setError(err instanceof Error ? err.message : '确认失败。') }
   }
-  async function remove(id: string) {
-    await client.deleteGrowthAssessment(id)
-    setAssessments(assessments.filter((a) => a.id !== id)); if (selectedId === id) setSelectedId(null)
+  async function remove(record: GrowthAssessment) {
+    setError('')
+    try {
+      await client.deleteGrowthAssessment(record.id, record.revision)
+      setAssessments(assessments.filter((a) => a.id !== record.id)); if (selectedId === record.id) setSelectedId(null)
+    } catch (err) { setError(err instanceof Error ? err.message : '删除失败。') }
   }
 
   return <div className="growth-pane assessment-pane">
@@ -266,7 +285,7 @@ function AssessmentPane({ client, assessments, setAssessments }: { client: ApiCl
           <button className="secondary" onClick={() => void saveDimension(key)}>保存 {key.toUpperCase()}</button>
         </fieldset>)}
         <div className="assess-level"><label>参考层级（自选）<select aria-label="参考层级" value={level} onChange={(e) => setLevel(e.target.value)}><option value="">未选择</option><option value="1.0">1.0</option><option value="2.0">2.0</option><option value="3.0">3.0</option></select></label><button className="secondary" onClick={() => void saveLevel()}>保存层级</button></div>
-        <footer className="assess-actions"><p>写操作通过 Core 执行并校验 Revision。</p><div><button className="danger" onClick={() => void remove(selected.id)}>删除</button>{selected.status === 'draft' && <button className="confirm" onClick={() => void confirm()} disabled={!selected.readyToConfirm}>确认自评</button>}</div></footer>
+        <footer className="assess-actions"><p>写操作通过 Core 执行并校验 Revision。</p><div><button className="danger" onClick={() => void remove(selected)}>删除</button>{selected.status === 'draft' && <button className="confirm" onClick={() => void confirm()} disabled={!selected.readyToConfirm}>确认自评</button>}</div></footer>
       </section>}
     </div>}
   </div>

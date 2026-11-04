@@ -23,6 +23,7 @@ from core import monthly_reflection
 from core import security
 from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
 from core import growth
+from core import vault_management
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
 
@@ -145,6 +146,7 @@ class GrowthGoalUpdateInput(BaseModel):
     due: str = Field(default="", max_length=10)
     completed: bool = False
     previous_goal_id: str = Field(default="", max_length=80)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class SecurityClientInput(BaseModel):
@@ -154,6 +156,11 @@ class SecurityClientInput(BaseModel):
 
 class SecurityScopesInput(BaseModel):
     scopes: list[str] = Field(min_length=1, max_length=20)
+
+
+class BackupRestoreInput(BaseModel):
+    confirmation: str = Field(min_length=1, max_length=220)
+    expected_vault_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 def envelope(data: Any, revision: str | None = None) -> dict[str, Any]:
@@ -260,7 +267,42 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
 
     @app.get("/api/v1/capabilities", dependencies=[auth])
     def capabilities() -> dict[str, Any]:
-        return envelope({"memoryLifecycle": True, "visualization": True, "onboarding": True, "human3Reflection": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
+        return envelope({"memoryLifecycle": True, "visualization": True, "onboarding": True, "human3Reflection": True, "monthlyReflection": True, "growthIntelligence": True, "securityCenter": True, "backupRecovery": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
+
+    @app.get("/api/v1/backups", dependencies=[auth])
+    def backups() -> dict[str, Any]:
+        try:
+            return envelope(vault_management.backup_overview(root))
+        except RuntimeError as exc:
+            raise ApiError(400, "BACKUP_ERROR", str(exc)) from None
+
+    @app.post("/api/v1/backups", status_code=201, dependencies=[auth])
+    def create_backup() -> dict[str, Any]:
+        try:
+            item = vault_management.create_managed_backup(root)
+            overview = vault_management.backup_overview(root)
+            return envelope({"backup": item, "currentRevision": overview["currentRevision"]})
+        except RuntimeError as exc:
+            raise ApiError(400, "BACKUP_ERROR", str(exc)) from None
+
+    @app.get("/api/v1/backups/{backup_id}/verify", dependencies=[auth])
+    def verify_backup(backup_id: str) -> dict[str, Any]:
+        try:
+            return envelope(vault_management.verify_managed_backup(root, backup_id))
+        except RuntimeError as exc:
+            raise ApiError(400, "BACKUP_INVALID", str(exc)) from None
+
+    @app.post("/api/v1/backups/{backup_id}/restore", dependencies=[auth])
+    def restore_backup(backup_id: str, data: BackupRestoreInput) -> dict[str, Any]:
+        if data.confirmation != f"RESTORE {backup_id}":
+            raise ApiError(400, "CONFIRMATION_REQUIRED", "恢复确认文字不匹配。")
+        try:
+            return envelope(vault_management.restore_managed_backup(root, backup_id, data.expected_vault_revision))
+        except RuntimeError as exc:
+            message = str(exc)
+            if "其他入口修改" in message:
+                raise ApiError(409, "REVISION_CONFLICT", message) from None
+            raise ApiError(400, "RESTORE_ERROR", message) from None
 
     @app.get("/api/v1/visualization/profile", dependencies=[auth])
     def visualization_profile() -> dict[str, Any]:
@@ -480,9 +522,9 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             return envelope(growth.assessment_view(root, path))
 
     @app.delete("/api/v1/growth/assessments/{assessment_id}", dependencies=[auth])
-    def growth_delete(assessment_id: str) -> dict[str, Any]:
+    def growth_delete(assessment_id: str, expected_revision: str) -> dict[str, Any]:
         try:
-            growth.delete(str(root), assessment_id)
+            growth.delete(str(root), assessment_id, expected_revision)
         except SystemExit as exc:
             raise domain_error(exc) from None
         return envelope({"id": assessment_id, "action": "archived"})
@@ -501,9 +543,9 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         return envelope(record)
 
     @app.delete("/api/v1/growth/associations/{association_id}", dependencies=[auth])
-    def growth_delete_association(association_id: str) -> dict[str, Any]:
+    def growth_delete_association(association_id: str, expected_revision: str) -> dict[str, Any]:
         try:
-            growth.delete_association(str(root), association_id)
+            growth.delete_association(str(root), association_id, expected_revision)
         except SystemExit as exc:
             raise domain_error(exc) from None
         return envelope({"id": association_id, "action": "deleted"})
@@ -528,15 +570,15 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     @app.put("/api/v1/growth/goals/{goal_id}", dependencies=[auth])
     def growth_update_goal(goal_id: str, data: GrowthGoalUpdateInput) -> dict[str, Any]:
         try:
-            record = growth.update_goal(str(root), goal_id, title=data.title, action=data.action, priority=data.priority, due=data.due, completed=data.completed, previous_goal_id=data.previous_goal_id)
+            record = growth.update_goal(str(root), goal_id, title=data.title, action=data.action, priority=data.priority, due=data.due, completed=data.completed, previous_goal_id=data.previous_goal_id, expected_revision=data.expected_revision)
         except SystemExit as exc:
             raise domain_error(exc) from None
         return envelope(record)
 
     @app.delete("/api/v1/growth/goals/{goal_id}", dependencies=[auth])
-    def growth_delete_goal(goal_id: str) -> dict[str, Any]:
+    def growth_delete_goal(goal_id: str, expected_revision: str) -> dict[str, Any]:
         try:
-            growth.delete_goal(str(root), goal_id)
+            growth.delete_goal(str(root), goal_id, expected_revision)
         except SystemExit as exc:
             raise domain_error(exc) from None
         return envelope({"id": goal_id, "action": "deleted"})

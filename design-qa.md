@@ -89,6 +89,19 @@ final result: passed
 
 final result: passed
 
+## Product Phase 9 — Visual Backup & Recovery Wizard
+
+- Desktop evidence: `artifacts/backup-recovery-qa/backup-recovery-1440.png`。备份状态、真实文件数、大小、Schema、完整性和恢复风险形成清晰的左右层级。
+- Mobile evidence: `artifacts/backup-recovery-qa/backup-recovery-390.png`。概览卡片、历史和恢复面板按顺序堆叠，无页面级横向溢出。
+- Flow health: empty state → create verified snapshot → verify again → type exact confirmation → safety backup → transactional restore，全链路使用真实 API。
+- Safety: 恢复按钮在确认文字不匹配或快照完整性失败时禁用；损坏快照显示 `invalid`，不会静默消失。
+- Privacy: 页面不显示绝对路径或正文；明确说明本地快照不是加密保险库。
+- Accessibility evidence: 原生按钮、输入框与标签可键盘操作；成功/错误反馈使用 status。截图不能单独证明完整 WCAG 合规。
+- Verification: Python 20/20、Vitest 13/13、Playwright 9/9、lint 和 production build 通过。
+- P0: none. P1: none. Blocking issues: none.
+
+final result: passed
+
 ---
 
 # Phase 4 — Memory Review Design QA
@@ -326,7 +339,14 @@ final result: passed
 
 - Visual spec: Deep Space / Midnight Navy / Electric Blue / Cyan / Violet / Holographic, reusing the existing Sidebar, Topbar and design tokens.
 - Six views delivered: Growth Overview, Four Dimensions, Growth Assessment, Evolution Timeline, Cross-Dimension Map, Goals & Actions.
-- Backend: 15/15 Python regression tests pass (growth dimensions / assessment / timeline / associations / goals).
-- Frontend: `GrowthDashboard.tsx` + `api.ts` + `App.tsx` wiring + `App.css`; typecheck / unit test / build / e2e to be verified by CI (sandbox cannot run the npm toolchain).
-- Screenshots: not captured in this sandbox (headless); to be produced from a local Windows build.
-- Known limitation: frontend unverified locally, pending CI and manual visual review.
+- Desktop evidence: `artifacts/phase8-acceptance/phase8-growth-1440.png`. The overview uses real confirmed assessment, goal and association counts; spacing, hierarchy and contrast are healthy at 1440px.
+- Mobile evidence: `artifacts/phase8-acceptance/phase8-growth-390.png`. Sidebar becomes a drawer, cards stack, tabs wrap without document-level horizontal overflow, and the primary summary remains readable.
+- Flow health: create assessment → save four user-authored dimensions → choose optional Level → confirm → add goal → add association → reload is complete and persistent.
+- Accessibility evidence: tabs expose `role=tab` and `aria-selected`; form controls have accessible labels; focus/keyboard semantics rely on native controls. Screenshot review alone does not prove full WCAG compliance.
+- Honest-data boundary: statistics are derived from API arrays, the empty state contains no fabricated examples, and Level/scores are never inferred from text.
+- Concurrency: assessment deletion, association deletion and goal update/deletion now enforce revision checks; stale requests surface API errors instead of silently overwriting.
+- Verification: Python 19/19, Vitest 13/13, Playwright 8/8, lint and production build passed.
+- P0: none. P1: none. Blocking issues: none.
+- Known limitation: automatic growth diagnosis and inferred scores are intentionally absent.
+
+final result: passed

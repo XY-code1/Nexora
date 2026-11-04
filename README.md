@@ -332,7 +332,7 @@ start-review.vbs
 
 浏览器会打开本地审核界面，用于查看、修改、确认或拒绝候选记忆。服务只监听`127.0.0.1`，不会向局域网或公网开放。出现问题时可运行`start-review.cmd`查看诊断信息。
 
-## 工程进展报告（2026-11-02）
+## 工程进展报告（2026-11-04）
 
 ### 已完成
 
@@ -349,12 +349,20 @@ start-review.vbs
 11. **跨设备同步**：`core/sync.py`提供 sync-status/commit/pull/push，只操作私人Vault自己的Git仓库，fast-forward-only，分叉和脏状态拒绝。
 12. **公开发布**：逐文件 `visibility: public` 白名单、脱敏预览、敏感扫描拦截和独立staging导出已形成闭环。
 13. **Windows安装与发布**：PyInstaller + Inno Setup 打包为无需 Python/Node 的安装程序（安装/升级/卸载），条件代码签名，tag 触发 GitHub Release。
+14. **Privacy Audit & Security Center**：客户端凭据哈希存储、最小 Scope、即时撤销、防篡改审计链和真实访问时间线。
+15. **Human 3.0 Growth Intelligence**：四维成长自评、跨月时间线、用户主动关联、目标行动与全息成长仪表盘；不自动诊断或推断成长分数。
+16. **可视化备份与恢复**：本机绑定快照、文件哈希校验、并发保护、恢复前安全备份和事务回滚。
 
 ### 尚未完成
 
-- 可视化备份与恢复向导。
+- Overview 产品总览页。
+- AI Connections 客户端发现与配置向导。
 
-### 接下来计划
+### 阶段编号说明
+
+仓库历史中的 **Engineering Phase 4–11** 描述底层工程能力；2026-11 的 **Product UI Phase 1–8** 描述产品页面升级。两套编号互不覆盖，后续文档必须显式写出 Engineering 或 Product UI，避免把 Product Phase 8（Human 3.0 Growth）误认为旧 Engineering Phase 8（对话式引导）。
+
+### Engineering 基础阶段（历史编号）
 
 | 阶段 | 内容 | 验收标准 |
 |---|---|---|
@@ -368,7 +376,19 @@ start-review.vbs
 | Phase 11 ✅ | Windows安装、签名与发布 | PyInstaller + Inno Setup 安装/升级/卸载、条件代码签名、tag 触发 GitHub Release |
 | 后续 | 可视化备份恢复向导与产品打磨 | 每项功能继续遵守人工确认和最小披露边界 |
 
-当前最优先工作是**可视化备份与恢复向导**。
+### Product UI 阶段
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| Product Phase 1–3 | 全局设计系统、公共框架、Personal Profile | ✅ |
+| Product Phase 4 | Memory Review | ✅ |
+| Product Phase 5 | Conversational Onboarding | ✅ |
+| Product Phase 6 | Monthly Reflection | ✅ |
+| Product Phase 7 | Privacy Audit & Security Center | ✅ |
+| Product Phase 8 | Human 3.0 Growth Intelligence | ✅ 专项验收通过 |
+| Product Phase 9 | Visual Backup & Recovery Wizard | ✅ 专项验收通过 |
+
+下一阶段建议进入 **Overview 总览**；AI Connections 保留到最后，因为它涉及客户端发现、外部配置写入和更复杂的权限边界。
 
 依赖锁定、SBOM、漏洞/泄漏扫描和干净Windows验证见[`docs/RELEASE_GATES.md`](docs/RELEASE_GATES.md)。
 
@@ -425,10 +445,11 @@ Windows安装包、代码签名和正式发布见[`docs/WINDOWS_INSTALLER.md`](d
 
 ### V0.6 普通用户安装
 
-- [ ] Windows安装程序
-- [ ] 自动创建私人Vault
+- [x] Windows安装程序
+- [x] 首次启动创建私人Vault
 - [ ] 自动检测AI客户端并配置MCP
-- [ ] 连接诊断和修复
+- [x] 本地服务、Vault、MCP客户端与审计诊断
+- [ ] 自动连接修复
 
 ### V0.7 Human 3.0
 
@@ -439,10 +460,11 @@ Windows安装包、代码签名和正式发布见[`docs/WINDOWS_INSTALLER.md`](d
 
 ### V1.0
 
-- [ ] 稳定Schema与迁移工具
-- [ ] 完整测试和故障恢复
+- [x] 版本化Schema、迁移、备份与事务恢复基础
+- [x] Core、API、MCP、Launcher、Frontend与E2E自动化测试
 - [ ] 模型无关适配
-- [ ] 数据导入、导出和公开内容脱敏管道
+- [x] 公开内容白名单导出和脱敏预览
+- [ ] 通用数据导入
 
 ## 快速开始（当前开发者版本）
 

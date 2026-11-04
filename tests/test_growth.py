@@ -66,7 +66,12 @@ def main() -> None:
         view2 = growth.assessment_view(root, draft2)
         assert view2["status"] == "draft"
 
-        growth.delete(str(root), aid)
+        try:
+            growth.delete(str(root), aid, "0" * 64)
+            raise AssertionError("stale assessment revision should fail")
+        except SystemExit as exc:
+            assert str(exc)
+        growth.delete(str(root), aid, view2["revision"])
         for folder in ("Drafts", "History"):
             assert not (root / growth.BASE / folder / f"{aid}.md").exists()
         assert (root / growth.BASE / "Archived" / f"{aid}.md").exists()
@@ -139,7 +144,12 @@ def main() -> None:
         assert len(listed) == 2
         assert {item["id"] for item in listed} == {assoc1["id"], assoc2["id"]}
 
-        growth.delete_association(str(root), assoc1["id"])
+        try:
+            growth.delete_association(str(root), assoc1["id"], "0" * 64)
+            raise AssertionError("stale association revision should fail")
+        except SystemExit as exc:
+            assert "Revision conflict" in str(exc)
+        growth.delete_association(str(root), assoc1["id"], assoc1["revision"])
         listed = growth.list_associations(root)
         assert len(listed) == 1 and listed[0]["id"] == assoc2["id"]
 
@@ -173,7 +183,12 @@ def main() -> None:
         except SystemExit as exc:
             assert "关联历史目标" in str(exc)
 
-        updated = growth.update_goal(str(root), goal3["id"], title="本月目标", action="推进", priority="low", due="2026-11-30", completed=True, previous_goal_id="")
+        try:
+            growth.update_goal(str(root), goal3["id"], title="本月目标", action="推进", priority="low", due="2026-11-30", completed=True, previous_goal_id="", expected_revision="0" * 64)
+            raise AssertionError("stale goal revision should fail")
+        except SystemExit as exc:
+            assert "Revision conflict" in str(exc)
+        updated = growth.update_goal(str(root), goal3["id"], title="本月目标", action="推进", priority="low", due="2026-11-30", completed=True, previous_goal_id="", expected_revision=goal3["revision"])
         assert updated["completed"] is True
 
         long_term = growth.list_goals(root, horizon="long-term")
@@ -181,7 +196,7 @@ def main() -> None:
         monthly = growth.list_goals(root, horizon="monthly")
         assert len(monthly) == 1 and monthly[0]["completed"] is True
 
-        growth.delete_goal(str(root), goal2["id"])
+        growth.delete_goal(str(root), goal2["id"], goal2["revision"])
         assert all(item["id"] != goal2["id"] for item in growth.list_goals(root))
         assert len(growth.list_goals(root)) == 2
 

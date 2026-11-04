@@ -44,4 +44,4 @@
 ## Repository state
 
 - Private Vault was not accessed.
-- Phase 7 changes are intentionally uncommitted and unpushed pending human acceptance.
+- Phase 7 was accepted and pushed to `main` as commit `0937762`.

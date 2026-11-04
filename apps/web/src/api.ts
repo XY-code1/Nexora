@@ -47,8 +47,10 @@ export type GrowthOverview = { currentMonth: string; assessments: GrowthAssessme
 export type GrowthHuman3Point = { id: string; date: string; scores: Record<GrowthDimensionKey, number>; summary: string }
 export type GrowthTimelinePoint = { month: string; assessment: GrowthAssessment | null; human3: GrowthHuman3Point | null; monthly: MonthlyReflection | null }
 export type GrowthTimeline = { disclaimer: string; months: GrowthTimelinePoint[] }
-export type GrowthAssociation = { id: string; fromDimension: GrowthDimensionKey; fromEventId: string; toDimension: GrowthDimensionKey; toEventId: string; relationType: 'correlation' | 'causation'; note: string; createdAt: string }
-export type GrowthGoal = { id: string; horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string; createdAt: string; updatedAt: string }
+export type GrowthAssociation = { id: string; fromDimension: GrowthDimensionKey; fromEventId: string; toDimension: GrowthDimensionKey; toEventId: string; relationType: 'correlation' | 'causation'; note: string; createdAt: string; revision: string }
+export type GrowthGoal = { id: string; horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string; createdAt: string; updatedAt: string; revision: string }
+export type VaultBackup = { id: string; created: string; schemaVersion: number; fileCount: number; sizeBytes: number; integrity: 'verified' | 'invalid'; managed: boolean }
+export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
 type ErrorEnvelope = { error: { code: string; message: string; details: unknown }; requestId: string }
@@ -102,15 +104,19 @@ export class ApiClient {
   saveGrowthDimension(id: string, dimension: GrowthDimensionKey, content: GrowthDimensionContent, revision: string, signal?: AbortSignal) { return this.request<GrowthAssessment>(`/api/v1/growth/assessments/${id}/dimensions/${dimension}`, { method: 'PUT', body: JSON.stringify({ ...content, expected_revision: revision }), signal }) }
   saveGrowthLevel(id: string, level: string, revision: string, signal?: AbortSignal) { return this.request<GrowthAssessment>(`/api/v1/growth/assessments/${id}/level`, { method: 'PUT', body: JSON.stringify({ level, expected_revision: revision }), signal }) }
   confirmGrowthAssessment(id: string, revision: string, signal?: AbortSignal) { return this.request<GrowthAssessment>(`/api/v1/growth/assessments/${id}/confirm`, { method: 'POST', body: JSON.stringify({ expected_revision: revision }), signal }) }
-  deleteGrowthAssessment(id: string, signal?: AbortSignal) { return this.request<{ id: string; action: string }>(`/api/v1/growth/assessments/${id}`, { method: 'DELETE', signal }) }
+  deleteGrowthAssessment(id: string, revision: string, signal?: AbortSignal) { return this.request<{ id: string; action: string }>(`/api/v1/growth/assessments/${id}?expected_revision=${encodeURIComponent(revision)}`, { method: 'DELETE', signal }) }
   growthTimeline(month?: string, signal?: AbortSignal) { return this.request<GrowthTimeline>(`/api/v1/growth/timeline${month ? `?month=${encodeURIComponent(month)}` : ''}`, { signal }) }
   growthAssociations(signal?: AbortSignal) { return this.request<GrowthAssociation[]>('/api/v1/growth/associations', { signal }) }
   addGrowthAssociation(input: { from_dimension: GrowthDimensionKey; from_event_id: string; to_dimension: GrowthDimensionKey; to_event_id: string; relation_type: 'correlation' | 'causation'; note: string }, signal?: AbortSignal) { return this.request<GrowthAssociation>('/api/v1/growth/associations', { method: 'POST', body: JSON.stringify(input), signal }) }
-  deleteGrowthAssociation(id: string, signal?: AbortSignal) { return this.request<{ id: string; action: string }>(`/api/v1/growth/associations/${id}`, { method: 'DELETE', signal }) }
+  deleteGrowthAssociation(id: string, revision: string, signal?: AbortSignal) { return this.request<{ id: string; action: string }>(`/api/v1/growth/associations/${id}?expected_revision=${encodeURIComponent(revision)}`, { method: 'DELETE', signal }) }
   growthGoals(horizon?: string, signal?: AbortSignal) { return this.request<GrowthGoal[]>(`/api/v1/growth/goals${horizon ? `?horizon=${encodeURIComponent(horizon)}` : ''}`, { signal }) }
   addGrowthGoal(input: { horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; previous_goal_id: string }, signal?: AbortSignal) { return this.request<GrowthGoal>('/api/v1/growth/goals', { method: 'POST', body: JSON.stringify(input), signal }) }
-  updateGrowthGoal(id: string, input: { title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previous_goal_id: string }, signal?: AbortSignal) { return this.request<GrowthGoal>(`/api/v1/growth/goals/${id}`, { method: 'PUT', body: JSON.stringify(input), signal }) }
-  deleteGrowthGoal(id: string, signal?: AbortSignal) { return this.request<{ id: string; action: string }>(`/api/v1/growth/goals/${id}`, { method: 'DELETE', signal }) }
+  updateGrowthGoal(id: string, input: { title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previous_goal_id: string; expected_revision: string }, signal?: AbortSignal) { return this.request<GrowthGoal>(`/api/v1/growth/goals/${id}`, { method: 'PUT', body: JSON.stringify(input), signal }) }
+  deleteGrowthGoal(id: string, revision: string, signal?: AbortSignal) { return this.request<{ id: string; action: string }>(`/api/v1/growth/goals/${id}?expected_revision=${encodeURIComponent(revision)}`, { method: 'DELETE', signal }) }
+  backups(signal?: AbortSignal) { return this.request<BackupOverview>('/api/v1/backups', { signal }) }
+  createBackup(signal?: AbortSignal) { return this.request<{ backup: VaultBackup; currentRevision: string }>('/api/v1/backups', { method: 'POST', signal }) }
+  verifyBackup(id: string, signal?: AbortSignal) { return this.request<VaultBackup>(`/api/v1/backups/${encodeURIComponent(id)}/verify`, { signal }) }
+  restoreBackup(id: string, confirmation: string, revision: string, signal?: AbortSignal) { return this.request<{ restoredBackupId: string; safetyBackup: VaultBackup; currentRevision: string }>(`/api/v1/backups/${encodeURIComponent(id)}/restore`, { method: 'POST', body: JSON.stringify({ confirmation, expected_vault_revision: revision }), signal }) }
   onboarding(signal?: AbortSignal) { return this.request<OnboardingState>('/api/v1/onboarding', { signal }) }
   onboardingResponse(topic: string, content: string, signal?: AbortSignal) { return this.request<{ candidateId: string; state: OnboardingState }>('/api/v1/onboarding/responses', { method: 'POST', body: JSON.stringify({ topic, content, consent: true }), signal }) }
   human3Session(signal?: AbortSignal) { return this.request<{ session: Human3Session | null }>('/api/v1/human3/session', { signal }) }

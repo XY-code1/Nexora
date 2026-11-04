@@ -20,6 +20,7 @@ from filelock import FileLock
 from .profile import FOLDER_STATUSES, MEMORY_ROOT, REQUIRED, ROOT, SECRET_PATTERNS, VALID_STATUSES, atomic_write, parse_record
 
 CURRENT_SCHEMA_VERSION = 1
+BACKUP_FORMAT = 2
 CONFIG = "profile.config.yml"
 _LOCKS: dict[str, FileLock] = {}
 _LOCKS_GUARD = threading.Lock()
@@ -108,6 +109,20 @@ def _file_hashes(root: Path) -> dict[str, str]:
     }
 
 
+def _content_revision(root: Path) -> str:
+    """Stable revision of files included in a managed backup."""
+    blocked = {".git", ".env", "Locks", "Transactions"}
+    hashes = {
+        path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+        and not any(part in blocked for part in path.relative_to(root).parts)
+        and not path.name.endswith((".key", ".pem"))
+    }
+    payload = json.dumps(hashes, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _ignore_runtime(_directory: str, names: list[str]) -> set[str]:
     blocked = {".git", ".env", "Locks", "Transactions"}
     return {name for name in names if name in blocked or name.endswith((".key", ".pem"))}
@@ -126,7 +141,8 @@ def _create_backup(vault: Path, destination_root: Path | None = None) -> Path:
     shutil.copytree(root, target / "vault", ignore=_ignore_runtime)
     hashes = _file_hashes(target / "vault")
     (target / "backup.json").write_text(json.dumps({
-        "format": 1, "schema_version": schema_version(root), "created": stamp, "files": hashes,
+        "format": BACKUP_FORMAT, "schema_version": schema_version(root), "created": stamp, "files": hashes,
+        "vault_binding": _local_binding("managed-backup", root),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     return target
 
@@ -146,7 +162,7 @@ def _validate_backup(source: Path) -> tuple[Path, dict[str, object]]:
         raise RuntimeError("备份结构无效。")
     _reject_links(snapshot)
     data = json.loads(manifest.read_text(encoding="utf-8"))
-    if data.get("format") != 1 or not isinstance(data.get("files"), dict):
+    if data.get("format") not in {1, BACKUP_FORMAT} or not isinstance(data.get("files"), dict):
         raise RuntimeError("不支持或不完整的备份格式。")
     if any(not (snapshot / name).is_file() for name in REQUIRED):
         raise RuntimeError("备份缺少Vault必需文件。")
@@ -157,6 +173,86 @@ def _validate_backup(source: Path) -> tuple[Path, dict[str, object]]:
     if _file_hashes(snapshot) != data["files"]:
         raise RuntimeError("备份文件清单或哈希校验失败。")
     return snapshot, data
+
+
+def _managed_backup(root: Path, backup_id: str) -> Path:
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,180}", backup_id) or backup_id in {".", ".."}:
+        raise RuntimeError("备份ID无效。")
+    source = (backup_root() / backup_id).resolve()
+    if source.parent != backup_root().resolve() or not source.is_dir():
+        raise RuntimeError("未找到备份。")
+    _snapshot, data = _validate_backup(source)
+    if data.get("format") != BACKUP_FORMAT or not hmac.compare_digest(str(data.get("vault_binding", "")), _local_binding("managed-backup", root)):
+        raise RuntimeError("备份不属于当前Vault，已拒绝恢复。")
+    return source
+
+
+def _backup_view(root: Path, source: Path) -> dict[str, object]:
+    snapshot, data = _validate_backup(source)
+    files = data["files"]
+    assert isinstance(files, dict)
+    return {
+        "id": source.name,
+        "created": str(data.get("created", "")),
+        "schemaVersion": int(data["schema_version"]),
+        "fileCount": len(files),
+        "sizeBytes": sum(path.stat().st_size for path in snapshot.rglob("*") if path.is_file()),
+        "integrity": "verified",
+        "managed": data.get("format") == BACKUP_FORMAT and hmac.compare_digest(str(data.get("vault_binding", "")), _local_binding("managed-backup", root)),
+    }
+
+
+def backup_overview(vault: Path) -> dict[str, object]:
+    """List default-location backups without exposing filesystem paths."""
+    root = vault.resolve()
+    base = backup_root()
+    items: list[dict[str, object]] = []
+    with vault_operation_lock(root):
+        _reject_links(root)
+        base.mkdir(parents=True, exist_ok=True)
+        for source in sorted((item for item in base.iterdir() if item.is_dir()), reverse=True):
+            try:
+                view = _backup_view(root, source)
+            except (OSError, RuntimeError, ValueError, KeyError, TypeError):
+                try:
+                    data = json.loads((source / "backup.json").read_text(encoding="utf-8"))
+                    if data.get("format") != BACKUP_FORMAT or not hmac.compare_digest(str(data.get("vault_binding", "")), _local_binding("managed-backup", root)):
+                        continue
+                    files = data.get("files", {})
+                    items.append({"id": source.name, "created": str(data.get("created", "")), "schemaVersion": int(data.get("schema_version", 0)), "fileCount": len(files) if isinstance(files, dict) else 0, "sizeBytes": 0, "integrity": "invalid", "managed": True})
+                except (OSError, ValueError, KeyError, TypeError):
+                    continue
+                continue
+            if view["managed"]:
+                items.append(view)
+        return {"currentRevision": _content_revision(root), "backups": items}
+
+
+def create_managed_backup(vault: Path) -> dict[str, object]:
+    root = vault.resolve()
+    target = create_backup(root)
+    return _backup_view(root, target)
+
+
+def verify_managed_backup(vault: Path, backup_id: str) -> dict[str, object]:
+    root = vault.resolve()
+    with vault_operation_lock(root):
+        source = _managed_backup(root, backup_id)
+        return _backup_view(root, source)
+
+
+def restore_managed_backup(vault: Path, backup_id: str, expected_vault_revision: str) -> dict[str, object]:
+    """Restore a locally bound backup after creating a safety backup."""
+    root = vault.resolve()
+    with vault_operation_lock(root):
+        recover_vault_swap(root)
+        _reject_links(root)
+        if not re.fullmatch(r"[0-9a-f]{64}", expected_vault_revision or "") or _content_revision(root) != expected_vault_revision:
+            raise RuntimeError("Vault已被其他入口修改，请刷新备份页面后重试。")
+        source = _managed_backup(root, backup_id)
+        safety = _create_backup(root)
+        _restore_backup(root, source)
+        return {"restoredBackupId": backup_id, "safetyBackup": _backup_view(root, safety), "currentRevision": _content_revision(root)}
 
 
 def _restore_backup(vault: Path, backup: Path) -> None:

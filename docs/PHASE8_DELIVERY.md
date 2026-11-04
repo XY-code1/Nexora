@@ -1,6 +1,6 @@
 # Phase 8 — Human 3.0 交付物回顾
 
-> 状态：全部子阶段（P8.1–P8.7）已完成，代码在工作区、未提交。本文档汇总整个 Phase 8 的交付物。
+> 状态：全部子阶段（P8.1–P8.7）已完成并进入 `main`；2026-11-04 专项验收通过。本文档汇总整个 Phase 8 的交付物。
 
 ## 1. 概述
 
@@ -65,12 +65,11 @@ Phase 8 把 Personal AI Profile 从「个人记忆管理系统」升级为「长
 ## 6. 测试
 
 - 后端 `tests/test_growth.py`：四维聚合、自评生命周期（创建/填写/Level/确认/编辑回退/归档删除）、时间线（合并/排序/过滤/快照保留）、跨维关联（correlation/causation/校验）、目标（CRUD/horizon/previousGoalId），全通过。
-- 后端全量回归：15/15 Python 测试通过。
-- 前端：`App.test.tsx` 冒烟测试（GrowthDashboard 空状态）；typecheck/vitest/build/e2e 待 CI 验证。
+- 后端全量回归：19/19 Python 测试脚本通过。
+- 前端：13/13 Vitest、lint、typecheck/build 与 8/8 Playwright E2E 通过。
 
 ## 7. 已知限制
 
-- 前端未经本地验证（沙箱 node_modules 不可用），依赖 CI + 本机 `npm ci && npm run build` 验收。
-- 沙箱无法产出桌面/移动端截图。
-- 未 commit/push（遵守「不 commit、push 或 merge」纪律）。
-- 之前误推的 `1d62750`（月度趋势聚合）保留作为 P8.4 前置。
+- 不提供自动成长诊断、自动 Level 或推断成长分数；这是产品边界。
+- `1d62750`（月度趋势聚合）保留作为 P8.4 前置。
+- 专项验收截图位于 `artifacts/phase8-acceptance/`。
