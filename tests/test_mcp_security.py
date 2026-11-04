@@ -27,11 +27,13 @@ def main():
 
         denied = vault / "30 Memory" / "Inbox" / "denied.md"
         denied.write_text("---\nai_access: denied\n---\nsecret", encoding="utf-8")
-        assert not m.list_pending()
+        assert m.list_pending()["totalPending"] == 1
 
         m.propose_memory("跨AI共享候选记忆", memory_type="preference", subject="sharing")
         pending = m.list_pending()
-        assert len(pending) == 1 and "跨AI共享" in pending[0]["content"]
+        assert pending["totalPending"] == 2
+        assert pending["byType"] == {"note": 1, "preference": 1}
+        assert "跨AI共享" not in str(pending)
         candidate = next(file for file in (vault / "30 Memory" / "Inbox").glob("*.md") if file.name != "denied.md")
         metadata, _ = profile_cli.read_record(candidate)
         assert metadata["source_agent"] == client["id"]

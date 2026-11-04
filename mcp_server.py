@@ -237,27 +237,24 @@ def propose_memory(content: str, memory_type: str = "note", subject: str = "") -
 
 @server.tool(
     description=(
-        "列出等待用户在 Obsidian 中审核的候选记忆。"
-        "这些内容仍是 candidate，模型不得当作已确认事实使用。"
+        "返回等待用户审核的候选记忆的统计信息。"
+        "只返回非敏感统计（总数和按类型计数），不返回候选的正文、摘要、来源或文件名。"
+        "候选记忆只有经用户确认后才会成为长期记忆。"
     )
 )
 @vault_locked
-def list_pending() -> list[dict[str, str]]:
+def list_pending() -> dict[str, object]:
     require_scope("memory:pending", "memory.pending_list", "memory")
     vault = get_vault()
     root = vault / "30 Memory" / "Inbox"
-    out: list[dict[str, str]] = []
+    by_type: dict[str, int] = {}
     total = 0
-    for file in sorted(root.glob("*.md"))[:MAX_LIST_ITEMS]:
-        text = read_limited(vault, file)
-        if not is_readable_for_search(text):
-            continue
-        content = apply_access(text, full_limit=1500, summary_limit=600)
-        total += len(content)
-        if total > MAX_RESPONSE_CHARS:
-            break
-        out.append({"file": file.name, "content": content})
-    return out
+    for file in sorted(root.glob("*.md")):
+        metadata, _ = profile_cli.parse_record(read_limited(vault, file))
+        kind = metadata.get("type", "note")
+        by_type[kind] = by_type.get(kind, 0) + 1
+        total += 1
+    return {"totalPending": total, "byType": by_type}
 
 
 @server.tool(

@@ -47,7 +47,8 @@ async def exercise(vault: Path) -> None:
             assert not proposed.is_error, proposed
             pending = await session.call_tool("list_pending", {})
             assert not pending.is_error, pending
-            assert "MCP protocol round-trip synthetic preference" in str(pending.content)
+            assert "totalPending" in str(pending.content)
+            assert "MCP protocol round-trip synthetic preference" not in str(pending.content)
 
             rejected = await session.call_tool("propose_memory", {
                 "content": "api_key: abcdefghijklmnop",
