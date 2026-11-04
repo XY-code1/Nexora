@@ -8,12 +8,13 @@ import MonthlyReflectionPage from './MonthlyReflectionPage'
 import SecurityCenterPage from './SecurityCenterPage'
 import MonthlyTrendPage from './MonthlyTrendPage'
 import GrowthDashboard from './GrowthDashboard'
+import OverviewPage from './OverviewPage'
 import BackupRecoveryPage from './BackupRecoveryPage'
 import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup'
+type View = 'overview' | 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup'
 
 type TokenGateProps = {
   error: string
@@ -179,7 +180,7 @@ function App() {
     viewRequest.current += 1
     setVisualLoading(null)
     if (next === 'review') { void loadCandidates(); return }
-    if (next === 'growth' || next === 'backup') return
+    if (next === 'growth' || next === 'backup' || next === 'overview') return
     const controller = new AbortController()
     visualAbort.current = controller
     const epoch = sessionEpoch.current
@@ -328,7 +329,7 @@ function App() {
   if (!token) return <TokenGate error={gateError} connecting={connecting} onConnect={connect} />
 
   const navigation: { label: string; view?: View; icon: typeof House }[] = [
-    { label: '概览', icon: House },
+    { label: '概览', view: 'overview', icon: House },
     { label: '记忆审核', view: 'review', icon: Stack },
     { label: '对话式引导', view: 'onboarding', icon: ChatCircleDots },
     { label: '个人档案', view: 'profile', icon: UserCircle },
@@ -340,7 +341,7 @@ function App() {
     { label: '备份与恢复', view: 'backup', icon: HardDrives },
     { label: 'AI 连接', icon: PlugsConnected },
   ]
-  const titles: Record<View, string> = { review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复' }
+  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复' }
 
   return <main className="app-shell">
     <button className="mobile-menu" aria-label="打开导航" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}><List size={22} /></button>
@@ -368,9 +369,21 @@ function App() {
         {view === 'monthly' && <MonthlyTrendPage value={monthlyTrendView} loading={visualLoading === 'monthly'} />}
         {view === 'growth' && client && <GrowthDashboard client={client} />}
         {view === 'backup' && client && <BackupRecoveryPage client={client} />}
+        {view === 'overview' && client && <OverviewPage client={client} onNavigate={(next) => void openView(next)} />}
         {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} />}
       </div>
     </section>
+
+    <aside className="status-panel" aria-label="智能状态面板">
+      <div className="status-panel-head"><p className="eyebrow">INTELLIGENCE STATUS</p><h2>智能状态</h2></div>
+      <dl className="status-list">
+        <div><dt>本地服务</dt><dd className="ok">已连接</dd></div>
+        <div><dt>Vault</dt><dd className="ok">受保护</dd></div>
+        <div><dt>待处理</dt><dd>{memoryStats.pendingReview}</dd></div>
+        <div><dt>确认记忆</dt><dd>{memoryStats.confirmedMemories}</dd></div>
+      </dl>
+      <button className="text-button" onClick={() => void loadCandidates()}>刷新状态</button>
+    </aside>
   </main>
 }
 

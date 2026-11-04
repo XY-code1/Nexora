@@ -165,6 +165,18 @@ describe('review workspace', () => {
     await screen.findByText('Personal Growth Intelligence')
   })
 
+  it('renders the overview page from the navigation', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
+      .mockImplementationOnce(() => response({ data: { profile: { access: 'summary-only', protected: false, sections: [] }, memory: stats, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready' }, meta: { requestId: 'overview' } }))
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: '概览' }))
+    await screen.findByText('你的个人智能中枢')
+    expect(screen.getByText('暂无待处理事项')).toBeInTheDocument()
+  })
+
   it('renders an honest empty profile without inventing relationships', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))

@@ -51,6 +51,7 @@ export type GrowthAssociation = { id: string; fromDimension: GrowthDimensionKey;
 export type GrowthGoal = { id: string; horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string; createdAt: string; updatedAt: string; revision: string }
 export type VaultBackup = { id: string; created: string; schemaVersion: number; fileCount: number; sizeBytes: number; integrity: 'verified' | 'invalid'; managed: boolean }
 export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
+export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
 type ErrorEnvelope = { error: { code: string; message: string; details: unknown }; requestId: string }
@@ -88,6 +89,7 @@ export class ApiClient {
 
   listCandidates(signal?: AbortSignal) { return this.request<Memory[]>('/api/v1/memories?status=candidate', { signal }) }
   memoryStats(signal?: AbortSignal) { return this.request<MemoryStats>('/api/v1/memory-stats', { signal }) }
+  overview(signal?: AbortSignal) { return this.request<OverviewSnapshot>('/api/v1/overview', { signal }) }
   profileOverview(signal?: AbortSignal) { return this.request<ProfileOverview>('/api/v1/visualization/profile', { signal }) }
   timeline(signal?: AbortSignal) { return this.request<TimelineItem[]>('/api/v1/visualization/timeline', { signal }) }
   privacyAudit(signal?: AbortSignal) { return this.request<PrivacyAudit>('/api/v1/visualization/privacy', { signal }) }

@@ -269,6 +269,25 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     def capabilities() -> dict[str, Any]:
         return envelope({"memoryLifecycle": True, "visualization": True, "onboarding": True, "human3Reflection": True, "monthlyReflection": True, "growthIntelligence": True, "securityCenter": True, "backupRecovery": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
 
+    @app.get("/api/v1/overview", dependencies=[auth])
+    def overview_snapshot() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            memory = memory_stats(root)
+            clients = security.list_clients(root)
+            active = [client for client in clients if client["status"] == "active"]
+            recent = security.query_events(root, page_size=6)["items"]
+            months = growth.growth_timeline(root)["months"]
+            latest_month = months[-1] if months else None
+            return envelope({
+                "profile": profile_overview(root),
+                "memory": memory,
+                "clients": {"total": len(active), "active": active[:8]},
+                "recentAccess": recent,
+                "growth": {"latestMonth": latest_month},
+                "pending": memory["pendingReview"],
+                "vault": "ready",
+            })
+
     @app.get("/api/v1/backups", dependencies=[auth])
     def backups() -> dict[str, Any]:
         try:
