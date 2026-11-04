@@ -22,6 +22,7 @@ from core.human3 import confirm_session, current_session, save_conclusion, save_
 from core import monthly_reflection
 from core import security
 from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
+from core import growth
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
 
@@ -100,6 +101,50 @@ class MonthlyGoalsInput(BaseModel):
 class MonthlySummaryInput(BaseModel):
     summary: str = Field(min_length=1, max_length=2400)
     expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class GrowthCreateInput(BaseModel):
+    month: str = Field(pattern=r"^\d{4}-(?:0[1-9]|1[0-2])$")
+
+
+class GrowthDimensionInput(BaseModel):
+    current: str = Field(default="", max_length=5000)
+    evidence: str = Field(default="", max_length=5000)
+    challenges: str = Field(default="", max_length=5000)
+    direction: str = Field(default="", max_length=5000)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class GrowthLevelInput(BaseModel):
+    level: str = Field(default="", max_length=8)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class GrowthAssociationInput(BaseModel):
+    from_dimension: str = Field(pattern=r"^(mind|body|spirit|vocation)$")
+    from_event_id: str = Field(default="", max_length=80)
+    to_dimension: str = Field(pattern=r"^(mind|body|spirit|vocation)$")
+    to_event_id: str = Field(default="", max_length=80)
+    relation_type: str = Field(pattern=r"^(correlation|causation)$")
+    note: str = Field(default="", max_length=1200)
+
+
+class GrowthGoalCreateInput(BaseModel):
+    horizon: str = Field(pattern=r"^(long-term|quarterly|monthly)$")
+    title: str = Field(min_length=1, max_length=160)
+    action: str = Field(default="", max_length=500)
+    priority: str = Field(pattern=r"^(low|medium|high)$")
+    due: str = Field(default="", max_length=10)
+    previous_goal_id: str = Field(default="", max_length=80)
+
+
+class GrowthGoalUpdateInput(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    action: str = Field(default="", max_length=500)
+    priority: str = Field(pattern=r"^(low|medium|high)$")
+    due: str = Field(default="", max_length=10)
+    completed: bool = False
+    previous_goal_id: str = Field(default="", max_length=80)
 
 
 class SecurityClientInput(BaseModel):
@@ -242,6 +287,16 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         with profile.vault_lock(root):
             return envelope(monthly_trend(root))
 
+    @app.get("/api/v1/growth/dimensions", dependencies=[auth])
+    def growth_dimensions() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(growth.dimension_overview(root))
+
+    @app.get("/api/v1/growth/timeline", dependencies=[auth])
+    def growth_timeline(month: str | None = None) -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(growth.growth_timeline(root, month))
+
     @app.get("/api/v1/onboarding", dependencies=[auth])
     def get_onboarding() -> dict[str, Any]:
         with profile.vault_lock(root):
@@ -382,6 +437,109 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             raise domain_error(exc) from None
         with profile.vault_lock(root):
             return envelope(monthly_reflection.reflection_view(root, path))
+
+    @app.get("/api/v1/growth/assessments", dependencies=[auth])
+    def growth_overview() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(growth.overview(root))
+
+    @app.post("/api/v1/growth/assessments", status_code=201, dependencies=[auth])
+    def growth_create(data: GrowthCreateInput) -> dict[str, Any]:
+        try:
+            path = growth.create(str(root), data.month)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(growth.assessment_view(root, path))
+
+    @app.put("/api/v1/growth/assessments/{assessment_id}/dimensions/{dimension}", dependencies=[auth])
+    def growth_dimension(assessment_id: str, dimension: str, data: GrowthDimensionInput) -> dict[str, Any]:
+        try:
+            path = growth.save_dimension(str(root), assessment_id, dimension, data.current, data.evidence, data.challenges, data.direction, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(growth.assessment_view(root, path))
+
+    @app.put("/api/v1/growth/assessments/{assessment_id}/level", dependencies=[auth])
+    def growth_level(assessment_id: str, data: GrowthLevelInput) -> dict[str, Any]:
+        try:
+            path = growth.save_level(str(root), assessment_id, data.level, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(growth.assessment_view(root, path))
+
+    @app.post("/api/v1/growth/assessments/{assessment_id}/confirm", dependencies=[auth])
+    def growth_confirm(assessment_id: str, data: RevisionInput) -> dict[str, Any]:
+        try:
+            path = growth.confirm(str(root), assessment_id, data.expected_revision)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        with profile.vault_lock(root):
+            return envelope(growth.assessment_view(root, path))
+
+    @app.delete("/api/v1/growth/assessments/{assessment_id}", dependencies=[auth])
+    def growth_delete(assessment_id: str) -> dict[str, Any]:
+        try:
+            growth.delete(str(root), assessment_id)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        return envelope({"id": assessment_id, "action": "archived"})
+
+    @app.get("/api/v1/growth/associations", dependencies=[auth])
+    def growth_associations() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            return envelope(growth.list_associations(root))
+
+    @app.post("/api/v1/growth/associations", status_code=201, dependencies=[auth])
+    def growth_add_association(data: GrowthAssociationInput) -> dict[str, Any]:
+        try:
+            record = growth.add_association(str(root), data.from_dimension, data.from_event_id, data.to_dimension, data.to_event_id, data.relation_type, data.note)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        return envelope(record)
+
+    @app.delete("/api/v1/growth/associations/{association_id}", dependencies=[auth])
+    def growth_delete_association(association_id: str) -> dict[str, Any]:
+        try:
+            growth.delete_association(str(root), association_id)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        return envelope({"id": association_id, "action": "deleted"})
+
+    @app.get("/api/v1/growth/goals", dependencies=[auth])
+    def growth_goals(horizon: str | None = None) -> dict[str, Any]:
+        with profile.vault_lock(root):
+            try:
+                result = growth.list_goals(root, horizon)
+            except SystemExit as exc:
+                raise domain_error(exc) from None
+            return envelope(result)
+
+    @app.post("/api/v1/growth/goals", status_code=201, dependencies=[auth])
+    def growth_add_goal(data: GrowthGoalCreateInput) -> dict[str, Any]:
+        try:
+            record = growth.add_goal(str(root), data.horizon, data.title, data.action, data.priority, data.due, data.previous_goal_id)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        return envelope(record)
+
+    @app.put("/api/v1/growth/goals/{goal_id}", dependencies=[auth])
+    def growth_update_goal(goal_id: str, data: GrowthGoalUpdateInput) -> dict[str, Any]:
+        try:
+            record = growth.update_goal(str(root), goal_id, title=data.title, action=data.action, priority=data.priority, due=data.due, completed=data.completed, previous_goal_id=data.previous_goal_id)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        return envelope(record)
+
+    @app.delete("/api/v1/growth/goals/{goal_id}", dependencies=[auth])
+    def growth_delete_goal(goal_id: str) -> dict[str, Any]:
+        try:
+            growth.delete_goal(str(root), goal_id)
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+        return envelope({"id": goal_id, "action": "deleted"})
 
     @app.get("/api/v1/security/overview", dependencies=[auth])
     def security_overview() -> dict[str, Any]:

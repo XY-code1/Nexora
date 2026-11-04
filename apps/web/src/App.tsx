@@ -7,11 +7,12 @@ import ConversationalOnboardingPage from './ConversationalOnboardingPage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
 import SecurityCenterPage from './SecurityCenterPage'
 import MonthlyTrendPage from './MonthlyTrendPage'
+import GrowthDashboard from './GrowthDashboard'
 import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly'
+type View = 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth'
 
 type TokenGateProps = {
   error: string
@@ -177,6 +178,7 @@ function App() {
     viewRequest.current += 1
     setVisualLoading(null)
     if (next === 'review') { void loadCandidates(); return }
+    if (next === 'growth') return
     const controller = new AbortController()
     visualAbort.current = controller
     const epoch = sessionEpoch.current
@@ -332,10 +334,11 @@ function App() {
     { label: '月度复盘', view: 'reflection', icon: CalendarDots },
     { label: '月度趋势', view: 'monthly', icon: ChartLineUp },
     { label: 'Human 3.0', view: 'human3', icon: Brain },
+    { label: '成长仪表盘', view: 'growth', icon: Sparkle },
     { label: '隐私审计', view: 'privacy', icon: ShieldCheck },
     { label: 'AI 连接', icon: PlugsConnected },
   ]
-  const titles: Record<View, string> = { review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势' }
+  const titles: Record<View, string> = { review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长' }
 
   return <main className="app-shell">
     <button className="mobile-menu" aria-label="打开导航" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}><List size={22} /></button>
@@ -361,6 +364,7 @@ function App() {
         {view === 'privacy' && <SecurityCenterPage value={securityView} loading={visualLoading === 'privacy'} saving={saving} credential={clientCredential} onAuthorize={authorizeSecurityClient} onScopes={updateSecurityScopes} onRevoke={revokeSecurityClient} onQuery={querySecurityEvents} onClearCredential={() => setClientCredential('')} />}
         {view === 'human3' && <Human3Page value={human3View} loading={visualLoading === 'human3'} />}
         {view === 'monthly' && <MonthlyTrendPage value={monthlyTrendView} loading={visualLoading === 'monthly'} />}
+        {view === 'growth' && client && <GrowthDashboard client={client} />}
         {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} />}
       </div>
     </section>

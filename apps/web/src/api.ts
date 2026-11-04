@@ -38,6 +38,17 @@ export type MonthlyOverview = { currentMonth: string; reflections: MonthlyReflec
 export type MonthlyTrendDimension = { key: ReflectionDimension; title: string }
 export type MonthlyTrendPoint = { month: string; dimensions: Record<ReflectionDimension, string>; completedDimensions: number; events: ReflectionEvent[]; eventCount: number; goals: ReflectionGoal[]; goalTotal: number; goalCompleted: number; summary: string; updated: string }
 export type MonthlyTrend = { disclaimer: string; dimensions: MonthlyTrendDimension[]; points: MonthlyTrendPoint[] }
+export type GrowthDimensionKey = 'mind' | 'body' | 'spirit' | 'vocation'
+export type GrowthDimensionItem = { key: GrowthDimensionKey; title: string; subtitle: string; areas: string[]; month: string; monthlyText: string; score: number | null; assessmentDate: string; assessmentSummary: string }
+export type GrowthDimensions = { disclaimer: string; dimensions: GrowthDimensionItem[] }
+export type GrowthDimensionContent = { current: string; evidence: string; challenges: string; direction: string }
+export type GrowthAssessment = { id: string; month: string; status: 'draft' | 'confirmed'; level: string; dimensions: Record<GrowthDimensionKey, GrowthDimensionContent>; completedDimensions: number; readyToConfirm: boolean; revision: string; updated: string }
+export type GrowthOverview = { currentMonth: string; assessments: GrowthAssessment[] }
+export type GrowthHuman3Point = { id: string; date: string; scores: Record<GrowthDimensionKey, number>; summary: string }
+export type GrowthTimelinePoint = { month: string; assessment: GrowthAssessment | null; human3: GrowthHuman3Point | null; monthly: MonthlyReflection | null }
+export type GrowthTimeline = { disclaimer: string; months: GrowthTimelinePoint[] }
+export type GrowthAssociation = { id: string; fromDimension: GrowthDimensionKey; fromEventId: string; toDimension: GrowthDimensionKey; toEventId: string; relationType: 'correlation' | 'causation'; note: string; createdAt: string }
+export type GrowthGoal = { id: string; horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string; createdAt: string; updatedAt: string }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
 type ErrorEnvelope = { error: { code: string; message: string; details: unknown }; requestId: string }
@@ -85,6 +96,21 @@ export class ApiClient {
   revokeSecurityClient(id: string, signal?: AbortSignal) { return this.request<SecurityClient>(`/api/v1/security/clients/${id}/revoke`, { method: 'POST', signal }) }
   human3Trend(signal?: AbortSignal) { return this.request<Human3Trend>('/api/v1/visualization/human3', { signal }) }
   monthlyTrend(signal?: AbortSignal) { return this.request<MonthlyTrend>('/api/v1/visualization/monthly', { signal }) }
+  growthDimensions(signal?: AbortSignal) { return this.request<GrowthDimensions>('/api/v1/growth/dimensions', { signal }) }
+  growthAssessments(signal?: AbortSignal) { return this.request<GrowthOverview>('/api/v1/growth/assessments', { signal }) }
+  createGrowthAssessment(month: string, signal?: AbortSignal) { return this.request<GrowthAssessment>('/api/v1/growth/assessments', { method: 'POST', body: JSON.stringify({ month }), signal }) }
+  saveGrowthDimension(id: string, dimension: GrowthDimensionKey, content: GrowthDimensionContent, revision: string, signal?: AbortSignal) { return this.request<GrowthAssessment>(`/api/v1/growth/assessments/${id}/dimensions/${dimension}`, { method: 'PUT', body: JSON.stringify({ ...content, expected_revision: revision }), signal }) }
+  saveGrowthLevel(id: string, level: string, revision: string, signal?: AbortSignal) { return this.request<GrowthAssessment>(`/api/v1/growth/assessments/${id}/level`, { method: 'PUT', body: JSON.stringify({ level, expected_revision: revision }), signal }) }
+  confirmGrowthAssessment(id: string, revision: string, signal?: AbortSignal) { return this.request<GrowthAssessment>(`/api/v1/growth/assessments/${id}/confirm`, { method: 'POST', body: JSON.stringify({ expected_revision: revision }), signal }) }
+  deleteGrowthAssessment(id: string, signal?: AbortSignal) { return this.request<{ id: string; action: string }>(`/api/v1/growth/assessments/${id}`, { method: 'DELETE', signal }) }
+  growthTimeline(month?: string, signal?: AbortSignal) { return this.request<GrowthTimeline>(`/api/v1/growth/timeline${month ? `?month=${encodeURIComponent(month)}` : ''}`, { signal }) }
+  growthAssociations(signal?: AbortSignal) { return this.request<GrowthAssociation[]>('/api/v1/growth/associations', { signal }) }
+  addGrowthAssociation(input: { from_dimension: GrowthDimensionKey; from_event_id: string; to_dimension: GrowthDimensionKey; to_event_id: string; relation_type: 'correlation' | 'causation'; note: string }, signal?: AbortSignal) { return this.request<GrowthAssociation>('/api/v1/growth/associations', { method: 'POST', body: JSON.stringify(input), signal }) }
+  deleteGrowthAssociation(id: string, signal?: AbortSignal) { return this.request<{ id: string; action: string }>(`/api/v1/growth/associations/${id}`, { method: 'DELETE', signal }) }
+  growthGoals(horizon?: string, signal?: AbortSignal) { return this.request<GrowthGoal[]>(`/api/v1/growth/goals${horizon ? `?horizon=${encodeURIComponent(horizon)}` : ''}`, { signal }) }
+  addGrowthGoal(input: { horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; previous_goal_id: string }, signal?: AbortSignal) { return this.request<GrowthGoal>('/api/v1/growth/goals', { method: 'POST', body: JSON.stringify(input), signal }) }
+  updateGrowthGoal(id: string, input: { title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previous_goal_id: string }, signal?: AbortSignal) { return this.request<GrowthGoal>(`/api/v1/growth/goals/${id}`, { method: 'PUT', body: JSON.stringify(input), signal }) }
+  deleteGrowthGoal(id: string, signal?: AbortSignal) { return this.request<{ id: string; action: string }>(`/api/v1/growth/goals/${id}`, { method: 'DELETE', signal }) }
   onboarding(signal?: AbortSignal) { return this.request<OnboardingState>('/api/v1/onboarding', { signal }) }
   onboardingResponse(topic: string, content: string, signal?: AbortSignal) { return this.request<{ candidateId: string; state: OnboardingState }>('/api/v1/onboarding/responses', { method: 'POST', body: JSON.stringify({ topic, content, consent: true }), signal }) }
   human3Session(signal?: AbortSignal) { return this.request<{ session: Human3Session | null }>('/api/v1/human3/session', { signal }) }

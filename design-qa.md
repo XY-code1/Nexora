@@ -321,3 +321,12 @@ final result: passed
 - Future roadmap: optional AI Provider authorization controls and Phase 8 Human 3.0 aggregation remain deliberately deferred.
 
 final result: passed
+
+## Phase 8 — Human 3.0 Growth Dashboard (P8.7)
+
+- Visual spec: Deep Space / Midnight Navy / Electric Blue / Cyan / Violet / Holographic, reusing the existing Sidebar, Topbar and design tokens.
+- Six views delivered: Growth Overview, Four Dimensions, Growth Assessment, Evolution Timeline, Cross-Dimension Map, Goals & Actions.
+- Backend: 15/15 Python regression tests pass (growth dimensions / assessment / timeline / associations / goals).
+- Frontend: `GrowthDashboard.tsx` + `api.ts` + `App.tsx` wiring + `App.css`; typecheck / unit test / build / e2e to be verified by CI (sandbox cannot run the npm toolchain).
+- Screenshots: not captured in this sandbox (headless); to be produced from a local Windows build.
+- Known limitation: frontend unverified locally, pending CI and manual visual review.

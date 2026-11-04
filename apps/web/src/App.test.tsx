@@ -150,6 +150,21 @@ describe('review workspace', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
+  it('renders the Human 3.0 growth dashboard', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
+      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
+      .mockImplementationOnce(() => response({ data: { disclaimer: '仅用于自我反思。', dimensions: [] }, meta: { requestId: 'g1' } }))
+      .mockImplementationOnce(() => response({ data: { currentMonth: '2026-11', assessments: [] }, meta: { requestId: 'g2' } }))
+      .mockImplementationOnce(() => response({ data: { disclaimer: '仅用于自我反思。', months: [] }, meta: { requestId: 'g3' } }))
+      .mockImplementationOnce(() => response({ data: [], meta: { requestId: 'g4' } }))
+      .mockImplementationOnce(() => response({ data: [], meta: { requestId: 'g5' } }))
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: '成长仪表盘' }))
+    await screen.findByText('Personal Growth Intelligence')
+  })
+
   it('renders an honest empty profile without inventing relationships', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
