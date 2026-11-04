@@ -21,6 +21,8 @@ KNOWN_SCOPES = {
     "profile:read", "context:read", "memory:search", "memory:propose",
     "memory:pending", "project:read", "assessment:read",
 }
+AUTHORIZATION_STATES = ("pending_authorization", "authorized", "revoked", "deleted")
+RECENT_WINDOW_SECONDS = 300
 SECURITY_ROOT = Path("90 System") / "Security"
 CLIENTS_FILE = SECURITY_ROOT / "clients.json"
 AUDIT_FILE = Path("90 System") / "Audit" / "security.jsonl"
@@ -32,6 +34,10 @@ def _now() -> str:
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _issue_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def _validate_client_id(value: str) -> str:
@@ -58,8 +64,11 @@ def _registry(root: Path) -> dict[str, Any]:
         value = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise RuntimeError("客户端授权注册表损坏；已停止授权。") from exc
-    if value.get("version") != 1 or not isinstance(value.get("clients"), list):
+    if not isinstance(value.get("clients"), list):
         raise RuntimeError("客户端授权注册表格式无效；已停止授权。")
+    for item in value["clients"]:
+        if "authorization" not in item:
+            item["authorization"] = "authorized" if item.get("status") == "active" else "revoked"
     return value
 
 
@@ -72,38 +81,115 @@ def _write_registry(root: Path, value: dict[str, Any]) -> None:
     profile.atomic_write(root / CLIENTS_FILE, json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
-def _client_view(value: dict[str, Any]) -> dict[str, Any]:
-    last = value.get("lastAccessAt", "")
-    recent = False
+def _activity_state(item: dict[str, Any]) -> str:
+    if item.get("error"):
+        return "error"
+    last = item.get("lastAccessAt", "")
     if last:
         try:
-            recent = (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() < 300
+            delta = (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds()
+            return "recently_active" if 0 <= delta < RECENT_WINDOW_SECONDS else "inactive"
         except ValueError:
-            pass
+            return "inactive"
+    return "never_connected"
+
+
+def _client_view(item: dict[str, Any]) -> dict[str, Any]:
+    authorization = item.get("authorization", "authorized")
+    activity = _activity_state(item)
+    legacy_status = "active" if authorization == "authorized" else "revoked"
+    legacy_connection = "recent" if activity == "recently_active" else "inactive"
     return {
-        "id": value["id"], "name": value["name"], "status": value["status"],
-        "connectionStatus": "recent" if recent and value["status"] == "active" else "inactive",
-        "scopes": value["scopes"], "authorizedAt": value["authorizedAt"],
-        "lastAccessAt": last, "revokedAt": value.get("revokedAt", ""),
+        "id": item["id"], "name": item["name"],
+        "authorization": authorization, "activity": activity,
+        "status": legacy_status, "connectionStatus": legacy_connection,
+        "scopes": item.get("scopes", []),
+        "registeredAt": item.get("registeredAt", ""),
+        "authorizedAt": item.get("authorizedAt", ""),
+        "lastAccessAt": item.get("lastAccessAt", ""),
+        "revokedAt": item.get("revokedAt", ""),
+        "deletedAt": item.get("deletedAt", ""),
     }
 
 
-def create_client(root: Path, name: str, scopes: list[str]) -> tuple[dict[str, Any], str]:
+def _find_client(registry: dict[str, Any], client_id: str) -> dict[str, Any] | None:
+    return next((item for item in registry["clients"] if item["id"] == client_id), None)
+
+
+def register_client(root: Path, name: str, scopes: list[str]) -> dict[str, Any]:
+    """注册客户端，状态 pending_authorization，不签发 token。"""
     name = profile.clean_meta(name, 80)
     if not name:
         raise SystemExit("客户端名称不能为空。")
     scopes = _validate_scopes(scopes)
     if not scopes:
         raise SystemExit("至少选择一个权限Scope。")
-    token = secrets.token_urlsafe(32)
     client_id = f"client-{uuid.uuid4().hex[:12]}"
+    item = {
+        "id": client_id, "name": name, "authorization": "pending_authorization",
+        "scopes": scopes, "tokenHash": "", "registeredAt": _now(),
+        "authorizedAt": "", "lastAccessAt": "", "revokedAt": "", "deletedAt": "",
+    }
     with _registry_lock(root):
         registry = _registry(root)
-        item = {"id": client_id, "name": name, "status": "active", "scopes": scopes, "tokenHash": _hash_token(token), "authorizedAt": _now(), "lastAccessAt": "", "revokedAt": ""}
+        existing = next((value for value in registry["clients"] if value["name"] == name and value["authorization"] != "deleted"), None)
+        if existing:
+            raise SystemExit("同名客户端已存在。")
         registry["clients"].append(item)
         _write_registry(root, registry)
-    append_event(root, client_id="local-user", event_type="client.authorized", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_AUTHORIZED", details={"targetClientId": client_id, "scopes": scopes})
+    append_event(root, client_id="local-user", event_type="client.registered", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_REGISTERED", details={"targetClientId": client_id, "scopes": scopes})
+    return _client_view(item)
+
+
+def authorize_client(root: Path, client_id: str) -> tuple[dict[str, Any], str]:
+    """对 pending 客户端授权，签发一次性 token。
+
+    只允许 pending_authorization -> authorized；已授权客户端必须用 reissue_token
+    更换 Token；revoked/deleted 是终态，不能重新授权（需重新注册）。
+    """
+    client_id = _validate_client_id(client_id)
+    token = _issue_token()
+    with _registry_lock(root):
+        registry = _registry(root)
+        item = _find_client(registry, client_id)
+        if not item:
+            raise SystemExit("未找到客户端。")
+        if item["authorization"] == "revoked":
+            raise SystemExit("已撤销的客户端不能重新授权，请重新注册。")
+        if item["authorization"] == "deleted":
+            raise SystemExit("已删除的客户端不能重新授权，请重新注册。")
+        if item["authorization"] == "authorized":
+            raise SystemExit("已授权客户端请使用 reissue 更换 Token。")
+        item["authorization"] = "authorized"
+        item["tokenHash"] = _hash_token(token)
+        item["authorizedAt"] = _now()
+        _write_registry(root, registry)
+    append_event(root, client_id="local-user", event_type="client.authorized", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_AUTHORIZED", details={"targetClientId": client_id})
     return _client_view(item), token
+
+
+def reissue_token(root: Path, client_id: str) -> tuple[dict[str, Any], str]:
+    """重新签发 token，旧 token 立即失效。"""
+    client_id = _validate_client_id(client_id)
+    token = _issue_token()
+    with _registry_lock(root):
+        registry = _registry(root)
+        item = _find_client(registry, client_id)
+        if not item:
+            raise SystemExit("未找到客户端。")
+        if item["authorization"] != "authorized":
+            raise SystemExit("只有已授权客户端可以重新签发。")
+        item["tokenHash"] = _hash_token(token)
+        item["authorizedAt"] = _now()
+        _write_registry(root, registry)
+    append_event(root, client_id="local-user", event_type="client.token_reissued", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_REISSUED_TOKEN", details={"targetClientId": client_id})
+    return _client_view(item), token
+
+
+def create_client(root: Path, name: str, scopes: list[str]) -> tuple[dict[str, Any], str]:
+    """便捷方法：注册并授权一步完成（向后兼容）。"""
+    view = register_client(root, name, scopes)
+    return authorize_client(root, view["id"])
 
 
 def list_clients(root: Path) -> list[dict[str, Any]]:
@@ -118,11 +204,11 @@ def update_scopes(root: Path, client_id: str, scopes: list[str]) -> dict[str, An
         raise SystemExit("至少保留一个权限Scope。")
     with _registry_lock(root):
         registry = _registry(root)
-        item = next((value for value in registry["clients"] if value["id"] == client_id), None)
+        item = _find_client(registry, client_id)
         if not item:
-            raise SystemExit("未找到授权客户端。")
-        if item["status"] != "active":
-            raise SystemExit("已撤销的客户端不能修改权限。")
+            raise SystemExit("未找到客户端。")
+        if item["authorization"] != "authorized":
+            raise SystemExit("只有已授权客户端可以修改权限。")
         item["scopes"] = scopes
         _write_registry(root, registry)
     append_event(root, client_id="local-user", event_type="client.scopes_updated", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_UPDATED_SCOPES", details={"targetClientId": client_id, "scopes": scopes})
@@ -133,13 +219,32 @@ def revoke_client(root: Path, client_id: str) -> dict[str, Any]:
     client_id = _validate_client_id(client_id)
     with _registry_lock(root):
         registry = _registry(root)
-        item = next((value for value in registry["clients"] if value["id"] == client_id), None)
+        item = _find_client(registry, client_id)
         if not item:
-            raise SystemExit("未找到授权客户端。")
-        item["status"] = "revoked"
+            raise SystemExit("未找到客户端。")
+        if item["authorization"] == "deleted":
+            raise SystemExit("已删除的客户端不能撤销。")
+        item["authorization"] = "revoked"
+        item["tokenHash"] = ""
         item["revokedAt"] = _now()
         _write_registry(root, registry)
     append_event(root, client_id="local-user", event_type="client.revoked", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_REVOKED", details={"targetClientId": client_id})
+    return _client_view(item)
+
+
+def delete_client(root: Path, client_id: str) -> dict[str, Any]:
+    """逻辑删除客户端；不删除历史审计证据。"""
+    client_id = _validate_client_id(client_id)
+    with _registry_lock(root):
+        registry = _registry(root)
+        item = _find_client(registry, client_id)
+        if not item:
+            raise SystemExit("未找到客户端。")
+        item["authorization"] = "deleted"
+        item["tokenHash"] = ""
+        item["deletedAt"] = _now()
+        _write_registry(root, registry)
+    append_event(root, client_id="local-user", event_type="client.deleted", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_DELETED", details={"targetClientId": client_id})
     return _client_view(item)
 
 
@@ -208,10 +313,14 @@ def authorize(root: Path, client_id: str, token: str, scope: str, *, event_type:
             client_id = "invalid-client"
         with _registry_lock(root):
             registry = _registry(root)
-            item = next((value for value in registry["clients"] if value["id"] == client_id), None)
-            if item and item["status"] == "revoked":
+            item = _find_client(registry, client_id)
+            if item and item["authorization"] == "revoked":
                 reason = "CLIENT_REVOKED"
-            elif item and not hmac.compare_digest(item["tokenHash"], _hash_token(token)):
+            elif item and item["authorization"] == "deleted":
+                reason = "CLIENT_DELETED"
+            elif item and item["authorization"] == "pending_authorization":
+                reason = "CLIENT_NOT_AUTHORIZED"
+            elif item and not hmac.compare_digest(item.get("tokenHash", ""), _hash_token(token)):
                 reason = "INVALID_CREDENTIAL"
             elif item and scope not in item["scopes"]:
                 reason = "SCOPE_NOT_GRANTED"
@@ -250,7 +359,7 @@ def diagnostics(root: Path) -> dict[str, Any]:
     clients = list_clients(root)
     return {
         "localService": "ok", "vault": "ready", "mcp": "configured" if clients else "not-configured",
-        "authorizedClients": sum(item["status"] == "active" for item in clients),
+        "authorizedClients": sum(item["authorization"] == "authorized" for item in clients),
         "recentDenied": query_events(root, result="denied", page_size=100)["total"],
         "audit": integrity,
     }

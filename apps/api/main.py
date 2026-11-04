@@ -637,6 +637,32 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         except SystemExit as exc:
             raise domain_error(exc) from None
 
+    @app.post("/api/v1/security/clients/{client_id}/authorize", dependencies=[auth])
+    def security_client_authorize(client_id: str) -> dict[str, Any]:
+        try:
+            with profile.vault_lock(root):
+                client, credential = security.authorize_client(root, client_id)
+                return envelope({"client": client, "credential": credential})
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+
+    @app.post("/api/v1/security/clients/{client_id}/reissue", dependencies=[auth])
+    def security_client_reissue(client_id: str) -> dict[str, Any]:
+        try:
+            with profile.vault_lock(root):
+                client, credential = security.reissue_token(root, client_id)
+                return envelope({"client": client, "credential": credential})
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+
+    @app.delete("/api/v1/security/clients/{client_id}", dependencies=[auth])
+    def security_delete_client(client_id: str) -> dict[str, Any]:
+        try:
+            with profile.vault_lock(root):
+                return envelope(security.delete_client(root, client_id))
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+
     @app.get("/api/v1/security/audit-events", dependencies=[auth])
     def security_audit_events(client_id: str = "", event_type: str = "", resource_type: str = "", result: str = "", since: str = "", until: str = "", page: int = 1, page_size: int = 25) -> dict[str, Any]:
         if result not in {"", "allowed", "denied"}:
