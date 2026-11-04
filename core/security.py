@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -81,6 +82,25 @@ def _write_registry(root: Path, value: dict[str, Any]) -> None:
     profile.atomic_write(root / CLIENTS_FILE, json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
+@contextmanager
+def _registry_audit_transaction(root: Path):
+    """Keep a registry mutation and its audit event rollback-consistent."""
+    registry_path, audit_path = root / CLIENTS_FILE, root / AUDIT_FILE
+    audit_path.parent.mkdir(parents=True, exist_ok=True)
+    with _registry_lock(root), FileLock(root / AUDIT_FILE.parent / "security-audit.lock", timeout=10):
+        rollback = {
+            registry_path: registry_path.read_text(encoding="utf-8") if registry_path.exists() else None,
+            audit_path: audit_path.read_text(encoding="utf-8") if audit_path.exists() else None,
+        }
+        journal, transaction = profile.begin_transaction(root, rollback)
+        try:
+            yield _registry(root), lambda **values: _append_event_unlocked(root, **values)
+            profile.commit_transaction(journal, transaction)
+        except BaseException:
+            profile.recover_transactions(root)
+            raise
+
+
 def _activity_state(item: dict[str, Any]) -> str:
     if item.get("error"):
         return "error"
@@ -130,14 +150,13 @@ def register_client(root: Path, name: str, scopes: list[str]) -> dict[str, Any]:
         "scopes": scopes, "tokenHash": "", "registeredAt": _now(),
         "authorizedAt": "", "lastAccessAt": "", "revokedAt": "", "deletedAt": "",
     }
-    with _registry_lock(root):
-        registry = _registry(root)
+    with _registry_audit_transaction(root) as (registry, emit):
         existing = next((value for value in registry["clients"] if value["name"] == name and value["authorization"] != "deleted"), None)
         if existing:
             raise SystemExit("同名客户端已存在。")
         registry["clients"].append(item)
         _write_registry(root, registry)
-    append_event(root, client_id="local-user", event_type="client.registered", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_REGISTERED", details={"targetClientId": client_id, "scopes": scopes})
+        emit(client_id="local-user", event_type="client.registered", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_REGISTERED", details={"targetClientId": client_id, "scopes": scopes})
     return _client_view(item)
 
 
@@ -149,8 +168,7 @@ def authorize_client(root: Path, client_id: str) -> tuple[dict[str, Any], str]:
     """
     client_id = _validate_client_id(client_id)
     token = _issue_token()
-    with _registry_lock(root):
-        registry = _registry(root)
+    with _registry_audit_transaction(root) as (registry, emit):
         item = _find_client(registry, client_id)
         if not item:
             raise SystemExit("未找到客户端。")
@@ -164,7 +182,7 @@ def authorize_client(root: Path, client_id: str) -> tuple[dict[str, Any], str]:
         item["tokenHash"] = _hash_token(token)
         item["authorizedAt"] = _now()
         _write_registry(root, registry)
-    append_event(root, client_id="local-user", event_type="client.authorized", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_AUTHORIZED", details={"targetClientId": client_id})
+        emit(client_id="local-user", event_type="client.authorized", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_AUTHORIZED", details={"targetClientId": client_id})
     return _client_view(item), token
 
 
@@ -172,8 +190,7 @@ def reissue_token(root: Path, client_id: str) -> tuple[dict[str, Any], str]:
     """重新签发 token，旧 token 立即失效。"""
     client_id = _validate_client_id(client_id)
     token = _issue_token()
-    with _registry_lock(root):
-        registry = _registry(root)
+    with _registry_audit_transaction(root) as (registry, emit):
         item = _find_client(registry, client_id)
         if not item:
             raise SystemExit("未找到客户端。")
@@ -182,7 +199,7 @@ def reissue_token(root: Path, client_id: str) -> tuple[dict[str, Any], str]:
         item["tokenHash"] = _hash_token(token)
         item["authorizedAt"] = _now()
         _write_registry(root, registry)
-    append_event(root, client_id="local-user", event_type="client.token_reissued", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_REISSUED_TOKEN", details={"targetClientId": client_id})
+        emit(client_id="local-user", event_type="client.token_reissued", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_REISSUED_TOKEN", details={"targetClientId": client_id})
     return _client_view(item), token
 
 
@@ -202,8 +219,7 @@ def update_scopes(root: Path, client_id: str, scopes: list[str]) -> dict[str, An
     scopes = _validate_scopes(scopes)
     if not scopes:
         raise SystemExit("至少保留一个权限Scope。")
-    with _registry_lock(root):
-        registry = _registry(root)
+    with _registry_audit_transaction(root) as (registry, emit):
         item = _find_client(registry, client_id)
         if not item:
             raise SystemExit("未找到客户端。")
@@ -211,14 +227,13 @@ def update_scopes(root: Path, client_id: str, scopes: list[str]) -> dict[str, An
             raise SystemExit("只有已授权客户端可以修改权限。")
         item["scopes"] = scopes
         _write_registry(root, registry)
-    append_event(root, client_id="local-user", event_type="client.scopes_updated", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_UPDATED_SCOPES", details={"targetClientId": client_id, "scopes": scopes})
+        emit(client_id="local-user", event_type="client.scopes_updated", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_UPDATED_SCOPES", details={"targetClientId": client_id, "scopes": scopes})
     return _client_view(item)
 
 
 def revoke_client(root: Path, client_id: str) -> dict[str, Any]:
     client_id = _validate_client_id(client_id)
-    with _registry_lock(root):
-        registry = _registry(root)
+    with _registry_audit_transaction(root) as (registry, emit):
         item = _find_client(registry, client_id)
         if not item:
             raise SystemExit("未找到客户端。")
@@ -228,15 +243,14 @@ def revoke_client(root: Path, client_id: str) -> dict[str, Any]:
         item["tokenHash"] = ""
         item["revokedAt"] = _now()
         _write_registry(root, registry)
-    append_event(root, client_id="local-user", event_type="client.revoked", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_REVOKED", details={"targetClientId": client_id})
+        emit(client_id="local-user", event_type="client.revoked", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_REVOKED", details={"targetClientId": client_id})
     return _client_view(item)
 
 
 def delete_client(root: Path, client_id: str) -> dict[str, Any]:
     """逻辑删除客户端；不删除历史审计证据。"""
     client_id = _validate_client_id(client_id)
-    with _registry_lock(root):
-        registry = _registry(root)
+    with _registry_audit_transaction(root) as (registry, emit):
         item = _find_client(registry, client_id)
         if not item:
             raise SystemExit("未找到客户端。")
@@ -244,7 +258,7 @@ def delete_client(root: Path, client_id: str) -> dict[str, Any]:
         item["tokenHash"] = ""
         item["deletedAt"] = _now()
         _write_registry(root, registry)
-    append_event(root, client_id="local-user", event_type="client.deleted", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_DELETED", details={"targetClientId": client_id})
+        emit(client_id="local-user", event_type="client.deleted", resource_type="client", scope="client:manage", result="allowed", reason_code="USER_DELETED", details={"targetClientId": client_id})
     return _client_view(item)
 
 
@@ -272,7 +286,7 @@ def verify_audit(root: Path) -> dict[str, Any]:
     return {"status": "verified", "events": count, "lastHash": previous}
 
 
-def append_event(root: Path, *, client_id: str, event_type: str, resource_type: str, scope: str, result: str, reason_code: str, correlation_id: str | None = None, details: dict[str, Any] | None = None) -> dict[str, Any]:
+def _append_event_unlocked(root: Path, *, client_id: str, event_type: str, resource_type: str, scope: str, result: str, reason_code: str, correlation_id: str | None = None, details: dict[str, Any] | None = None) -> dict[str, Any]:
     if result not in {"allowed", "denied"}:
         raise RuntimeError("审计结果无效。")
     safe_details = details or {}
@@ -281,28 +295,35 @@ def append_event(root: Path, *, client_id: str, event_type: str, resource_type: 
         raise RuntimeError("审计详情包含禁止字段。")
     folder = root / AUDIT_FILE.parent
     folder.mkdir(parents=True, exist_ok=True)
+    integrity = verify_audit(root)
+    if integrity["status"] == "invalid":
+        raise RuntimeError("安全审计链完整性失败；已停止受保护操作。")
+    record = {
+        "eventId": f"evt-{uuid.uuid4().hex}", "timestamp": _now(), "clientId": profile.clean_meta(client_id, 64) or "unknown",
+        "eventType": profile.clean_meta(event_type, 80), "resourceType": profile.clean_meta(resource_type, 80),
+        "scope": profile.clean_meta(scope, 80), "result": result, "reasonCode": profile.clean_meta(reason_code, 80),
+        "correlationId": correlation_id or f"corr-{uuid.uuid4().hex}", "details": safe_details,
+        "prevHash": integrity.get("lastHash", ""),
+    }
+    record["hash"] = _canonical_hash(record)
+    with (root / AUDIT_FILE).open("ab") as handle:
+        handle.write((json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
+        handle.flush()
+        os.fsync(handle.fileno())
+    return record
+
+
+def append_event(root: Path, **values: Any) -> dict[str, Any]:
+    folder = root / AUDIT_FILE.parent
+    folder.mkdir(parents=True, exist_ok=True)
     with FileLock(folder / "security-audit.lock", timeout=10):
-        integrity = verify_audit(root)
-        if integrity["status"] == "invalid":
-            raise RuntimeError("安全审计链完整性失败；已停止受保护操作。")
-        record = {
-            "eventId": f"evt-{uuid.uuid4().hex}", "timestamp": _now(), "clientId": profile.clean_meta(client_id, 64) or "unknown",
-            "eventType": profile.clean_meta(event_type, 80), "resourceType": profile.clean_meta(resource_type, 80),
-            "scope": profile.clean_meta(scope, 80), "result": result, "reasonCode": profile.clean_meta(reason_code, 80),
-            "correlationId": correlation_id or f"corr-{uuid.uuid4().hex}", "details": safe_details,
-            "prevHash": integrity.get("lastHash", ""),
-        }
-        record["hash"] = _canonical_hash(record)
-        with (root / AUDIT_FILE).open("ab") as handle:
-            handle.write((json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
-            handle.flush()
-            os.fsync(handle.fileno())
-        return record
+        return _append_event_unlocked(root, **values)
 
 
 def authorize(root: Path, client_id: str, token: str, scope: str, *, event_type: str, resource_type: str) -> dict[str, Any]:
     correlation = f"corr-{uuid.uuid4().hex}"
     reason = "UNKNOWN_CLIENT"
+    denied_emitted = False
     item: dict[str, Any] | None = None
     if scope not in KNOWN_SCOPES:
         reason = "UNKNOWN_SCOPE"
@@ -311,8 +332,7 @@ def authorize(root: Path, client_id: str, token: str, scope: str, *, event_type:
             client_id = _validate_client_id(client_id)
         except SystemExit:
             client_id = "invalid-client"
-        with _registry_lock(root):
-            registry = _registry(root)
+        with _registry_audit_transaction(root) as (registry, emit):
             item = _find_client(registry, client_id)
             if item and item["authorization"] == "revoked":
                 reason = "CLIENT_REVOKED"
@@ -326,10 +346,17 @@ def authorize(root: Path, client_id: str, token: str, scope: str, *, event_type:
                 reason = "SCOPE_NOT_GRANTED"
             elif item:
                 item["lastAccessAt"] = _now()
+                item["error"] = ""
                 _write_registry(root, registry)
-                append_event(root, client_id=client_id, event_type=event_type, resource_type=resource_type, scope=scope, result="allowed", reason_code="GRANT_VALID", correlation_id=correlation)
+                emit(client_id=client_id, event_type=event_type, resource_type=resource_type, scope=scope, result="allowed", reason_code="GRANT_VALID", correlation_id=correlation)
                 return _client_view(item)
-    append_event(root, client_id=client_id or "unknown", event_type=event_type, resource_type=resource_type, scope=scope, result="denied", reason_code=reason, correlation_id=correlation)
+            if item and item.get("authorization") == "authorized" and reason in {"INVALID_CREDENTIAL", "SCOPE_NOT_GRANTED"}:
+                item["error"] = reason
+                _write_registry(root, registry)
+                emit(client_id=client_id, event_type=event_type, resource_type=resource_type, scope=scope, result="denied", reason_code=reason, correlation_id=correlation)
+                denied_emitted = True
+    if not denied_emitted:
+        append_event(root, client_id=client_id or "unknown", event_type=event_type, resource_type=resource_type, scope=scope, result="denied", reason_code=reason, correlation_id=correlation)
     raise PermissionError(f"客户端访问被拒绝：{reason}")
 
 

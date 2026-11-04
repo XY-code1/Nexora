@@ -1,6 +1,6 @@
 # AI Connections — 实施计划
 
-> 状态：C1–C4 完成；C4 已通过真实 stdio Host 链路验证。
+> 状态：C1–C5 完成；C4 已通过真实 stdio Host 链路验证，C5 已通过原子性、并发和故障注入测试。
 
 ## C1 架构审计结论
 
@@ -39,10 +39,10 @@
 
 安全要求：Token 用 `secrets.token_urlsafe(32)`；只存 SHA-256 哈希；重签发/撤销/删除后旧 token 立即失效；审计链不可删；不在日志记录 token 明文；状态变更服务端验证。
 
-### 当前安全限制（记录，待后续阶段处理）
+### C2 时记录的安全限制
 
-- **Registry 写与 Audit 写非原子**（待 C5）：状态变更成功但审计写入失败时，可能出现「状态已变但审计缺失」的半失败状态。
-- **activity 的 `error` 状态无自动触发来源**（待 C5）：需设计「明确错误证据」的记录机制。
+- **Registry / Audit 原子性**：已在 C5 使用文件事务和统一锁顺序解决。
+- **activity `error` 证据**：已在 C5 仅根据 `INVALID_CREDENTIAL` / `SCOPE_NOT_GRANTED` 的真实拒绝事件设置；下次成功访问后清除。
 - **兼容字段冗余**（待 C6）：`status`/`connectionStatus` 是为不破坏现有 Security Center 前端临时保留的过渡字段，前端迁移到 `authorization`/`activity` 后应移除。
 
 ## C3 — 权限与候选记忆隔离（已完成）
@@ -58,7 +58,13 @@
 - 真实 stdio 验证覆盖 initialize、tools/list 和受权 Tool 调用。
 - 当前机器未安装 Claude Desktop，因此未篡改用户 Host 配置；已验证的子进程命令与 Host 实际使用的 stdio 命令相同。
 
-## C5–C6 预览（本次不实施）
+## C5 — 原子性与失败恢复（已完成）
 
-- **C5 测试与安全验证**：Registry/Audit 原子性加固 + 并发/失败场景。
+- Registry 变更、`lastAccessAt` 更新和 Audit 事件共用事务；审计写入失败时回滚全部变更。
+- 统一锁顺序覆盖并发注册和并发访问，审计哈希链保持完整。
+- 错误状态只由明确的认证/权限拒绝事件触发，不伪造在线或异常状态。
+- 故障注入覆盖注册回滚、Scope 回滚、无残留 Transaction journal 和恢复后继续授权。
+
+## C6 预览
+
 - **C6 AI Connections UI**：前端迁移到 authorization/activity + 接入向导。
