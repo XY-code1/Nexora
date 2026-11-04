@@ -194,6 +194,8 @@ MCP 不向 Agent 提供任意文件写入、确认、删除或公开能力。高
 
 每个 AI 客户端必须在 Security Center 中显式授权，并配置独立的 `PROFILE_AGENT_ID` 与 `PROFILE_CLIENT_TOKEN`。Gateway 每次调用都读取 Vault 内的持久授权；缺失、失效或已撤销凭据默认拒绝。详见 [`docs/SECURITY_CENTER.md`](docs/SECURITY_CENTER.md)。
 
+Claude Desktop、Cursor 和 VS Code 的绝对路径配置生成方法见 [`docs/MCP_HOST_CONNECTION.md`](docs/MCP_HOST_CONNECTION.md)。生成器不会覆盖 Host 现有配置。
+
 ## 记忆模型
 
 ```yaml

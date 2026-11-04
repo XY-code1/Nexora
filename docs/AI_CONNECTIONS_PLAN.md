@@ -1,6 +1,6 @@
 # AI Connections — 实施计划
 
-> 状态：C1 架构审计完成；C2 完成，待人工验收。
+> 状态：C1–C4 完成；C4 已通过真实 stdio Host 链路验证。
 
 ## C1 架构审计结论
 
@@ -45,9 +45,20 @@
 - **activity 的 `error` 状态无自动触发来源**（待 C5）：需设计「明确错误证据」的记录机制。
 - **兼容字段冗余**（待 C6）：`status`/`connectionStatus` 是为不破坏现有 Security Center 前端临时保留的过渡字段，前端迁移到 `authorization`/`activity` 后应移除。
 
-## C3–C6 预览（本次不实施）
+## C3 — 权限与候选记忆隔离（已完成）
 
-- **C3 权限控制**：scope 与数据资源映射审查；monthly/growth/privacy 暂不开放；`list_pending` 候选内容隔离。
-- **C4 Claude Desktop 真实接入**：可复制配置 + 启动命令 + 真实 Claude Desktop 端到端验证。
+- Growth Data 保持 local-only，monthly / growth / privacy 不向 MCP 开放。
+- `list_pending` 仅返回总数和按类型计数，不返回候选记忆正文、摘要、来源或文件名。
+
+## C4 — 本地 Host 真实接入（已完成）
+
+- 新增 Claude Desktop / Cursor / VS Code 的 Host 配置生成器。
+- 强制绝对 Python、Server 和 Vault 路径，避免 Host 工作目录不同导致失败。
+- Token 仅从环境变量读取；生成器拒绝覆盖已有配置。
+- 真实 stdio 验证覆盖 initialize、tools/list 和受权 Tool 调用。
+- 当前机器未安装 Claude Desktop，因此未篡改用户 Host 配置；已验证的子进程命令与 Host 实际使用的 stdio 命令相同。
+
+## C5–C6 预览（本次不实施）
+
 - **C5 测试与安全验证**：Registry/Audit 原子性加固 + 并发/失败场景。
 - **C6 AI Connections UI**：前端迁移到 authorization/activity + 接入向导。
