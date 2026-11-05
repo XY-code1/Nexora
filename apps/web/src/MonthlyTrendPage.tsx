@@ -1,9 +1,10 @@
 import type { MonthlyTrend } from './api'
+import { EmptyState, LoadingState } from './components/StateBlocks'
 
 export default function MonthlyTrendPage({ value, loading }: { value: MonthlyTrend | null; loading: boolean }) {
-  if (loading) return <div className="skeletons" aria-label="加载中"><i /><i /><i /></div>
-  if (!value) return <div className="profile-empty"><h3>月度趋势</h3><p>正在读取本地月度复盘数据。</p></div>
-  if (value.points.length === 0) return <div className="profile-empty"><h3>还没有已确认的月度复盘</h3><p>确认至少一期月度复盘后，这里会展示跨月对比与趋势。</p></div>
+  if (loading) return <LoadingState label="正在读取月度复盘趋势…" />
+  if (!value) return <EmptyState title="月度趋势" description="正在读取本地月度复盘数据。" />
+  if (value.points.length === 0) return <EmptyState title="还没有已确认的月度复盘" description="确认至少一期月度复盘后，这里会展示跨月对比与趋势。" />
 
   return <section className="monthly-trend" aria-label="月度复盘趋势">
     <p className="trend-disclaimer">{value.disclaimer}</p>

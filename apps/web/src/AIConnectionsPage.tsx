@@ -35,7 +35,7 @@ export default function AIConnectionsPage({ client }: { client: ApiClient }) {
   const command = `python scripts/mcp_host_config.py --host ${host} --vault "<PRIVATE_VAULT>" --client-id "<CLIENT_ID>" --output "<PRIVATE_OUTPUT>.json"`
 
   return <section className="connections-page">
-    <header className="connections-hero"><div><p className="eyebrow">MODEL-AGNOSTIC / LOCAL STDIO</p><h2>AI Connections</h2><p>为每个 AI 建立独立身份和最小权限。连接不会获得正式记忆确认权。</p></div><span><PlugsConnected />{overview?.diagnostics.authorizedClients ?? 0} 个已授权客户端</span></header>
+    <header className="connections-hero compact-heading"><div><p className="eyebrow">MODEL-AGNOSTIC / LOCAL STDIO</p><p>为每个 AI 建立独立身份和最小权限。连接不会获得正式记忆确认权。</p></div><span><PlugsConnected />{overview?.diagnostics.authorizedClients ?? 0} 个已授权客户端</span></header>
     {error && <div className="notice error" role="alert"><Warning />{error}</div>}
     {credential && <section className="connection-credential" role="status"><Key /><div><strong>Token 仅显示这一次</strong><code>{credential}</code><small>保存后请立即清除屏幕。本页不会恢复该 Token。</small></div><button onClick={() => setCredential('')}>我已保存</button></section>}
     <div className="connections-grid">

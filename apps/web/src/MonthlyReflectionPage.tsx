@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { ArrowRight, Brain, CalendarDots, CheckCircle, Clock, Lightning, Plus, Sparkle, Trash, UserCircle } from '@phosphor-icons/react'
+import { ArrowRight, Archive, Brain, CalendarDots, CheckCircle, Clock, Lightning, Plus, Sparkle, Trash, UserCircle } from '@phosphor-icons/react'
 import type { MonthlyOverview, MonthlyReflection, ReflectionDimension, ReflectionEvent, ReflectionGoal } from './api'
+import { ErrorState, LoadingState } from './components/StateBlocks'
 
 const dimensions: { key: ReflectionDimension; label: string; short: string; prompts: string[] }[] = [
   { key: 'mind', label: 'MIND — 认知与思维', short: 'MIND', prompts: ['本月学习了什么？', '哪些认知或思维方式发生了变化？', '困难与最重要的收获是什么？'] },
@@ -35,8 +36,18 @@ export default function MonthlyReflectionPage(props: Props) {
   const [goals, setGoals] = useState<ReflectionGoal[]>([])
   useEffect(() => { setSummaryDraft(selected?.summary ?? ''); setGoals(selected?.goals ?? []) }, [selected])
   const current = useMemo(() => overview?.reflections.find((item) => item.month === overview.currentMonth), [overview])
-  if (loading) return <div className="visual-panel" role="status">正在读取本地月度复盘…</div>
-  if (!overview) return <div className="visual-panel" role="alert">月度复盘暂时不可用，请检查本地服务。</div>
+  const recent = useMemo(() => {
+    if (!overview) return []
+    const sorted = [...overview.reflections].sort((a, b) => b.month.localeCompare(a.month))
+    return sorted.slice(0, 3)
+  }, [overview])
+  const archived = useMemo(() => {
+    if (!overview) return []
+    const sorted = [...overview.reflections].sort((a, b) => b.month.localeCompare(a.month))
+    return sorted.slice(3)
+  }, [overview])
+  if (loading) return <LoadingState label="正在读取本地月度复盘…" />
+  if (!overview) return <ErrorState title="月度复盘暂时不可用" description="本地服务没有返回复盘数据，请确认服务仍在运行后重试。" />
 
   async function addEvent() {
     if (await props.onAddEvent(event)) setEvent({ title: '', date: '', dimension: 'mind', description: '', feeling: '', project: '' })
@@ -44,9 +55,10 @@ export default function MonthlyReflectionPage(props: Props) {
   function addGoal() { setGoals((items) => [...items, { id: `goal-${crypto.randomUUID().slice(0, 8)}`, title: '', action: '', priority: 'medium', due: '', completed: false, previousGoalId: '' }]) }
 
   return <section className="monthly-page">
-    <header className="monthly-heading"><div><p className="eyebrow">MONTHLY REFLECTION / LOCAL INTELLIGENCE</p><h2>Monthly Reflection</h2><p>用真实经历整理这个月。辅助摘要只在本地从你的输入中提取，判断、编辑与最终确认始终由你完成。</p></div>{selected && <div className={`reflection-status ${selected.status}`}><i /><span><small>{selected.month}</small><strong>{selected.status === 'confirmed' ? '正式复盘' : '本地草稿'}</strong></span></div>}</header>
+    <header className="monthly-heading compact-heading"><div><p className="eyebrow">MONTHLY REFLECTION / LOCAL INTELLIGENCE</p><p>以真实经历完成本月复盘，摘要、修改和正式确认始终由你控制。</p></div>{selected && <div className={`reflection-status ${selected.status}`}><i /><span><small>{selected.month}</small><strong>{selected.status === 'confirmed' ? '正式复盘' : '本地草稿'}</strong></span></div>}</header>
+    <section className="monthly-command" aria-label="本月复盘任务"><div><small>CURRENT MONTH</small><strong>{overview.currentMonth}</strong><span>{current ? `${current.completedDimensions}/4 个维度已完成` : '尚未创建本月复盘'}</span></div><progress max="4" value={current?.completedDimensions ?? 0} aria-label="复盘完成进度" /><button className="primary-action" onClick={() => void props.onCreate(overview.currentMonth)} disabled={saving || Boolean(current)}>{current ? '本月复盘已创建' : <><Plus />创建本月复盘</>}</button></section>
     <div className="monthly-layout">
-      <aside className="month-archive"><div className="archive-title"><p className="eyebrow">REFLECTION ARCHIVE</p><h3>月份</h3></div>{!current && <button className="create-month" onClick={() => void props.onCreate(overview.currentMonth)} disabled={saving}><Plus />创建 {overview.currentMonth} 复盘</button>}<div className="month-list">{overview.reflections.map((item) => <button key={item.id} className={item.id === selected?.id ? 'active' : ''} onClick={() => { props.onSelect(item); setSection('overview') }}><CalendarDots /><span><strong>{item.month}</strong><small>{item.status === 'confirmed' ? '已确认' : `${item.completedDimensions}/4 维度`}</small></span><i /></button>)}</div>{overview.reflections.length === 0 && <div className="archive-empty">还没有月度复盘。创建后，草稿会持久保存在本地 Vault。</div>}</aside>
+      <aside className="month-archive"><div className="archive-title"><p className="eyebrow">REFLECTION ARCHIVE</p><h3>月份</h3></div>{!current && <button className="create-month" onClick={() => void props.onCreate(overview.currentMonth)} disabled={saving}><Plus />创建 {overview.currentMonth} 复盘</button>}<div className="month-list">{recent.map((item) => <button key={item.id} className={item.id === selected?.id ? 'active' : ''} onClick={() => { props.onSelect(item); setSection('overview') }}><CalendarDots /><span><strong>{item.month}</strong><small>{item.status === 'confirmed' ? '已确认' : `${item.completedDimensions}/4 维度`}</small></span><i /></button>)}</div>{recent.length === 0 && <div className="archive-empty">还没有月度复盘。创建后，草稿会持久保存在本地 Vault。</div>}{archived.length > 0 && <details className="archive-history"><summary><Archive size={15} />更早的复盘（{archived.length}）</summary><div className="month-list">{archived.map((item) => <button key={item.id} className={item.id === selected?.id ? 'active' : ''} onClick={() => { props.onSelect(item); setSection('overview') }}><CalendarDots /><span><strong>{item.month}</strong><small>{item.status === 'confirmed' ? '已确认' : `${item.completedDimensions}/4 维度`}</small></span><i /></button>)}</div></details>}</aside>
       <main className="reflection-console">
         {!selected ? <div className="reflection-welcome"><span><CalendarDots size={34} /></span><p className="eyebrow">START A PRIVATE REVIEW</p><h3>回顾 {overview.currentMonth}</h3><p>创建一份本地草稿，再按自己的节奏填写。未确认内容不会成为正式复盘。</p><button className="primary-action" onClick={() => void props.onCreate(overview.currentMonth)} disabled={saving || Boolean(current)}>创建本月复盘 <ArrowRight /></button></div> : <>
 <nav className="reflection-nav" aria-label="复盘内容"><button disabled={saving} className={section === 'overview' ? 'active' : ''} onClick={() => setSection('overview')}>Overview</button>{dimensions.map((item) => <button disabled={saving} key={item.key} className={section === item.key ? 'active' : ''} onClick={() => { setDimensionDraft(selected.dimensions[item.key]); setSection(item.key) }}>{item.short}<i className={selected.dimensions[item.key] ? 'done' : ''} /></button>)}<button disabled={saving} className={section === 'events' ? 'active' : ''} onClick={() => setSection('events')}>Events</button><button disabled={saving} className={section === 'summary' ? 'active' : ''} onClick={() => { setSummaryDraft(selected.summary); setSection('summary') }}>Summary</button><button disabled={saving} className={section === 'goals' ? 'active' : ''} onClick={() => { setGoals(selected.goals); setSection('goals') }}>Goals</button></nav>

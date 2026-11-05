@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Brain, Clock, Network, ShieldCheck, Stack, UserCircle } from '@phosphor-icons/react'
+import { ArrowRight, Brain, ChatCircle, Clock, Network, ShieldCheck, Stack, UserCircle } from '@phosphor-icons/react'
 import type { ApiClient, AuditEvent, OverviewSnapshot } from './api'
+import { EmptyState, ErrorState, LoadingState } from './components/StateBlocks'
 
 type Props = {
   client: ApiClient
-  onNavigate: (view: 'review' | 'profile' | 'privacy' | 'growth') => void
+  onNavigate: (view: 'review' | 'onboarding' | 'profile' | 'privacy' | 'reflection' | 'growth') => void
 }
 
 function displayTime(value: string) {
@@ -37,23 +38,22 @@ export default function OverviewPage({ client, onNavigate }: Props) {
     return () => { cancelled = true }
   }, [client])
 
-  if (loading) return <div className="skeletons" aria-label="加载中"><i /><i /><i /></div>
-  if (error) return <div className="profile-empty"><h3>无法加载总览</h3><p>{error}</p></div>
-  if (!value) return <div className="profile-empty"><h3>总览</h3><p>正在读取本地档案。</p></div>
+  if (loading) return <LoadingState label="正在读取本地总览…" />
+  if (error) return <ErrorState title="无法加载总览" description={error} />
+  if (!value) return <EmptyState title="总览" description="正在读取本地档案。" />
 
   const { profile, memory, clients, recentAccess, growth, pending } = value
   const latestMonth = growth.latestMonth
+  const next = pending > 0
+    ? { label: '审核候选记忆', detail: `${pending} 条内容等待你的判断`, view: 'review' as const }
+    : memory.confirmedMemories === 0
+      ? { label: '开始对话建档', detail: '提交第一条由你控制的候选记忆', view: 'onboarding' as const }
+      : { label: '开始本月复盘', detail: '整理本月经历与下一步计划', view: 'reflection' as const }
 
   return <section className="overview-page" aria-label="个人智能中枢总览">
-    <div className="overview-hero">
-      <div className="ai-core" aria-hidden="true">
-        <span className="core-ring ring-1" /><span className="core-ring ring-2" /><span className="core-ring ring-3" /><span className="core-nucleus" />
-      </div>
-      <div className="core-caption">
-        <p className="eyebrow">PERSONAL INTELLIGENCE CORE</p>
-        <h2>你的个人智能中枢</h2>
-        <p>档案、记忆、连接与成长，都在这里汇总——所有数据仅在本机，由你掌控。</p>
-      </div>
+    <div className="overview-command">
+      <div className="command-intro"><p className="eyebrow">PERSONAL INTELLIGENCE WORKSPACE</p><h2>你的个人智能中枢</h2><p>查看真实状态，继续当前最重要的任务。所有数据留在本机并由你确认。</p></div>
+      <button className="next-action" onClick={() => onNavigate(next.view)}><span><small>RECOMMENDED NEXT STEP</small><strong>{next.label}</strong><em>{next.detail}</em></span><ArrowRight size={22} /></button>
       <div className="core-metrics" aria-label="核心指标">
         <article><strong>{memory.confirmedMemories}</strong><span>确认记忆</span></article>
         <article><strong>{clients.total}</strong><span>已连接 AI</span></article>
@@ -61,7 +61,7 @@ export default function OverviewPage({ client, onNavigate }: Props) {
       </div>
     </div>
 
-    <div className="overview-modules" aria-label="功能模块">
+    <div className="overview-body"><div className="overview-modules" aria-label="功能模块">
       <button className="overview-module" onClick={() => onNavigate('profile')}>
         <span className="module-icon"><UserCircle size={26} /></span>
         <div><p className="eyebrow">PROFILE</p><h3>个人档案</h3><p>当前状态：{accessLabel(profile.access)}</p></div>
@@ -86,11 +86,9 @@ export default function OverviewPage({ client, onNavigate }: Props) {
         <span className="module-icon"><Clock size={26} /></span>
         <div><p className="eyebrow">NEXT</p><h3>待处理</h3><p>{pending > 0 ? `${pending} 条候选记忆待审核` : '暂无待处理事项'}</p></div>
       </button>
+      <button className="overview-module" onClick={() => onNavigate('onboarding')}><span className="module-icon"><ChatCircle size={26} /></span><div><p className="eyebrow">ONBOARDING</p><h3>对话建档</h3><p>明确提交的回答将进入候选审核</p></div></button>
     </div>
 
-    {recentAccess.length > 0 && <div className="overview-recent" aria-label="最近访问明细">
-      <h3>最近 AI 访问</h3>
-      <ul>{recentAccess.slice(0, 4).map((event) => <li key={event.eventId}><span className={event.result}>{event.result}</span><strong>{event.clientId}</strong><em>{event.eventType}</em><time>{displayTime(event.timestamp)}</time></li>)}</ul>
-    </div>}
+    <div className="overview-recent" aria-label="最近访问明细"><h3>最近活动</h3>{recentAccess.length > 0 ? <ul>{recentAccess.slice(0, 4).map((event) => <li key={event.eventId}><span className={event.result}>{event.result}</span><strong>{event.clientId}</strong><em>{event.eventType}</em><time>{displayTime(event.timestamp)}</time></li>)}</ul> : <div className="overview-empty"><Clock size={24} /><p>尚无 AI 访问记录</p></div>}</div></div>
   </section>
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { CheckCircle, Clock, FileText, Funnel, LockKey, MagnifyingGlass, NotePencil, Tag, UserCircle, XCircle } from '@phosphor-icons/react'
 import type { Memory, MemoryStats } from './api'
+import { EmptyState } from './components/StateBlocks'
 
 type Props = {
   memories: Memory[]
@@ -15,6 +16,7 @@ type Props = {
   onRejectionReason: (value: string) => void
   onSave: () => Promise<boolean>
   onAct: (action: 'confirm' | 'reject') => Promise<boolean>
+  onOnboarding: () => void
 }
 
 function displayTime(value: string) {
@@ -48,8 +50,8 @@ export default function MemoryReviewPage(props: Props) {
   }
 
   return <section className="review-page">
-    <header className="review-heading">
-      <div><p className="eyebrow">MEMORY LIFECYCLE / HUMAN REVIEW</p><h2>Memory Review</h2><p>Review candidate memories before they become part of your Personal AI Profile.</p></div>
+    <header className="review-heading compact-heading">
+      <div><p className="eyebrow">MEMORY LIFECYCLE / HUMAN REVIEW</p><p>候选记忆必须由你确认后，才会进入个人档案。</p></div>
       <div className="review-stats" aria-label="真实记忆统计">
         <article><span>Candidate Memories</span><strong>{stats.candidateMemories}</strong></article>
         <article><span>Pending Review</span><strong>{stats.pendingReview}</strong></article>
@@ -57,25 +59,26 @@ export default function MemoryReviewPage(props: Props) {
       </div>
     </header>
 
-    <div className="review-toolbar">
-      <label className="search-field"><MagnifyingGlass size={18} /><span className="sr-only">搜索候选记忆</span><input aria-label="搜索候选记忆" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、内容或来源…" /></label>
-      <label><Funnel size={17} /><span className="sr-only">分类筛选</span><select aria-label="分类筛选" value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">全部分类</option>{categories.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-      <label><Clock size={17} /><span className="sr-only">状态筛选</span><select aria-label="状态筛选" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">全部待审核状态</option><option value="candidate">Candidate</option><option value="disputed">Disputed</option></select></label>
-    </div>
-
     <div className="review-workspace">
+      <aside className="review-filters" aria-label="记忆筛选">
+        <div><p className="eyebrow">FILTERS</p><h3>筛选记忆</h3></div>
+        <label className="search-field"><MagnifyingGlass size={18} /><span className="sr-only">搜索候选记忆</span><input aria-label="搜索候选记忆" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索记忆…" /></label>
+        <label><Funnel size={17} /><span>分类</span><select aria-label="分类筛选" value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">全部分类</option>{categories.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label><Clock size={17} /><span>状态</span><select aria-label="状态筛选" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">全部待审核状态</option><option value="candidate">Candidate</option><option value="disputed">Disputed</option></select></label>
+        <div className="lifecycle-guide"><strong>Candidate</strong><span>人工判断</span><em>Confirmed / Rejected</em></div>
+      </aside>
       <aside className="candidate-queue" aria-label="候选记忆列表">
         <div className="queue-heading"><div><p className="eyebrow">CANDIDATE QUEUE</p><h3>等待你的判断</h3></div><span>{filtered.length} / {memories.length}</span></div>
         {loading && <div className="skeletons" aria-label="加载中"><i /><i /><i /></div>}
-        {!loading && memories.length === 0 && <div className="review-empty"><FileText size={28} /><h3>暂时没有候选记忆</h3><p>新的候选内容会在这里等待人工审核，不会自动成为正式记忆。</p></div>}
-        {!loading && memories.length > 0 && filtered.length === 0 && <div className="review-empty"><MagnifyingGlass size={28} /><h3>没有匹配结果</h3><p>调整搜索词或筛选条件后重试。</p></div>}
+        {!loading && memories.length === 0 && <EmptyState icon={<FileText size={26} />} title="暂时没有候选记忆" description="通过对话式引导提交愿意长期保存的信息，再回到这里审核。" action={<button className="primary-action" onClick={props.onOnboarding}>开始对话建档</button>} />}
+        {!loading && memories.length > 0 && filtered.length === 0 && <EmptyState icon={<MagnifyingGlass size={26} />} title="没有匹配结果" description="调整搜索词或筛选条件后重试。" />}
         {!loading && filtered.map((memory) => <button key={memory.id} className={`candidate-row ${memory.id === selected?.id ? 'selected' : ''}`} aria-pressed={memory.id === selected?.id} onClick={() => select(memory)}>
           <span className="candidate-icon"><FileText size={20} /></span><span className="candidate-copy"><small>{memory.type} · {memory.status}</small><strong>{memory.subject || '未命名候选记忆'}</strong><span>{memory.content}</span><em>{memory.sourceAgent} · {displayTime(memory.created)}</em></span>
         </button>)}
       </aside>
 
       <section className="memory-inspector" aria-live="polite">
-        {!selected && !loading && <div className="inspector-empty"><FileText size={34} /><h3>选择一条候选记忆</h3><p>完整内容与生命周期操作会显示在这里。</p></div>}
+        {!selected && !loading && <EmptyState icon={<FileText size={30} />} title={memories.length ? '选择一条候选记忆' : '从一次对话开始'} description={memories.length ? '在左侧队列中点选一条候选记忆，这里会显示完整内容和生命周期操作。' : '只有你明确提交的回答才会成为候选记忆。先完成一次对话，再回来确认。'} action={memories.length === 0 ? <button className="secondary-action" onClick={props.onOnboarding}>前往对话式引导</button> : undefined} />}
         {selected && <>
           <header className="inspector-heading"><div><p className="eyebrow">MEMORY INSPECTOR / {selected.status.toUpperCase()}</p><h3>{selected.subject || '未命名候选记忆'}</h3></div><span className="lifecycle-badge">Candidate</span></header>
           <div className="lifecycle-track" aria-label="记忆生命周期"><strong>Candidate</strong><i /><span>Explicit confirmation</span><i /><span>Formal memory</span></div>

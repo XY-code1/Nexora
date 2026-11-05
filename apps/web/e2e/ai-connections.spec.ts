@@ -11,7 +11,7 @@ test('AI Connections registers, authorizes, rotates, revokes and deletes a clien
   await page.goto('/#/ai-connections')
   await page.getByLabel('本地启动令牌').fill('e2e-token')
   await page.getByRole('button', { name: '连接审核空间' }).click()
-  await expect(page.getByRole('heading', { name: 'AI Connections' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'AI 连接', level: 1 })).toBeVisible()
   await page.getByLabel('AI 客户端名称').fill('C6 E2E Client')
   await page.getByRole('button', { name: '创建待授权连接' }).click()
   const record = page.locator('.connection-list article').filter({ hasText: 'C6 E2E Client' })

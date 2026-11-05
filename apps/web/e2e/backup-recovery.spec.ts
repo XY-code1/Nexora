@@ -15,7 +15,7 @@ test('managed backup is verified and restored through the guarded local flow', a
   await page.getByLabel('本地启动令牌').fill('e2e-token')
   await page.getByRole('button', { name: '连接审核空间' }).click()
   await page.getByRole('button', { name: '备份与恢复' }).click()
-  await expect(page.getByRole('heading', { name: 'Backup & Recovery' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '备份与恢复', level: 1 })).toBeVisible()
   await expect(page.getByText('还没有本地备份')).toBeVisible()
 
   await page.getByRole('button', { name: '创建完整备份' }).click()

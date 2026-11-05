@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle, Clock, Fingerprint, Key, LockKey, MagnifyingGlass, Plus, Pulse, ShieldWarning, UserCircle, XCircle } from '@phosphor-icons/react'
 import type { AuditEvent, SecurityCenter } from './api'
+import { ErrorState, LoadingState } from './components/StateBlocks'
 
 type Filters = { clientId: string; eventType: string; result: string; since: string; until: string; page: number; pageSize: number }
 type Props = {
@@ -43,8 +44,8 @@ export default function SecurityCenterPage(props: Props) {
     }
   }, [value, selectedClient])
   const eventTypes = useMemo(() => [...new Set(value?.audit.items.map((item) => item.eventType) ?? [])].sort(), [value])
-  if (loading) return <div className="visual-panel" role="status">正在验证安全状态与审计链…</div>
-  if (!value) return <div className="visual-panel" role="alert">安全中心暂时不可用。受保护操作保持拒绝状态。</div>
+  if (loading) return <LoadingState label="正在验证安全状态与审计链…" />
+  if (!value) return <ErrorState title="安全中心暂时不可用" description="受保护操作保持拒绝状态。确认本地服务仍在运行后重试。" />
   const diagnostics = value.overview.diagnostics
   const integrity = diagnostics.audit.status
 
@@ -56,7 +57,7 @@ export default function SecurityCenterPage(props: Props) {
   async function applyFilters(next = filters) { await props.onQuery(next) }
 
   return <section className="security-page">
-    <header className="security-heading"><div><p className="eyebrow">PRIVACY AUDIT / SECURITY CENTER</p><h2>Security Center</h2><p>查看真实客户端授权、最小权限、访问决定和记忆生命周期。缺少数据会明确显示为缺失，不会伪装成安全状态。</p></div><span className={`integrity-badge ${integrity}`}><Fingerprint size={19} /><span><small>AUDIT INTEGRITY</small><strong>{integrity === 'verified' ? '链已验证' : integrity === 'missing' ? '尚无审计记录' : '完整性失败'}</strong></span></span></header>
+    <header className="security-heading compact-heading"><div><p className="eyebrow">PRIVACY AUDIT / SECURITY CENTER</p><h2 className="sr-only">Security Center</h2><p>查看真实客户端授权、最小权限、访问决定和记忆生命周期。缺少数据会明确显示为缺失，不会伪装成安全状态。</p></div><span className={`integrity-badge ${integrity}`}><Fingerprint size={19} /><span><small>AUDIT INTEGRITY</small><strong>{integrity === 'verified' ? '链已验证' : integrity === 'missing' ? '尚无审计记录' : '完整性失败'}</strong></span></span></header>
 
     <section className="security-overview" aria-label="Security Overview">
       <Status label="Local Service" value={diagnostics.localService} good={diagnostics.localService === 'ok'} />

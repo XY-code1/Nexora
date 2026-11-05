@@ -27,13 +27,14 @@ test('Security Center authorizes, changes and revokes a real local client', asyn
 
   await page.locator('.scope-editor label').filter({ hasText: 'memory:search' }).getByRole('checkbox').check()
   await page.getByRole('button', { name: '保存权限' }).click()
-  await expect(page.locator('.event-table strong', { hasText: 'client.scopes_updated' })).toBeVisible()
+  // 事件表按时间倒序，其他测试可能已产生同名事件，因此明确取最新的一条。
+  await expect(page.locator('.event-table strong', { hasText: 'client.scopes_updated' }).first()).toBeVisible()
   await page.screenshot({ path: resolve(shots, 'security-center-1440.png'), fullPage: true })
 
   await page.getByRole('button', { name: '撤销授权' }).click()
   await expect(page.getByText(/已撤销/).first()).toBeVisible()
-  await expect(page.locator('.event-table strong', { hasText: 'client.revoked' })).toBeVisible()
-  await page.locator('.event-table button', { hasText: 'client.revoked' }).click()
+  await expect(page.locator('.event-table strong', { hasText: 'client.revoked' }).first()).toBeVisible()
+  await page.locator('.event-table button', { hasText: 'client.revoked' }).first().click()
   await expect(page.getByRole('dialog', { name: '审计事件详情' })).toBeVisible()
   await page.locator('.event-detail article header button').click()
 

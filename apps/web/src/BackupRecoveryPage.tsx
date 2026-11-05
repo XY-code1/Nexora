@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowCounterClockwise, CheckCircle, ClockCounterClockwise, Database, ShieldCheck, Warning } from '@phosphor-icons/react'
 import type { ApiClient, BackupOverview, VaultBackup } from './api'
+import { LoadingState } from './components/StateBlocks'
 
 function time(value: string) {
   if (!value) return '时间未知'
@@ -67,11 +68,11 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
     finally { setBusy('') }
   }
 
-  if (!value && !message) return <div className="visual-panel" role="status">正在核对本地备份目录…</div>
+  if (!value && !message) return <LoadingState label="正在核对本地备份目录…" />
 
   return <section className="backup-page">
-    <header className="backup-heading">
-      <div><p className="eyebrow">VAULT RESILIENCE / LOCAL ONLY</p><h2>Backup & Recovery</h2><p>在设备本地创建可验证快照，并以事务方式恢复。备份路径和私人内容不会显示在页面或发送到外部服务；本地快照不是加密保险库。</p></div>
+    <header className="backup-heading compact-heading">
+      <div><p className="eyebrow">VAULT RESILIENCE / LOCAL ONLY</p><p>在设备本地创建可验证快照，并以事务方式恢复。备份路径和私人内容不会显示在页面或发送到外部服务；本地快照不是加密保险库。</p></div>
       <span className="boundary-badge"><ShieldCheck size={18} />本机绑定</span>
     </header>
 

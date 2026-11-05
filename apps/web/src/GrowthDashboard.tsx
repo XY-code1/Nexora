@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ApiClient, GrowthAssessment, GrowthAssociation, GrowthDimensionContent, GrowthDimensionKey, GrowthDimensions, GrowthGoal, GrowthTimeline } from './api'
+import { ErrorState, LoadingState } from './components/StateBlocks'
 
 const DIMENSION_KEYS: GrowthDimensionKey[] = ['mind', 'body', 'spirit', 'vocation']
 const HORIZONS: GrowthGoal['horizon'][] = ['long-term', 'quarterly', 'monthly']
@@ -60,12 +61,12 @@ export default function GrowthDashboard({ client }: { client: ApiClient }) {
     setTimeline(tl)
   }
 
-  if (loading) return <div className="skeletons" aria-label="加载中"><i /><i /><i /></div>
-  if (error) return <div className="profile-empty"><h3>无法加载成长数据</h3><p>{error}</p></div>
+  if (loading) return <LoadingState label="正在读取成长数据…" />
+  if (error) return <ErrorState title="无法加载成长数据" description={error} />
 
   return <section className="growth-dashboard" aria-label="Human 3.0 成长仪表盘">
-    <header className="growth-head">
-      <div><p className="eyebrow">HUMAN 3.0 / GROWTH</p><h2>Personal Growth Intelligence</h2><p>四维记录、观察、分析与规划你的长期变化。所有分析都基于真实数据，不推断成长分数。</p></div>
+    <header className="growth-head compact-heading">
+      <div><p className="eyebrow">HUMAN 3.0 / GROWTH</p><h2 className="sr-only">Personal Growth Intelligence</h2><p>四维记录、观察、分析与规划你的长期变化。所有分析都基于真实数据，不推断成长分数。</p></div>
       <div className="growth-stats" aria-label="成长概览统计">
         <article><span>Assessments</span><strong>{stats.confirmed}/{stats.assessments}</strong></article>
         <article><span>Goals</span><strong>{stats.goalDone}/{stats.goals}</strong></article>

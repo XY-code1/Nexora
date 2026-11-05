@@ -15,7 +15,7 @@ test('Conversational Onboarding is consent-gated and responsive', async ({ page 
   await page.getByLabel('本地启动令牌').fill('e2e-token')
   await page.getByRole('button', { name: '连接审核空间' }).click()
   await page.getByRole('button', { name: '对话式引导' }).click()
-  await expect(page.getByRole('heading', { name: 'Build your profile through dialogue.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '对话式引导', level: 1 })).toBeVisible()
   await expect(page.getByText('Human confirmation required')).toBeVisible()
   await page.getByLabel('你的回答').fill('这是尚未同意创建候选的回答。')
   await expect(page.getByRole('button', { name: /保存为候选并继续/ })).toBeDisabled()

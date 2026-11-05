@@ -20,8 +20,11 @@ test('Monthly Reflection persists dimensions, events, goals, summary and confirm
   page.on('dialog', (dialog) => dialog.accept())
   await page.setViewportSize({ width: 1440, height: 1024 })
   await connect(page)
-  await expect(page.getByRole('heading', { name: 'Monthly Reflection' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '月度复盘', level: 1 })).toBeVisible()
   const create = page.getByRole('button', { name: /创建 \d{4}-\d{2} 复盘/ }).first()
+  // 等待归档栏的创建入口渲染完成再点击。数据加载前元素不存在，用 isVisible 猜测会直接跳过点击；
+  // 若本月复盘已存在（重复运行共享 Vault），该入口不会出现，此时直接进入已有复盘。
+  await create.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined)
   if (await create.isVisible()) await create.click()
   await expect(page.getByText('继续整理这个月')).toBeVisible()
   await page.screenshot({ path: resolve(shots, 'monthly-reflection-1440.png'), fullPage: true })

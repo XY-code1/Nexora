@@ -41,7 +41,7 @@ test('hash navigation restores scroll, focus, history and refresh state', async 
   await expect(page).toHaveURL(/#\/onboarding$/)
   await connect(page)
   await expect(page.getByRole('heading', { name: '对话式引导', level: 1 })).toBeFocused()
-  await expect(page.getByRole('heading', { name: 'Build your profile through dialogue.' })).toBeVisible()
+  await expect(page.getByText('一次聚焦一个问题。回答只会成为候选记忆，确认前不会进入正式档案。')).toBeVisible()
   await page.screenshot({ path: resolve(shots, 'desktop-onboarding-route.png'), fullPage: true })
 })
 
@@ -71,7 +71,7 @@ test('mobile drawer traps focus, closes with Escape and navigates', async ({ pag
   await expect(menu).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByRole('heading', { name: '对话式引导', level: 1 })).toBeFocused()
   await expect(page.locator('.app-stage')).toHaveJSProperty('scrollTop', 0)
-  await expect(page.getByRole('heading', { name: 'Build your profile through dialogue.' })).toBeVisible()
+  await expect(page.getByText('一次聚焦一个问题。回答只会成为候选记忆，确认前不会进入正式档案。')).toBeVisible()
   await page.waitForTimeout(300)
   await page.screenshot({ path: resolve(shots, 'mobile-onboarding-route.png'), fullPage: true })
 })
