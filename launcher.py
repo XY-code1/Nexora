@@ -53,16 +53,42 @@ def choose_vault(value: Path | None) -> Path:
     return Path(selected).resolve()
 
 
+def _newest_source_mtime(web: Path) -> float:
+    """前端源码中最近一次修改时间；用于判断现有构建是否已过期。"""
+    newest = 0.0
+    for pattern in ("src/**/*", "index.html", "package.json", "vite.config.ts"):
+        for path in web.glob(pattern):
+            try:
+                newest = max(newest, path.stat().st_mtime)
+            except OSError:
+                continue
+    return newest
+
+
 def ensure_web_build() -> Path:
     web = ROOT / "apps" / "web"
     index = web / "dist" / "index.html"
-    if index.is_file():
+    stale = not index.is_file() or index.stat().st_mtime < _newest_source_mtime(web)
+    if not stale:
         return index.parent
     npm = shutil.which("npm.cmd") or shutil.which("npm")
     if not npm:
+        if index.is_file():
+            # 没有 npm 时仍可运行旧构建，只是看不到最新前端改动。
+            return index.parent
         raise RuntimeError("缺少前端构建且未找到 npm；请先安装 Node.js 或使用后续打包版本。")
-    subprocess.run([npm, "install"], cwd=web, check=True)
-    subprocess.run([npm, "run", "build"], cwd=web, check=True)
+    if index.is_file():
+        print("前端源码已更新，正在重新构建 React 界面…")
+    try:
+        if not (web / "node_modules").is_dir():
+            subprocess.run([npm, "install"], cwd=web, check=True)
+        subprocess.run([npm, "run", "build"], cwd=web, check=True)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        if index.is_file():
+            # 构建失败不应阻断启动：回退到已有构建并说明原因。
+            print(f"前端重建失败（{exc}），继续使用现有构建；界面可能不是最新版本。")
+            return index.parent
+        raise RuntimeError(f"React审核界面构建失败：{exc}") from exc
     if not index.is_file():
         raise RuntimeError("React审核界面构建失败。")
     return index.parent
