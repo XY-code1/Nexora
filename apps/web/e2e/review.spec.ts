@@ -11,7 +11,7 @@ test('Memory Review search, filters and responsive layout', async ({ page }) => 
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
   page.on('pageerror', (error) => errors.push(error.message))
   await page.setViewportSize({ width: 1440, height: 1024 })
-  await page.goto('/')
+  await page.goto('/#/memory-review')
   await page.getByLabel('本地启动令牌').fill('e2e-token')
   await page.getByRole('button', { name: '连接审核空间' }).click()
   await expect(page.getByRole('heading', { name: 'Memory Review' })).toBeVisible()
@@ -33,7 +33,7 @@ test('Memory Review search, filters and responsive layout', async ({ page }) => 
 
 test('审核候选记忆：编辑后确认', async ({ page }) => {
   page.on('dialog', (dialog) => dialog.accept())
-  await page.goto('/')
+  await page.goto('/#/memory-review')
   await page.getByLabel('本地启动令牌').fill('e2e-token')
   await page.getByRole('button', { name: '连接审核空间' }).click()
   await expect(page.getByRole('heading', { name: '回答风格' })).toBeVisible()

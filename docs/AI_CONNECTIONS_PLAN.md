@@ -1,6 +1,6 @@
 # AI Connections — 实施计划
 
-> 状态：C1–C5 完成；C4 已通过真实 stdio Host 链路验证，C5 已通过原子性、并发和故障注入测试。
+> 状态：C1–C6 全部完成。C4 已通过真实 stdio Host 链路验证，C5 已通过原子性、并发和故障注入测试，C6 已完成 UI 与真实生命周期 E2E。
 
 ## C1 架构审计结论
 
@@ -43,7 +43,7 @@
 
 - **Registry / Audit 原子性**：已在 C5 使用文件事务和统一锁顺序解决。
 - **activity `error` 证据**：已在 C5 仅根据 `INVALID_CREDENTIAL` / `SCOPE_NOT_GRANTED` 的真实拒绝事件设置；下次成功访问后清除。
-- **兼容字段冗余**（待 C6）：`status`/`connectionStatus` 是为不破坏现有 Security Center 前端临时保留的过渡字段，前端迁移到 `authorization`/`activity` 后应移除。
+- **兼容字段冗余**：新 UI 只使用 `authorization`/`activity`；`status`/`connectionStatus` 继续作为兼容字段返回，避免破坏已有客户端，后续只能通过版本化 API 移除。
 
 ## C3 — 权限与候选记忆隔离（已完成）
 
@@ -65,6 +65,10 @@
 - 错误状态只由明确的认证/权限拒绝事件触发，不伪造在线或异常状态。
 - 故障注入覆盖注册回滚、Scope 回滚、无残留 Transaction journal 和恢复后继续授权。
 
-## C6 预览
+## C6 — AI Connections UI 与接入向导（已完成）
 
-- **C6 AI Connections UI**：前端迁移到 authorization/activity + 接入向导。
+- 独立 `#/ai-connections` 页面和可用导航入口。
+- 支持待授权注册、明确授权、一次性 Token、重签、撤销和逻辑删除。
+- 客户端状态已迁移到 `authorization` / `activity`；旧 `status` / `connectionStatus` 仅保留为只读兼容字段。
+- Claude Desktop / Cursor / VS Code 接入向导仅生成不含私密数据的命令模板，不在前端返回真实 Vault 路径。
+- 全部操作调用 FastAPI 和 Core，没有前端假交互，不改变 MCP 权限和记忆确认边界。

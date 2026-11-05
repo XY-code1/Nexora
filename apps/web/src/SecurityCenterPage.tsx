@@ -8,7 +8,7 @@ type Props = {
   loading: boolean
   saving: boolean
   credential: string
-  onAuthorize: (name: string, scopes: string[]) => Promise<boolean>
+  onAuthorize: (name: string, scopes: string[]) => Promise<string | null>
   onScopes: (id: string, scopes: string[]) => Promise<boolean>
   onRevoke: (id: string) => Promise<boolean>
   onQuery: (filters: Filters) => Promise<boolean>
@@ -33,7 +33,15 @@ export default function SecurityCenterPage(props: Props) {
   const [filters, setFilters] = useState<Filters>({ clientId: '', eventType: '', result: '', since: '', until: '', page: 1, pageSize: 25 })
   const client = value?.clients.find((item) => item.id === selectedClient) ?? null
   useEffect(() => { setEditedScopes(client?.scopes ?? []) }, [client])
-  useEffect(() => { if (!selectedClient && value?.clients[0]) setSelectedClient(value.clients[0].id) }, [value, selectedClient])
+  useEffect(() => {
+    const selected = value?.clients.find((item) => item.id === selectedClient)
+    if (!selected || selected.authorization === 'deleted') {
+      const next = value?.clients.find((item) => item.authorization === 'authorized')
+        ?? value?.clients.find((item) => item.authorization !== 'deleted')
+        ?? value?.clients[0]
+      setSelectedClient(next?.id ?? '')
+    }
+  }, [value, selectedClient])
   const eventTypes = useMemo(() => [...new Set(value?.audit.items.map((item) => item.eventType) ?? [])].sort(), [value])
   if (loading) return <div className="visual-panel" role="status">正在验证安全状态与审计链…</div>
   if (!value) return <div className="visual-panel" role="alert">安全中心暂时不可用。受保护操作保持拒绝状态。</div>
@@ -41,7 +49,10 @@ export default function SecurityCenterPage(props: Props) {
   const integrity = diagnostics.audit.status
 
   function toggle(list: string[], scope: string, set: (next: string[]) => void) { set(list.includes(scope) ? list.filter((item) => item !== scope) : [...list, scope]) }
-  async function authorize() { if (await props.onAuthorize(name, grantScopes)) { setName(''); setGrantScopes([]) } }
+  async function authorize() {
+    const clientId = await props.onAuthorize(name, grantScopes)
+    if (clientId) { setSelectedClient(clientId); setName(''); setGrantScopes([]) }
+  }
   async function applyFilters(next = filters) { await props.onQuery(next) }
 
   return <section className="security-page">
@@ -61,10 +72,10 @@ export default function SecurityCenterPage(props: Props) {
     <div className="security-grid">
       <section className="security-panel access-management"><header><div><p className="eyebrow">AI ACCESS MANAGEMENT</p><h3>真实客户端授权</h3></div><span>{value.clients.length} records</span></header>
         <div className="authorize-form"><label>客户端名称<input aria-label="客户端名称" value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：Local Codex" /></label><fieldset><legend>初始最小权限</legend>{value.overview.scopes.map((scope) => <label key={scope}><input type="checkbox" checked={grantScopes.includes(scope)} onChange={() => toggle(grantScopes, scope, setGrantScopes)} /><span><strong>{scope}</strong><small>{scopeDescriptions[scope]}</small></span></label>)}</fieldset><button className="primary-action" onClick={() => void authorize()} disabled={saving || !name.trim() || grantScopes.length === 0}><Plus />授权客户端</button></div>
-        <div className="client-list">{value.clients.map((item) => <button key={item.id} className={item.id === selectedClient ? 'active' : ''} onClick={() => setSelectedClient(item.id)}><span className={`client-state ${item.status}`}><UserCircle /></span><span><strong>{item.name}</strong><small>{item.id}</small><em>{item.status === 'revoked' ? `已撤销 ${time(item.revokedAt)}` : `${item.connectionStatus === 'recent' ? '最近访问' : '未连接'} · ${time(item.lastAccessAt)}`}</em></span></button>)}{value.clients.length === 0 && <p className="security-empty">尚未授权任何 AI 客户端。系统不会根据名称猜测 Claude、Codex 或 Cursor 连接。</p>}</div>
+        <div className="client-list">{value.clients.map((item) => <button key={item.id} className={item.id === selectedClient ? 'active' : ''} onClick={() => setSelectedClient(item.id)}><span className={`client-state ${item.authorization}`}><UserCircle /></span><span><strong>{item.name}</strong><small>{item.id}</small><em>{item.authorization === 'revoked' ? `已撤销 ${time(item.revokedAt)}` : `${item.activity === 'recently_active' ? '最近访问' : '未连接'} · ${time(item.lastAccessAt)}`}</em></span></button>)}{value.clients.length === 0 && <p className="security-empty">尚未授权任何 AI 客户端。系统不会根据名称猜测 Claude、Codex 或 Cursor 连接。</p>}</div>
       </section>
 
-      <section className="security-panel permission-management"><header><div><p className="eyebrow">LEAST PRIVILEGE</p><h3>Permission Management</h3></div></header>{client ? <><div className="client-identity"><Fingerprint /><div><strong>{client.name}</strong><small>{client.id}</small></div><span className={client.status}>{client.status}</span></div><div className="scope-editor">{value.overview.scopes.map((scope) => <label key={scope}><input type="checkbox" checked={editedScopes.includes(scope)} disabled={client.status === 'revoked'} onChange={() => toggle(editedScopes, scope, setEditedScopes)} /><span><strong>{scope}</strong><small>{scopeDescriptions[scope]}</small></span></label>)}</div><footer><button className="secondary-action" onClick={() => void props.onScopes(client.id, editedScopes)} disabled={saving || client.status === 'revoked' || editedScopes.length === 0 || editedScopes.join() === client.scopes.join()}>保存权限</button><button className="danger" onClick={() => { if (window.confirm(`撤销 ${client.name}？后续请求会立即被拒绝。`)) void props.onRevoke(client.id) }} disabled={saving || client.status === 'revoked'}>撤销授权</button></footer><p className="confirmation-boundary"><LockKey />客户端永远没有正式记忆确认权限。确认仍只存在于本地人工审核流程。</p></> : <p className="security-empty">选择一个真实授权记录后管理权限。</p>}</section>
+      <section className="security-panel permission-management"><header><div><p className="eyebrow">LEAST PRIVILEGE</p><h3>Permission Management</h3></div></header>{client ? <><div className="client-identity"><Fingerprint /><div><strong>{client.name}</strong><small>{client.id}</small></div><span className={client.authorization}>{client.authorization}</span></div><div className="scope-editor">{value.overview.scopes.map((scope) => <label key={scope}><input type="checkbox" checked={editedScopes.includes(scope)} disabled={client.authorization !== 'authorized'} onChange={() => toggle(editedScopes, scope, setEditedScopes)} /><span><strong>{scope}</strong><small>{scopeDescriptions[scope]}</small></span></label>)}</div><footer><button className="secondary-action" onClick={() => void props.onScopes(client.id, editedScopes)} disabled={saving || client.authorization !== 'authorized' || editedScopes.length === 0 || editedScopes.join() === client.scopes.join()}>保存权限</button><button className="danger" onClick={() => { if (window.confirm(`撤销 ${client.name}？后续请求会立即被拒绝。`)) void props.onRevoke(client.id) }} disabled={saving || client.authorization !== 'authorized'}>撤销授权</button></footer><p className="confirmation-boundary"><LockKey />客户端永远没有正式记忆确认权限。确认仍只存在于本地人工审核流程。</p></> : <p className="security-empty">选择一个真实授权记录后管理权限。</p>}</section>
     </div>
 
     <section className="security-panel access-timeline"><header><div><p className="eyebrow">ACCESS TIMELINE</p><h3>真实访问事件</h3></div><span>{value.audit.total} events</span></header><div className="audit-filters"><select aria-label="客户端筛选" value={filters.clientId} onChange={(e) => setFilters({ ...filters, clientId: e.target.value, page: 1 })}><option value="">全部客户端</option>{value.clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="事件类型筛选" value={filters.eventType} onChange={(e) => setFilters({ ...filters, eventType: e.target.value, page: 1 })}><option value="">全部事件类型</option>{eventTypes.map((item) => <option key={item} value={item}>{item}</option>)}</select><select aria-label="结果筛选" value={filters.result} onChange={(e) => setFilters({ ...filters, result: e.target.value, page: 1 })}><option value="">Allowed / Denied</option><option value="allowed">Allowed</option><option value="denied">Denied</option></select><input aria-label="开始时间" type="datetime-local" value={filters.since} onChange={(e) => setFilters({ ...filters, since: e.target.value, page: 1 })} /><input aria-label="结束时间" type="datetime-local" value={filters.until} onChange={(e) => setFilters({ ...filters, until: e.target.value, page: 1 })} /><button onClick={() => void applyFilters()}><MagnifyingGlass />查询</button></div>

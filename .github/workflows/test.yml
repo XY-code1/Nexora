@@ -19,6 +19,7 @@ jobs:
       - run: python tests/test_mcp_protocol.py
       - run: python tests/test_mcp_host_config.py
       - run: python tests/test_security_atomicity.py
+      - run: python tests/test_ai_connections.py
       - run: python tests/test_memory_lifecycle.py
       - run: python tests/test_review_app.py
       - run: python tests/test_core_contract.py

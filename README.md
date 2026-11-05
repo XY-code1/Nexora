@@ -358,7 +358,7 @@ start-review.vbs
 ### 尚未完成
 
 - Overview 产品总览页。
-- AI Connections 客户端发现与配置向导。
+- AI Connections 客户端注册、授权、Token 重签、撤销、状态展示与本地 Host 配置向导。
 
 ### 阶段编号说明
 
@@ -389,6 +389,7 @@ start-review.vbs
 | Product Phase 7 | Privacy Audit & Security Center | ✅ |
 | Product Phase 8 | Human 3.0 Growth Intelligence | ✅ 专项验收通过 |
 | Product Phase 9 | Visual Backup & Recovery Wizard | ✅ 专项验收通过 |
+| AI Connections C1–C6 | 客户端生命周期、权限、Host 配置、原子审计与可视化向导 | ✅ 完成 |
 
 下一阶段建议进入 **Overview 总览**；AI Connections 保留到最后，因为它涉及客户端发现、外部配置写入和更复杂的权限边界。
 

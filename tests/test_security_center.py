@@ -73,7 +73,7 @@ def main():
         assert filtered["total"] == 1
 
         revoked = api.post(f"/api/v1/security/clients/{client['id']}/revoke", headers=headers)
-        assert revoked.json()["data"]["status"] == "revoked"
+        assert revoked.json()["data"]["authorization"] == "revoked"
         try:
             security.authorize(root, client["id"], credential, "profile:read", event_type="profile.read", resource_type="profile")
             raise AssertionError("revoked client was allowed")

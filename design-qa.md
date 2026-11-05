@@ -350,3 +350,15 @@ final result: passed
 - Known limitation: automatic growth diagnosis and inferred scores are intentionally absent.
 
 final result: passed
+
+## AI Connections C6 验收（2026-11-05）
+
+- 独立路由 `#/ai-connections`、Sidebar 导航、桌面和 390px 响应式布局已完成。
+- 注册、授权、Token 重签、撤销、逻辑删除均通过真实 API 与 Core 执行。
+- 页面仅显示一次性 Token；不返回真实 Vault 路径，不提供正式记忆确认能力。
+- 客户端展示使用 `authorization` / `activity`，没有虚构在线状态。
+- Claude Desktop / Cursor / VS Code 命令模板不包含 Token 或真实 Vault 路径。
+- 桌面截图：`artifacts/ai-connections-c6/desktop.png`
+- 390px 截图：`artifacts/ai-connections-c6/mobile.png`
+
+已知限制：当前环境没有 Claude Desktop，Host 内实际 UI 状态仍需在安装并登录 Claude Desktop 的设备上人工确认；真实 stdio 子进程协议已由 C4 自动化验证。

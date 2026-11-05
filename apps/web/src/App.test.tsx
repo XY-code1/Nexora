@@ -6,7 +6,10 @@ afterEach(() => {
   vi.restoreAllMocks()
   window.history.replaceState(null, '', '/')
 })
-beforeEach(() => vi.spyOn(window, 'confirm').mockReturnValue(true))
+beforeEach(() => {
+  window.history.replaceState(null, '', '/#/memory-review')
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+})
 
 const memory = {
   id: 'mem-20261102-12345678', status: 'candidate', type: 'preference', subject: '回答风格', sourceAgent: 'test-agent',
@@ -23,10 +26,10 @@ function response(data: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } }))
 }
 
-async function connect() {
+async function connect(expected = '回答风格') {
   fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
   fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-  await screen.findAllByText('回答风格')
+  await screen.findAllByText(expected)
 }
 
 describe('review workspace', () => {
@@ -97,15 +100,16 @@ describe('review workspace', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
       .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
+      .mockImplementationOnce(() => response({ data: { profile: { access: 'summary-only', protected: false, sections: [] }, memory: stats, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 1, vault: 'ready' }, meta: { requestId: 'overview' } }))
       .mockImplementationOnce(() => response({ data: { status: 'shutting-down' }, meta: { requestId: '2' } }))
     window.history.replaceState(null, '', '/#token=launcher-token')
 
     render(<App />)
-    await screen.findAllByText('回答风格')
-    expect(window.location.hash).toBe('')
+    await screen.findByText('你的个人智能中枢')
+    expect(window.location.hash).toBe('#/overview')
     fireEvent.click(screen.getByRole('button', { name: '关闭服务' }))
     await screen.findByRole('heading', { name: '本地服务已关闭' })
-    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/v1/shutdown')
+    expect(fetchMock.mock.calls[3]?.[0]).toBe('/api/v1/shutdown')
   })
 
   it('shows privacy-trimmed visualization pages on demand', async () => {
@@ -183,9 +187,7 @@ describe('review workspace', () => {
       .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { access: 'allowed', protected: false, sections: [], hasConfirmedMemories: false }, meta: { requestId: '2' } }))
     render(<App />)
-    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
-    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-    await screen.findByText('暂时没有候选记忆')
+    await connect('暂时没有候选记忆')
     fireEvent.click(screen.getByRole('button', { name: '个人档案' }))
     await screen.findByText('档案还是空的')
     expect(screen.getByText('暂无可展示的已确认记忆')).toBeInTheDocument()
@@ -230,9 +232,7 @@ describe('review workspace', () => {
       .mockImplementationOnce(() => response({ data: onboarding, meta: { requestId: '2' } }))
       .mockImplementationOnce(() => response({ data: { candidateId: 'mem-onboarding', state: { ...onboarding, topics: [{ ...onboarding.topics[0], status: 'pending' }, onboarding.topics[1]], nextTopic: 'communication' } }, meta: { requestId: '3' } }))
     render(<App />)
-    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
-    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-    await screen.findByText('暂时没有候选记忆')
+    await connect('暂时没有候选记忆')
     fireEvent.click(screen.getByRole('button', { name: '对话式引导' }))
     await screen.findByText('我应该怎么称呼你？')
     fireEvent.change(screen.getByLabelText('你的回答'), { target: { value: '请称呼我为小明' } })
@@ -253,9 +253,7 @@ describe('review workspace', () => {
       .mockImplementationOnce(() => response({ data: { currentMonth: '2026-11', reflections: [] }, meta: { requestId: '2' } }))
       .mockImplementationOnce(() => response({ data: reflection, meta: { requestId: '3' } }))
     render(<App />)
-    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
-    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-    await screen.findByText('暂时没有候选记忆')
+    await connect('暂时没有候选记忆')
     fireEvent.click(screen.getByRole('button', { name: '月度复盘' }))
     const create = await screen.findAllByRole('button', { name: /创建 2026-11 复盘/ })
     fireEvent.click(create[0])
@@ -273,9 +271,7 @@ describe('review workspace', () => {
       .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-1' } }))
       .mockImplementationOnce(() => response({ data: { currentMonth: '2026-11', reflections: [reflection] }, meta: { requestId: '2' } }))
     render(<App />)
-    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
-    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-    await screen.findByText('暂时没有候选记忆')
+    await connect('暂时没有候选记忆')
     fireEvent.click(screen.getByRole('button', { name: '月度复盘' }))
     const confirm = await screen.findByRole('button', { name: '确认正式复盘' })
     expect(confirm).toBeDisabled()

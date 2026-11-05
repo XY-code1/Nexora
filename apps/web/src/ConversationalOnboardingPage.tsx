@@ -60,7 +60,7 @@ export default function ConversationalOnboardingPage({ value, loading, saving, o
             <div className="guide-message"><span className="agent-avatar"><Sparkle size={18} /></span><div><small>PROFILE GUIDE · {topic.title}</small><p>{topic.prompt}</p><em>你可以简短回答、详细描述，或暂时跳过。</em></div></div>
             <div className="user-composer">
               <div className="composer-label"><span><UserCircle size={17} />你的回答</span><small>{answer.length} / 1000</small></div>
-              <textarea aria-label="你的回答" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={1000} placeholder="只填写你愿意保存为候选记忆的内容…" disabled={saving} autoFocus />
+              <textarea aria-label="你的回答" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={1000} placeholder="只填写你愿意保存为候选记忆的内容…" disabled={saving} />
               <label className="consent-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={saving} /><span>我同意将这次回答创建为候选记忆，稍后由我审核确认。</span></label>
               <div className="composer-actions"><button className="secondary" onClick={() => skip(topic)} disabled={saving}>暂时跳过</button><button className="primary-action" onClick={() => void submit(topic)} disabled={saving || !answer.trim() || !consent}>{saving ? '正在创建候选…' : <>保存为候选并继续 <ArrowRight size={17} /></>}</button></div>
             </div>

@@ -274,7 +274,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         with profile.vault_lock(root):
             memory = memory_stats(root)
             clients = security.list_clients(root)
-            active = [client for client in clients if client["status"] == "active"]
+            active = [client for client in clients if client["authorization"] == "authorized"]
             recent = security.query_events(root, page_size=6)["items"]
             months = growth.growth_timeline(root)["months"]
             latest_month = months[-1] if months else None
@@ -618,6 +618,14 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             with profile.vault_lock(root):
                 client, credential = security.create_client(root, data.name, data.scopes)
                 return envelope({"client": client, "credential": credential})
+        except SystemExit as exc:
+            raise domain_error(exc) from None
+
+    @app.post("/api/v1/security/clients/register", status_code=201, dependencies=[auth])
+    def security_register_client(data: SecurityClientInput) -> dict[str, Any]:
+        try:
+            with profile.vault_lock(root):
+                return envelope(security.register_client(root, data.name, data.scopes))
         except SystemExit as exc:
             raise domain_error(exc) from None
 

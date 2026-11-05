@@ -1,0 +1,35 @@
+import { expect, test } from '@playwright/test'
+import { mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const shots = resolve(process.cwd(), '../../artifacts/ai-connections-c6')
+test.beforeAll(() => mkdirSync(shots, { recursive: true }))
+
+test('AI Connections registers, authorizes, rotates, revokes and deletes a client', async ({ page }) => {
+  page.on('dialog', (dialog) => dialog.accept())
+  await page.setViewportSize({ width: 1440, height: 1024 })
+  await page.goto('/#/ai-connections')
+  await page.getByLabel('本地启动令牌').fill('e2e-token')
+  await page.getByRole('button', { name: '连接审核空间' }).click()
+  await expect(page.getByRole('heading', { name: 'AI Connections' })).toBeVisible()
+  await page.getByLabel('AI 客户端名称').fill('C6 E2E Client')
+  await page.getByRole('button', { name: '创建待授权连接' }).click()
+  const record = page.locator('.connection-list article').filter({ hasText: 'C6 E2E Client' })
+  await expect(record.getByText('待授权')).toBeVisible()
+  await record.getByRole('button', { name: '授权并签发 Token' }).click()
+  await expect(page.getByText('Token 仅显示这一次')).toBeVisible()
+  await page.getByRole('button', { name: '我已保存' }).click()
+  await record.getByRole('button', { name: '重签 Token' }).click()
+  await expect(page.getByText('Token 仅显示这一次')).toBeVisible()
+  await page.getByRole('button', { name: '我已保存' }).click()
+  await record.getByRole('button', { name: '撤销' }).click()
+  await expect(record.getByText('已撤销')).toBeVisible()
+  await record.getByRole('button', { name: '删除 C6 E2E Client' }).click()
+  await expect(record.getByText('已删除')).toBeVisible()
+  await page.locator('.app-stage').evaluate((element) => { element.scrollTop = 0 })
+  await page.screenshot({ path: resolve(shots, 'desktop.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.waitForTimeout(350)
+  await page.locator('.app-stage').evaluate((element) => { element.scrollTop = 0 })
+  await page.screenshot({ path: resolve(shots, 'mobile.png'), fullPage: true })
+})

@@ -10,11 +10,20 @@ import MonthlyTrendPage from './MonthlyTrendPage'
 import GrowthDashboard from './GrowthDashboard'
 import OverviewPage from './OverviewPage'
 import BackupRecoveryPage from './BackupRecoveryPage'
+import AIConnectionsPage from './AIConnectionsPage'
 import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'overview' | 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup'
+type View = 'overview' | 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections'
+
+const VIEW_ROUTES: Record<View, string> = {
+  overview: '#/overview', review: '#/memory-review', onboarding: '#/onboarding', profile: '#/profile',
+  timeline: '#/memory-timeline', privacy: '#/privacy-audit', reflection: '#/monthly-reflection',
+  human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections',
+}
+const ROUTE_VIEWS = new Map(Object.entries(VIEW_ROUTES).map(([view, route]) => [route, view as View]))
+function viewFromHash(hash: string): View | null { return ROUTE_VIEWS.get(hash) ?? null }
 
 type TokenGateProps = {
   error: string
@@ -73,7 +82,7 @@ function App() {
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<Notice>(null)
   const [closed, setClosed] = useState(false)
-  const [view, setView] = useState<View>('review')
+  const [view, setView] = useState<View>(() => viewFromHash(window.location.hash) ?? 'overview')
   const [profileView, setProfileView] = useState<ProfileOverview | null>(null)
   const [timelineView, setTimelineView] = useState<TimelineItem[] | null>(null)
   const [securityView, setSecurityView] = useState<SecurityCenter | null>(null)
@@ -85,10 +94,16 @@ function App() {
   const [monthlyTrendView, setMonthlyTrendView] = useState<MonthlyTrend | null>(null)
   const [visualLoading, setVisualLoading] = useState<View | null>(null)
   const [navigationOpen, setNavigationOpen] = useState(false)
+  const [navigationAnnouncement, setNavigationAnnouncement] = useState('')
   const sessionEpoch = useRef(0)
   const viewRequest = useRef(0)
   const visualAbort = useRef<AbortController | null>(null)
   const sessionAbort = useRef<AbortController | null>(null)
+  const stageRef = useRef<HTMLElement>(null)
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const sidebarRef = useRef<HTMLElement>(null)
+  const connectedViewRef = useRef<View | null>(null)
 
   const client = useMemo(() => token ? new ApiClient(token) : null, [token])
   const selected = memories.find((memory) => memory.id === selectedId) ?? null
@@ -102,6 +117,7 @@ function App() {
   }
 
   async function connect(nextToken: string) {
+    connectedViewRef.current = viewFromHash(window.location.hash) ?? 'overview'
     const epoch = ++sessionEpoch.current
     sessionAbort.current?.abort()
     const controller = new AbortController()
@@ -127,13 +143,81 @@ function App() {
   }
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.slice(1))
+    const initialHash = window.location.hash
+    const params = new URLSearchParams(initialHash.slice(1))
     const bootstrapToken = params.get('token')
     if (bootstrapToken) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES.overview}`)
       void connect(bootstrapToken)
+      return
     }
+    if (!viewFromHash(initialHash)) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES.overview}`)
   }, []) // Launcher token is consumed once, removed from the URL, then kept only in memory.
+
+  useEffect(() => {
+    if (!client) return
+    const initialView = connectedViewRef.current ?? viewFromHash(window.location.hash) ?? 'overview'
+    connectedViewRef.current = null
+    if (initialView === 'review') setView('review')
+    else void openView(initialView, false)
+  }, [client])
+
+  useEffect(() => {
+    function onRouteChange() {
+      const next = viewFromHash(window.location.hash)
+      if (!next) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES.overview}`)
+        if (client) void openView('overview', false)
+        else setView('overview')
+        return
+      }
+      if (client) void openView(next, false)
+      else setView(next)
+    }
+    window.addEventListener('hashchange', onRouteChange)
+    window.addEventListener('popstate', onRouteChange)
+    return () => {
+      window.removeEventListener('hashchange', onRouteChange)
+      window.removeEventListener('popstate', onRouteChange)
+    }
+  }, [client])
+
+  useEffect(() => {
+    if (!token) return
+    if (stageRef.current) {
+      stageRef.current.scrollTop = 0
+      stageRef.current.scrollLeft = 0
+    }
+    const focusTimer = window.setTimeout(() => {
+      titleRef.current?.focus({ preventScroll: true })
+      setNavigationAnnouncement(`${titleRef.current?.textContent ?? '页面'}已打开`)
+    })
+    return () => window.clearTimeout(focusTimer)
+  }, [view, token])
+
+  useEffect(() => {
+    if (!navigationOpen) return
+    const frame = window.requestAnimationFrame(() => {
+      sidebarRef.current?.querySelector<HTMLButtonElement>('nav button[aria-current="page"]')?.focus()
+    })
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setNavigationOpen(false)
+        menuButtonRef.current?.focus()
+        return
+      }
+      if (event.key !== 'Tab' || !sidebarRef.current) return
+      const focusable = [...sidebarRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => { window.cancelAnimationFrame(frame); document.removeEventListener('keydown', onKeyDown) }
+  }, [navigationOpen])
 
   async function loadCandidates() {
     if (!client) return
@@ -166,21 +250,25 @@ function App() {
     setSelectedId(null)
     setDraft('')
     setNotice(null)
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES.review}`)
     setView('review')
     setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null); setClientCredential('')
     setVisualLoading(null)
     setGateError(message)
   }
 
-  async function openView(next: View) {
+  async function openView(next: View, updateRoute = true) {
     if (!client) return
+    if (updateRoute && window.location.hash !== VIEW_ROUTES[next]) {
+      window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES[next]}`)
+    }
     setView(next)
     setNotice(null)
     visualAbort.current?.abort()
     viewRequest.current += 1
     setVisualLoading(null)
     if (next === 'review') { void loadCandidates(); return }
-    if (next === 'growth' || next === 'backup' || next === 'overview') return
+    if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections') return
     const controller = new AbortController()
     visualAbort.current = controller
     const epoch = sessionEpoch.current
@@ -264,7 +352,7 @@ function App() {
   async function confirmReflection() { if (!reflectionView || !window.confirm('确认这份月度复盘？确认后会进入历史；后续修改将重新变为草稿。')) return false; const ok = await monthlyAction((api, signal) => api.confirmMonthly(reflectionView.id, reflectionView.revision, signal)); if (ok) setNotice({ kind: 'success', text: '月度复盘已由你确认并进入历史。' }); return Boolean(ok) }
 
   async function refreshSecurity() { if (!client) return false; try { const result = await client.securityCenter(sessionAbort.current?.signal); setSecurityView(result); return true } catch (error) { handleMutationError(error); return false } }
-  async function authorizeSecurityClient(name: string, scopes: string[]) { if (!client) return false; setSaving(true); try { const result = await client.authorizeSecurityClient(name, scopes, sessionAbort.current?.signal); setClientCredential(result.credential); setNotice({ kind: 'success', text: '客户端已授权；凭据只显示一次。' }); await refreshSecurity(); return true } catch (error) { handleMutationError(error); return false } finally { setSaving(false) } }
+  async function authorizeSecurityClient(name: string, scopes: string[]) { if (!client) return null; setSaving(true); try { const result = await client.authorizeSecurityClient(name, scopes, sessionAbort.current?.signal); setClientCredential(result.credential); setNotice({ kind: 'success', text: '客户端已授权；凭据只显示一次。' }); await refreshSecurity(); return result.client.id } catch (error) { handleMutationError(error); return null } finally { setSaving(false) } }
   async function updateSecurityScopes(id: string, scopes: string[]) { if (!client) return false; setSaving(true); try { await client.updateSecurityScopes(id, scopes, sessionAbort.current?.signal); setNotice({ kind: 'success', text: '最小权限已更新，后续请求立即使用新权限。' }); await refreshSecurity(); return true } catch (error) { handleMutationError(error); return false } finally { setSaving(false) } }
   async function revokeSecurityClient(id: string) { if (!client) return false; setSaving(true); try { await client.revokeSecurityClient(id, sessionAbort.current?.signal); setNotice({ kind: 'success', text: '客户端授权已撤销，后续请求将被拒绝。' }); await refreshSecurity(); return true } catch (error) { handleMutationError(error); return false } finally { setSaving(false) } }
   async function querySecurityEvents(filters: { clientId: string; eventType: string; result: string; since: string; until: string; page: number; pageSize: number }) { if (!client || !securityView) return false; try { const audit = await client.securityEvents(filters, sessionAbort.current?.signal); setSecurityView({ ...securityView, audit }); return true } catch (error) { handleMutationError(error); return false } }
@@ -339,24 +427,30 @@ function App() {
     { label: '成长仪表盘', view: 'growth', icon: Sparkle },
     { label: '隐私审计', view: 'privacy', icon: ShieldCheck },
     { label: '备份与恢复', view: 'backup', icon: HardDrives },
-    { label: 'AI 连接', icon: PlugsConnected },
+    { label: 'AI 连接', view: 'connections', icon: PlugsConnected },
   ]
-  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复' }
+  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接' }
+
+  function closeNavigation() {
+    setNavigationOpen(false)
+    window.requestAnimationFrame(() => menuButtonRef.current?.focus())
+  }
 
   return <main className="app-shell">
-    <button className="mobile-menu" aria-label="打开导航" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}><List size={22} /></button>
-    {navigationOpen && <button className="navigation-scrim" aria-label="关闭导航" onClick={() => setNavigationOpen(false)} />}
-    <aside className={`sidebar ${navigationOpen ? 'open' : ''}`}>
-      <div className="brand"><span className="brand-mark"><CirclesFour weight="duotone" /></span><div><strong>Personal AI Profile</strong><small>INTELLIGENCE LIBRARY</small></div><button className="drawer-close" aria-label="关闭导航" onClick={() => setNavigationOpen(false)}><X /></button></div>
+    <button ref={menuButtonRef} className="mobile-menu" aria-label="打开导航" aria-controls="primary-navigation" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}><List size={22} /></button>
+    {navigationOpen && <button className="navigation-scrim" aria-label="关闭导航" onClick={closeNavigation} />}
+    <aside ref={sidebarRef} id="primary-navigation" aria-label="主导航" className={`sidebar ${navigationOpen ? 'open' : ''}`}>
+      <div className="brand"><span className="brand-mark"><CirclesFour weight="duotone" /></span><div><strong>Personal AI Profile</strong><small>INTELLIGENCE LIBRARY</small></div><button className="drawer-close" aria-label="关闭导航" onClick={closeNavigation}><X /></button></div>
       <nav aria-label="档案功能">
-        {navigation.map((item) => { const Icon = item.icon; const active = item.view === view || (item.view === 'profile' && view === 'timeline'); return <button key={item.label} className={active ? 'active' : ''} aria-label={item.view === 'human3' ? 'Human 3.0趋势' : undefined} aria-current={active ? 'page' : undefined} aria-disabled={!item.view} title={!item.view ? '后续阶段开放' : undefined} onClick={() => { if (item.view) { void openView(item.view); setNavigationOpen(false) } }}><Icon size={22} weight={active ? 'duotone' : 'regular'} /><span>{item.label}</span>{!item.view && <small>即将开放</small>}</button> })}
+        {navigation.map((item) => { const Icon = item.icon; const active = item.view === view || (item.view === 'profile' && view === 'timeline'); return <button key={item.label} className={active ? 'active' : ''} aria-label={item.view === 'human3' ? 'Human 3.0趋势' : undefined} aria-current={active ? 'page' : undefined} aria-disabled={!item.view} title={!item.view ? '后续阶段开放' : undefined} onClick={() => { if (item.view) { void openView(item.view); setNavigationOpen(false); if (item.view === view) window.requestAnimationFrame(() => titleRef.current?.focus({ preventScroll: true })) } }}><Icon size={22} weight={active ? 'duotone' : 'regular'} /><span>{item.label}</span>{!item.view && <small>即将开放</small>}</button> })}
       </nav>
       <button className="timeline-shortcut" onClick={() => { void openView('timeline'); setNavigationOpen(false) }}><CalendarDots size={18} />记忆时间线</button>
       <div className="sidebar-status"><p><Database size={17} /><span>本地服务</span><strong>已连接</strong></p><p><LockKey size={17} /><span>Vault</span><strong>受保护</strong></p></div>
     </aside>
 
-    <section className="app-stage">
-      <header className="topbar"><div><p className="eyebrow">HOLOGRAPHIC LIBRARY</p><h1>{titles[view]}</h1></div><div className="topbar-actions"><span className="service-status"><i />本地服务</span><span className="service-status"><i />Vault 已就绪</span><button className="icon-button" aria-label="同步候选记忆" title="同步候选记忆" onClick={() => void loadCandidates()} disabled={loading}><Database size={19} /></button><button className="text-button" onClick={() => disconnect()}>断开连接</button><button className="text-button danger-link" onClick={() => void shutdown()} disabled={saving}>关闭服务</button></div></header>
+    <section ref={stageRef} className="app-stage" tabIndex={-1}>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">{navigationAnnouncement}</div>
+      <header className="topbar"><div><p className="eyebrow">HOLOGRAPHIC LIBRARY</p><h1 ref={titleRef} tabIndex={-1}>{titles[view]}</h1></div><div className="topbar-actions"><span className="service-status"><i />本地服务</span><span className="service-status"><i />Vault 已就绪</span><button className="icon-button" aria-label="同步候选记忆" title="同步候选记忆" onClick={() => void loadCandidates()} disabled={loading}><Database size={19} /></button><button className="text-button" onClick={() => disconnect()}>断开连接</button><button className="text-button danger-link" onClick={() => void shutdown()} disabled={saving}>关闭服务</button></div></header>
       <div className="content-shell">
         {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
 
@@ -370,6 +464,7 @@ function App() {
         {view === 'growth' && client && <GrowthDashboard client={client} />}
         {view === 'backup' && client && <BackupRecoveryPage client={client} />}
         {view === 'overview' && client && <OverviewPage client={client} onNavigate={(next) => void openView(next)} />}
+        {view === 'connections' && client && <AIConnectionsPage client={client} />}
         {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} />}
       </div>
     </section>
