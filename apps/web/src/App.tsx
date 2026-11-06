@@ -11,6 +11,7 @@ import GrowthDashboard from './GrowthDashboard'
 import OverviewPage from './OverviewPage'
 import BackupRecoveryPage from './BackupRecoveryPage'
 import AIConnectionsPage from './AIConnectionsPage'
+import FirstRunWizard from './FirstRunWizard'
 import { LoadingState } from './components/StateBlocks'
 import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
@@ -95,6 +96,8 @@ function App() {
   const [monthlyTrendView, setMonthlyTrendView] = useState<MonthlyTrend | null>(null)
   const [visualLoading, setVisualLoading] = useState<View | null>(null)
   const [navigationOpen, setNavigationOpen] = useState(false)
+  const [firstRun, setFirstRun] = useState(false)
+  const [wizardVaultName, setWizardVaultName] = useState('')
   const [navigationAnnouncement, setNavigationAnnouncement] = useState('')
   const sessionEpoch = useRef(0)
   const viewRequest = useRef(0)
@@ -132,6 +135,25 @@ function App() {
       setToken(nextToken)
       applyMemories(result)
       setMemoryStats(stats)
+      // 首次运行判定：档案为空且没有任何记忆时，先走初始化向导，而不是直接面对完整功能菜单。
+      // 只有在「完全没有记忆」时才发这两个请求，正常使用的会话完全不受影响。
+      // 判定在后台进行，不阻塞连接；结论到达前先按常规界面呈现。
+      const noMemories = stats.candidateMemories === 0 && stats.confirmedMemories === 0 && stats.pendingReview === 0
+      if (noMemories) {
+        void Promise.all([
+          nextClient.overview(controller.signal).catch(() => null),
+          nextClient.vaultStatus(controller.signal).catch(() => null),
+        ]).then(([snapshot, vaultInfo]) => {
+          if (epoch !== sessionEpoch.current || controller.signal.aborted) return
+          const untouched = snapshot !== null
+            && snapshot.profile.sections.length === 0
+            && stats.candidateMemories === 0
+            && stats.confirmedMemories === 0
+            && stats.pendingReview === 0
+          setWizardVaultName(vaultInfo?.displayName && vaultInfo.displayName !== 'vault' ? vaultInfo.displayName : '我的个人空间')
+          setFirstRun(untouched)
+        })
+      }
       setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null); setMonthlyTrendView(null)
       setNotice(null)
     } catch (error) {
@@ -260,6 +282,7 @@ function App() {
     setView('review')
     setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null); setClientCredential('')
     setVisualLoading(null)
+    setFirstRun(false)
     setGateError(message)
   }
 
@@ -421,19 +444,42 @@ function App() {
 
   if (closed) return <main className="gate"><section className="gate-panel"><p className="eyebrow">PERSONAL AI PROFILE / CLOSED</p><h1>本地服务已关闭</h1><p>你的私人档案仍保存在本地。现在可以关闭此浏览器标签页。</p></section></main>
   if (!token) return <TokenGate error={gateError} connecting={connecting} onConnect={connect} />
+  // 阶段一：第一次打开产品时先走初始化向导，不直接暴露完整功能菜单。
+  if (firstRun && client) return <FirstRunWizard
+    client={client}
+    vaultName={wizardVaultName}
+    onStartProfile={() => { setFirstRun(false); void openView('onboarding') }}
+    onSkip={() => { setFirstRun(false); void openView('overview') }}
+  />
 
-  const navigation: { label: string; view?: View; icon: typeof House }[] = [
-    { label: '概览', view: 'overview', icon: House },
-    { label: '记忆审核', view: 'review', icon: Stack },
-    { label: '对话式引导', view: 'onboarding', icon: ChatCircleDots },
-    { label: '个人档案', view: 'profile', icon: UserCircle },
-    { label: '月度复盘', view: 'reflection', icon: CalendarDots },
-    { label: '月度趋势', view: 'monthly', icon: ChartLineUp },
-    { label: 'Human 3.0', view: 'human3', icon: Brain },
-    { label: '成长仪表盘', view: 'growth', icon: Sparkle },
-    { label: '隐私审计', view: 'privacy', icon: ShieldCheck },
-    { label: '备份与恢复', view: 'backup', icon: HardDrives },
-    { label: 'AI 连接', view: 'connections', icon: PlugsConnected },
+  const navigationGroups: { title: string; items: { label: string; view?: View; icon: typeof House }[] }[] = [
+    {
+      title: '核心',
+      items: [
+        { label: '概览', view: 'overview', icon: House },
+        { label: '记忆审核', view: 'review', icon: Stack },
+        { label: '对话式引导', view: 'onboarding', icon: ChatCircleDots },
+        { label: '个人档案', view: 'profile', icon: UserCircle },
+      ],
+    },
+    {
+      title: '记录',
+      items: [
+        { label: '月度复盘', view: 'reflection', icon: CalendarDots },
+        { label: '月度趋势', view: 'monthly', icon: ChartLineUp },
+        { label: 'Human 3.0', view: 'human3', icon: Brain },
+        { label: '成长仪表盘', view: 'growth', icon: Sparkle },
+        { label: '记忆时间线', view: 'timeline', icon: CalendarDots },
+      ],
+    },
+    {
+      title: '系统',
+      items: [
+        { label: '隐私审计', view: 'privacy', icon: ShieldCheck },
+        { label: '备份与恢复', view: 'backup', icon: HardDrives },
+        { label: 'AI 连接', view: 'connections', icon: PlugsConnected },
+      ],
+    },
   ]
   const titles: Record<View, string> = { overview: '总览', review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接' }
 
@@ -448,9 +494,11 @@ function App() {
     <aside ref={sidebarRef} id="primary-navigation" aria-label="主导航" className={`sidebar ${navigationOpen ? 'open' : ''}`}>
       <div className="brand"><span className="brand-mark"><CirclesFour weight="duotone" /></span><div><strong>Personal AI Profile</strong><small>INTELLIGENCE LIBRARY</small></div><button className="drawer-close" aria-label="关闭导航" onClick={closeNavigation}><X /></button></div>
       <nav aria-label="档案功能">
-        {navigation.map((item) => { const Icon = item.icon; const active = item.view === view || (item.view === 'profile' && view === 'timeline'); return <button key={item.label} className={active ? 'active' : ''} aria-label={item.view === 'human3' ? 'Human 3.0趋势' : undefined} aria-current={active ? 'page' : undefined} aria-disabled={!item.view} title={!item.view ? '后续阶段开放' : undefined} onClick={() => { if (item.view) { void openView(item.view); setNavigationOpen(false); if (item.view === view) window.requestAnimationFrame(() => titleRef.current?.focus({ preventScroll: true })) } }}><Icon size={22} weight={active ? 'duotone' : 'regular'} /><span>{item.label}</span>{!item.view && <small>即将开放</small>}</button> })}
+        {navigationGroups.map((group) => <div className="nav-group" key={group.title}>
+          <p className="nav-group-title">{group.title}</p>
+          {group.items.map((item) => { const Icon = item.icon; const active = item.view === view || (item.view === 'profile' && view === 'timeline'); return <button key={item.label} className={active ? 'active' : ''} aria-label={item.view === 'human3' ? 'Human 3.0趋势' : undefined} aria-current={active ? 'page' : undefined} aria-disabled={!item.view} title={!item.view ? '后续阶段开放' : undefined} onClick={() => { if (item.view) { void openView(item.view); setNavigationOpen(false); if (item.view === view) window.requestAnimationFrame(() => titleRef.current?.focus({ preventScroll: true })) } }}><Icon size={21} weight={active ? 'duotone' : 'regular'} /><span>{item.label}</span>{!item.view && <small>即将开放</small>}</button> })}
+        </div>)}
       </nav>
-      <button className="timeline-shortcut" onClick={() => { void openView('timeline'); setNavigationOpen(false) }}><CalendarDots size={18} />记忆时间线</button>
       <div className="sidebar-status"><p><Database size={17} /><span>本地服务</span><strong>已连接</strong></p><p><LockKey size={17} /><span>Vault</span><strong>受保护</strong></p></div>
     </aside>
 
@@ -475,13 +523,14 @@ function App() {
       </div>
     </section>
 
-    {view === 'overview' && <aside className="status-panel" aria-label="智能状态面板">
-      <div className="status-panel-head"><p className="eyebrow">INTELLIGENCE STATUS</p><h2>智能状态</h2></div>
+    {/* 阶段二：首页不再以系统运行状态为主，这些信息已收进 Vault Status 区域。 */}
+    {view === 'overview' && <aside className="status-panel" aria-label="个人空间状态">
+      <div className="status-panel-head"><p className="eyebrow">PERSONAL SPACE</p><h2>空间状态</h2></div>
       <dl className="status-list">
         <div><dt>本地服务</dt><dd className="ok">已连接</dd></div>
-        <div><dt>Vault</dt><dd className="ok">受保护</dd></div>
         <div><dt>待处理</dt><dd>{memoryStats.pendingReview}</dd></div>
         <div><dt>确认记忆</dt><dd>{memoryStats.confirmedMemories}</dd></div>
+        <div><dt>候选记忆</dt><dd>{memoryStats.candidateMemories}</dd></div>
       </dl>
       <button className="text-button" onClick={() => void loadCandidates()}>刷新状态</button>
     </aside>}
