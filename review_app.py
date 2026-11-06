@@ -15,13 +15,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from core import profile as profile_cli
+from core.repository import list_markdown
 
 HOST = "127.0.0.1"
 MAX_BODY = 16_384
 
 
 def _candidate_cards(vault: Path) -> str:
-    files = sorted((vault / "30 Memory" / "Inbox").glob("*.md"))
+    files = list_markdown(vault, "30 Memory/Inbox", limit=1000)
     if not files:
         return '<section class="empty"><h2>没有待确认记忆</h2><p>继续与已连接的AI对话，候选记忆会出现在这里。</p></section>'
     cards: list[str] = []

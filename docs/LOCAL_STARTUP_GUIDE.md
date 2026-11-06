@@ -66,7 +66,7 @@ python profile.py validate "C:\你的\Vault路径"
 
 第二条会输出「验证通过：结构完整，未发现已知秘密模式或重复记忆ID」。
 
-建议把 Vault 放在**仓库之外**的目录，例如 `C:\Users\<YOU>\Documents\my-ai-profile`，避免和代码混在一起。
+建议把 Vault 放在**仓库之外**的目录，例如 `D:\PersonalAIProfile\my-ai-profile`，避免和代码混在一起。
 
 Vault 位置的三种指定方式（launcher 依次查找）：
 

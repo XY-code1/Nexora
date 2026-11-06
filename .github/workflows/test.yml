@@ -28,6 +28,7 @@ jobs:
       - run: python tests/test_onboarding.py
       - run: python tests/test_human3.py
       - run: python tests/test_vault_management.py
+      - run: python tests/test_vault_product.py
       - run: python tests/test_sync.py
       - run: python tests/test_release_gate.py
       - run: python tests/test_monthly_reflection.py
@@ -80,6 +81,7 @@ jobs:
       - run: python tests/test_visualization.py
       - run: python tests/test_onboarding.py
       - run: python tests/test_human3.py
+      - run: python tests/test_vault_product.py
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "24"

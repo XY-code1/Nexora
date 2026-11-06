@@ -86,6 +86,10 @@ def init(path: str) -> None:
     if target.exists() and any(target.iterdir()):
         raise SystemExit(f"目标目录非空：{target}")
     shutil.copytree(ROOT / "template", target, dirs_exist_ok=True)
+    # Initialising a template must not mutate the machine-wide recent-Vault
+    # registry.  Registration happens only when a Vault is actually opened.
+    from .vault_identity import ensure_identity
+    ensure_identity(target)
     print(f"已初始化：{target}")
 
 

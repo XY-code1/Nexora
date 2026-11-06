@@ -17,6 +17,8 @@ test('managed backup is verified and restored through the guarded local flow', a
   await page.getByRole('button', { name: '备份与恢复' }).click()
   await expect(page.getByRole('heading', { name: '备份与恢复', level: 1 })).toBeVisible()
   await expect(page.getByText('还没有本地备份')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Vault 生命周期' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'GitHub Private Backup' })).toBeVisible()
 
   await page.getByRole('button', { name: '创建完整备份' }).click()
   await expect(page.getByText('完整备份已创建并通过哈希校验。')).toBeVisible()

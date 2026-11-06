@@ -4,6 +4,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -28,8 +29,10 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp)
         vault = base / "vault"
+        second_vault = base / "vault-2"
         runtime_dir = base / "runtime"
         profile.init(str(vault))
+        profile.init(str(second_vault))
         command = [
             sys.executable, str(ROOT / "launcher.py"), "--vault", str(vault),
             "--runtime-dir", str(runtime_dir), "--no-browser",
@@ -43,6 +46,34 @@ def main():
             assert port > 0 and token
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/v1/health", timeout=2) as response:
                 assert response.status == 200
+
+            switch = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/v1/vault/switch", method="POST",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                data=json.dumps({"path": str(second_vault)}).encode("utf-8"),
+            )
+            with urllib.request.urlopen(switch, timeout=2) as response:
+                assert response.status == 200
+            old_token = token
+            for _ in range(100):
+                next_runtime = wait_for_runtime(runtime_file)
+                if next_runtime.get("vault") == str(second_vault.resolve()) and next_runtime.get("token") != token:
+                    runtime = next_runtime
+                    break
+                time.sleep(0.1)
+            else:
+                raise AssertionError("launcher did not switch Vault")
+            port = int(runtime["port"])
+            token = str(runtime["token"])
+            stale = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/v1/vault",
+                headers={"Authorization": f"Bearer {old_token}"},
+            )
+            try:
+                urllib.request.urlopen(stale, timeout=2)
+                raise AssertionError("stale launcher session was accepted")
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 401
 
             duplicate = subprocess.run(command, cwd=ROOT, timeout=5)
             assert duplicate.returncode == 0 and process.poll() is None

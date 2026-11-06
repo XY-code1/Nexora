@@ -26,6 +26,8 @@ from mcp.server.mcpserver import MCPServer
 from core import profile as profile_cli
 from core.access import apply_access, extract_summary, get_access_level, is_readable_for_search
 from core import security
+from core.repository import list_markdown, read_text
+from core.vault_identity import ensure_identity
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
 MAX_FILE_CHARS = 12_000
@@ -46,6 +48,10 @@ def get_vault() -> Path:
         raise RuntimeError(f"私人档案结构不完整：{', '.join(missing)}")
     assert_vault_isolated(root)
     require_current_schema(root)
+    expected = os.environ.get("PROFILE_VAULT_ID", "").strip()
+    actual = ensure_identity(root)["vault_id"]
+    if expected and expected != actual:
+        raise RuntimeError("MCP 配置的 Vault identity 与当前目录不匹配，已拒绝访问。")
     return root
 
 
@@ -82,12 +88,7 @@ def safe_path(root: Path, candidate: Path) -> Path:
 
 
 def read_limited(root: Path, candidate: Path, limit: int = MAX_FILE_CHARS) -> str:
-    path = safe_path(root, candidate)
-    with path.open("r", encoding="utf-8") as handle:
-        text = handle.read(limit + 1)
-    if len(text) > limit:
-        raise ValueError(f"档案文件超过单文件读取上限（{limit}字符）。")
-    return text
+    return read_text(root, candidate, limit=limit)
 
 
 def vault_locked(function):
@@ -108,6 +109,12 @@ server = MCPServer(
         "确认、删除、修改 Profile、公开内容等高风险操作不在本 MCP 中提供。"
     ),
 )
+
+
+@server.tool(description="返回当前 MCP 绑定的非敏感 Vault identity，用于与本地 Web 核对。")
+def get_vault_identity() -> dict[str, str]:
+    identity = ensure_identity(get_vault())
+    return {"vaultId": identity["vault_id"], "displayName": identity["display_name"]}
 
 
 @server.tool(
@@ -154,7 +161,7 @@ def search_memory(query: str, limit: int = 8) -> list[dict[str, str]]:
     root = vault / "30 Memory" / "Confirmed"
     terms = [term.lower() for term in re.findall(r"\w+", query) if term.strip()]
     results: list[tuple[int, Path, str]] = []
-    for file in sorted(root.glob("*.md"))[:MAX_LIST_ITEMS]:
+    for file in list_markdown(vault, "30 Memory/Confirmed", limit=MAX_LIST_ITEMS):
         text = read_limited(vault, file)
         if not is_readable_for_search(text):
             continue
@@ -185,7 +192,7 @@ def list_projects() -> list[dict[str, str]]:
     root = vault / "20 Projects" / "Active"
     out: list[dict[str, str]] = []
     total = 0
-    for file in sorted(root.rglob("*.md"))[:MAX_LIST_ITEMS]:
+    for file in list_markdown(vault, "20 Projects/Active", recursive=True, limit=MAX_LIST_ITEMS):
         text = read_limited(vault, file)
         if not is_readable_for_search(text):
             continue
@@ -249,7 +256,7 @@ def list_pending() -> dict[str, object]:
     root = vault / "30 Memory" / "Inbox"
     by_type: dict[str, int] = {}
     total = 0
-    for file in sorted(root.glob("*.md")):
+    for file in list_markdown(vault, "30 Memory/Inbox", limit=1000):
         metadata, _ = profile_cli.parse_record(read_limited(vault, file))
         kind = metadata.get("type", "note")
         by_type[kind] = by_type.get(kind, 0) + 1
@@ -269,7 +276,7 @@ def get_human3_summary() -> str:
     vault = get_vault()
     history = vault / "40 Reviews" / "Human3" / "History"
     confirmed = []
-    for file in sorted(history.glob("*.md"), reverse=True)[:MAX_LIST_ITEMS]:
+    for file in list_markdown(vault, "40 Reviews/Human3/History", limit=MAX_LIST_ITEMS, reverse=True):
         text = read_limited(vault, file)
         metadata, _ = profile_cli.parse_record(text)
         if metadata.get("status") == "confirmed":

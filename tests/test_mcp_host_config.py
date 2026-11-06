@@ -47,6 +47,7 @@ def main() -> None:
         encoded = json.dumps(config)
         entry = config["mcpServers"]["personal-ai-profile"]
         assert entry["env"]["PROFILE_VAULT"] == str(vault.resolve())
+        assert entry["env"]["PROFILE_VAULT_ID"].startswith("vault_")
         assert entry["args"] == [str((ROOT / "mcp_server.py").resolve())]
         assert "PROFILE_CLIENT_TOKEN" in encoded
         output = Path(temporary) / "host.json"

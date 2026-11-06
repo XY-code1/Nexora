@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import secrets
 import uuid
 from pathlib import Path
@@ -16,6 +17,9 @@ from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from core import profile
+from core import sync as git_sync
+from core.vault_identity import VaultMonitor, list_registered, register_vault
+from core.repository import list_markdown
 from core.access import extract_summary
 from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
@@ -163,6 +167,25 @@ class BackupRestoreInput(BaseModel):
     expected_vault_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class VaultPathInput(BaseModel):
+    path: str = Field(min_length=1, max_length=1000)
+
+
+class GitCommitInput(BaseModel):
+    message: str = Field(min_length=1, max_length=160)
+    confirmation: str = Field(pattern=r"^COMMIT$")
+
+
+class GitConfirmationInput(BaseModel):
+    confirmation: str = Field(pattern=r"^(PULL|PUSH)$")
+
+
+def safe_git_error(message: str, root: Path) -> str:
+    """Keep Git diagnostics useful without returning credentials or Vault paths."""
+    value = re.sub(r"(https?://)[^/@\s]+@", r"\1[redacted]@", message)
+    return value.replace(str(root), "[Vault]")
+
+
 def envelope(data: Any, revision: str | None = None) -> dict[str, Any]:
     meta: dict[str, Any] = {"requestId": uuid.uuid4().hex}
     if revision:
@@ -203,7 +226,7 @@ def memory_view(root: Path, path: Path) -> dict[str, Any]:
 def memory_stats(root: Path) -> dict[str, int]:
     counts = {"candidateMemories": 0, "pendingReview": 0, "confirmedMemories": 0}
     for folder, target in (("Inbox", "pendingReview"), ("Confirmed", "confirmedMemories")):
-        for path in (root / profile.MEMORY_ROOT / folder).glob("*.md"):
+        for path in list_markdown(root, f"30 Memory/{folder}"):
             metadata, _ = profile.read_record(profile.safe_vault_file(root, path))
             counts[target] += 1
             if folder == "Inbox" and metadata.get("status") == "candidate":
@@ -234,6 +257,16 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     app.state.vault = root
     app.state.token = token or secrets.token_urlsafe(32)
     app.state.request_shutdown = None
+    app.state.request_restart = None
+    register_vault(root)
+    app.state.vault_monitor = VaultMonitor(root)
+
+    @app.middleware("http")
+    async def track_local_mutations(request: Request, call_next):
+        response = await call_next(request)
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 400 and not request.url.path.startswith("/api/v1/vault/switch"):
+            app.state.vault_monitor.accept()
+        return response
 
     def authorize(authorization: Annotated[str | None, Header()] = None) -> None:
         scheme, _, credential = (authorization or "").partition(" ")
@@ -265,9 +298,84 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     def health() -> dict[str, Any]:
         return envelope({"status": "ok", "schemaVersion": 1, "vaultReady": True})
 
+    @app.get("/api/v1/vault", dependencies=[auth])
+    def vault_status() -> dict[str, Any]:
+        return envelope(app.state.vault_monitor.view())
+
+    @app.get("/api/v1/vaults", dependencies=[auth])
+    def vaults() -> dict[str, Any]:
+        return envelope(list_registered())
+
+    @app.post("/api/v1/vaults/validate", dependencies=[auth])
+    def validate_vault(data: VaultPathInput) -> dict[str, Any]:
+        candidate = Path(data.path).expanduser().resolve()
+        try:
+            assert_vault_isolated(candidate)
+            require_current_schema(candidate)
+            missing = [name for name in profile.REQUIRED if not (candidate / name).is_file()]
+            if missing:
+                raise RuntimeError(f"Vault 结构不完整：{', '.join(missing)}")
+            entry = register_vault(candidate)
+            return envelope({"vaultId": entry["vault_id"], "displayName": entry["display_name"], "valid": True})
+        except RuntimeError as exc:
+            raise ApiError(400, "INVALID_VAULT", str(exc)) from None
+
+    @app.post("/api/v1/vaults/create", status_code=201, dependencies=[auth])
+    def create_vault(data: VaultPathInput) -> dict[str, Any]:
+        candidate = Path(data.path).expanduser().resolve()
+        try:
+            profile.init(str(candidate))
+            entry = register_vault(candidate)
+            return envelope({"vaultId": entry["vault_id"], "displayName": entry["display_name"], "created": True})
+        except (RuntimeError, SystemExit) as exc:
+            raise ApiError(400, "VAULT_CREATE_FAILED", str(exc)) from None
+
+    @app.post("/api/v1/vault/switch", dependencies=[auth])
+    def switch_vault(data: VaultPathInput, background: BackgroundTasks) -> dict[str, Any]:
+        candidate = Path(data.path).expanduser().resolve()
+        validate_vault(data)
+        if not callable(app.state.request_restart):
+            raise ApiError(409, "RESTART_UNAVAILABLE", "当前启动方式不支持安全切换；请关闭服务后使用 --vault 重新启动。")
+        background.add_task(app.state.request_restart, candidate)
+        return envelope({"status": "restarting"})
+
+    @app.get("/api/v1/git/status", dependencies=[auth])
+    def git_status() -> dict[str, Any]:
+        try:
+            return envelope(git_sync.sync_status(str(root)))
+        except RuntimeError as exc:
+            return envelope({"configured": False, "message": safe_git_error(str(exc), root), "dirty": [], "unmerged": []})
+
+    @app.post("/api/v1/git/commit", dependencies=[auth])
+    def git_commit(data: GitCommitInput) -> dict[str, Any]:
+        if data.confirmation != "COMMIT":
+            raise ApiError(400, "CONFIRMATION_REQUIRED", "请输入 COMMIT 确认。")
+        try:
+            return envelope({"head": git_sync.sync_commit(str(root), data.message)})
+        except RuntimeError as exc:
+            raise ApiError(409, "GIT_COMMIT_FAILED", safe_git_error(str(exc), root)) from None
+
+    @app.post("/api/v1/git/pull", dependencies=[auth])
+    def git_pull(data: GitConfirmationInput) -> dict[str, Any]:
+        if data.confirmation != "PULL":
+            raise ApiError(400, "CONFIRMATION_REQUIRED", "请输入 PULL 确认。")
+        try:
+            return envelope(git_sync.sync_pull(str(root)))
+        except RuntimeError as exc:
+            raise ApiError(409, "GIT_PULL_FAILED", safe_git_error(str(exc), root)) from None
+
+    @app.post("/api/v1/git/push", dependencies=[auth])
+    def git_push(data: GitConfirmationInput) -> dict[str, Any]:
+        if data.confirmation != "PUSH":
+            raise ApiError(400, "CONFIRMATION_REQUIRED", "请输入 PUSH 确认。")
+        try:
+            return envelope(git_sync.sync_push(str(root)))
+        except RuntimeError as exc:
+            raise ApiError(409, "GIT_PUSH_FAILED", safe_git_error(str(exc), root)) from None
+
     @app.get("/api/v1/capabilities", dependencies=[auth])
     def capabilities() -> dict[str, Any]:
-        return envelope({"memoryLifecycle": True, "visualization": True, "onboarding": True, "human3Reflection": True, "monthlyReflection": True, "growthIntelligence": True, "securityCenter": True, "backupRecovery": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
+        return envelope({"memoryLifecycle": True, "vaultLifecycle": True, "externalChangeDetection": True, "gitBackup": True, "visualization": True, "onboarding": True, "human3Reflection": True, "monthlyReflection": True, "growthIntelligence": True, "securityCenter": True, "backupRecovery": True, "revisionControl": True, "fileLock": True, "shutdown": callable(app.state.request_shutdown)})
 
     @app.get("/api/v1/overview", dependencies=[auth])
     def overview_snapshot() -> dict[str, Any]:
@@ -692,7 +800,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         if status not in folders:
             raise ApiError(400, "INVALID_STATUS", "不支持的记忆状态筛选。")
         with profile.vault_lock(root):
-            files = sorted((root / profile.MEMORY_ROOT / folders[status]).glob("*.md"))[:max(1, min(limit, 100))]
+            files = list_markdown(root, f"30 Memory/{folders[status]}", limit=max(1, min(limit, 100)))
             return envelope([memory_view(root, path) for path in files])
 
     @app.get("/api/v1/memory-stats", dependencies=[auth])

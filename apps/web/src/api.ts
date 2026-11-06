@@ -51,6 +51,9 @@ export type GrowthAssociation = { id: string; fromDimension: GrowthDimensionKey;
 export type GrowthGoal = { id: string; horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string; createdAt: string; updatedAt: string; revision: string }
 export type VaultBackup = { id: string; created: string; schemaVersion: number; fileCount: number; sizeBytes: number; integrity: 'verified' | 'invalid'; managed: boolean }
 export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
+export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean }
+export type RegisteredVault = { vaultId: string; displayName: string; available: boolean; lastOpenedAt: string }
+export type GitStatus = { configured?: boolean; message?: string; branch?: string; head?: string; upstream?: string | null; ahead?: number; behind?: number; dirty: string[]; unmerged: string[] }
 export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
@@ -123,6 +126,15 @@ export class ApiClient {
   createBackup(signal?: AbortSignal) { return this.request<{ backup: VaultBackup; currentRevision: string }>('/api/v1/backups', { method: 'POST', signal }) }
   verifyBackup(id: string, signal?: AbortSignal) { return this.request<VaultBackup>(`/api/v1/backups/${encodeURIComponent(id)}/verify`, { signal }) }
   restoreBackup(id: string, confirmation: string, revision: string, signal?: AbortSignal) { return this.request<{ restoredBackupId: string; safetyBackup: VaultBackup; currentRevision: string }>(`/api/v1/backups/${encodeURIComponent(id)}/restore`, { method: 'POST', body: JSON.stringify({ confirmation, expected_vault_revision: revision }), signal }) }
+  vaultStatus(signal?: AbortSignal) { return this.request<VaultStatus>('/api/v1/vault', { signal }) }
+  registeredVaults(signal?: AbortSignal) { return this.request<RegisteredVault[]>('/api/v1/vaults', { signal }) }
+  validateVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; valid: boolean }>('/api/v1/vaults/validate', { method: 'POST', body: JSON.stringify({ path }), signal }) }
+  createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }
+  switchVault(path: string, signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/vault/switch', { method: 'POST', body: JSON.stringify({ path }), signal }) }
+  gitStatus(signal?: AbortSignal) { return this.request<GitStatus>('/api/v1/git/status', { signal }) }
+  gitCommit(message: string, signal?: AbortSignal) { return this.request<{ head: string }>('/api/v1/git/commit', { method: 'POST', body: JSON.stringify({ message, confirmation: 'COMMIT' }), signal }) }
+  gitPull(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/pull', { method: 'POST', body: JSON.stringify({ confirmation: 'PULL' }), signal }) }
+  gitPush(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/push', { method: 'POST', body: JSON.stringify({ confirmation: 'PUSH' }), signal }) }
   onboarding(signal?: AbortSignal) { return this.request<OnboardingState>('/api/v1/onboarding', { signal }) }
   onboardingResponse(topic: string, content: string, signal?: AbortSignal) { return this.request<{ candidateId: string; state: OnboardingState }>('/api/v1/onboarding/responses', { method: 'POST', body: JSON.stringify({ topic, content, consent: true }), signal }) }
   human3Session(signal?: AbortSignal) { return this.request<{ session: Human3Session | null }>('/api/v1/human3/session', { signal }) }

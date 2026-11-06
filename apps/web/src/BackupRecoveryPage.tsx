@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowCounterClockwise, CheckCircle, ClockCounterClockwise, Database, ShieldCheck, Warning } from '@phosphor-icons/react'
-import type { ApiClient, BackupOverview, VaultBackup } from './api'
+import { ArrowCounterClockwise, CheckCircle, ClockCounterClockwise, Database, GitBranch, ShieldCheck, Warning } from '@phosphor-icons/react'
+import type { ApiClient, BackupOverview, GitStatus, RegisteredVault, VaultBackup, VaultStatus } from './api'
 import { LoadingState } from './components/StateBlocks'
 
 function time(value: string) {
@@ -22,12 +22,18 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
   const [confirmation, setConfirmation] = useState('')
   const [busy, setBusy] = useState('')
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [vault, setVault] = useState<VaultStatus | null>(null)
+  const [registered, setRegistered] = useState<RegisteredVault[]>([])
+  const [git, setGit] = useState<GitStatus | null>(null)
+  const [vaultPath, setVaultPath] = useState('')
+  const [commitMessage, setCommitMessage] = useState('chore: update personal profile')
 
   async function load() {
     setMessage(null)
     try {
-      const next = await client.backups()
+      const [next, status, vaults, gitStatus] = await Promise.all([client.backups(), client.vaultStatus(), client.registeredVaults(), client.gitStatus()])
       setValue(next)
+      setVault(status); setRegistered(vaults); setGit(gitStatus)
       setSelectedId((current) => current && next.backups.some((item) => item.id === current) ? current : next.backups[0]?.id ?? '')
     } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '无法读取备份状态。' }) }
   }
@@ -68,6 +74,32 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
     finally { setBusy('') }
   }
 
+  async function vaultAction(action: 'validate' | 'create' | 'switch') {
+    if (!vaultPath.trim()) return
+    setBusy(action); setMessage(null)
+    try {
+      if (action === 'validate') await client.validateVault(vaultPath.trim())
+      if (action === 'create') await client.createVault(vaultPath.trim())
+      if (action === 'switch') { if (!window.confirm('切换会重启本地服务并使当前会话失效。继续吗？')) return; await client.switchVault(vaultPath.trim()) }
+      setMessage({ kind: 'success', text: action === 'switch' ? '正在安全重启到目标 Vault…' : action === 'create' ? '新 Vault 已创建，可在确认后切换。' : 'Vault 校验通过。' })
+      if (action !== 'switch') await load()
+    } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : 'Vault 操作失败。' }) }
+    finally { setBusy('') }
+  }
+
+  async function gitAction(action: 'commit' | 'pull' | 'push') {
+    if (!window.confirm(`${action.toUpperCase()} 只会作用于当前私人 Vault。继续吗？`)) return
+    setBusy(`git:${action}`); setMessage(null)
+    try {
+      if (action === 'commit') await client.gitCommit(commitMessage)
+      if (action === 'pull') await client.gitPull()
+      if (action === 'push') await client.gitPush()
+      setGit(await client.gitStatus())
+      setMessage({ kind: 'success', text: `Git ${action} 已完成。` })
+    } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : `Git ${action} 失败。` }) }
+    finally { setBusy('') }
+  }
+
   if (!value && !message) return <LoadingState label="正在核对本地备份目录…" />
 
   return <section className="backup-page">
@@ -77,6 +109,12 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
     </header>
 
     {message && <div className={`backup-message ${message.kind}`} role="status">{message.kind === 'success' ? <CheckCircle /> : <Warning />}<span>{message.text}</span></div>}
+
+    <section className="vault-control" aria-label="Vault 生命周期">
+      <div><p className="eyebrow">CURRENT VAULT</p><h3>{vault?.displayName ?? '正在识别'}</h3><p><code>{vault?.vaultId.slice(0, 18) ?? '—'}</code> · Schema {vault?.schemaVersion ?? '—'} · {vault?.externalChange ? '检测到外部修改' : '内容已同步'}</p></div>
+      <div className="vault-path-actions"><label>新建、校验或切换 Vault 的本机目录<input aria-label="Vault 目录" value={vaultPath} onChange={(event) => setVaultPath(event.target.value)} placeholder="选择后粘贴本机目录；路径不会写入 Vault" /></label><div><button onClick={() => void vaultAction('validate')} disabled={Boolean(busy) || !vaultPath.trim()}>校验</button><button onClick={() => void vaultAction('create')} disabled={Boolean(busy) || !vaultPath.trim()}>创建</button><button className="secondary-action" onClick={() => void vaultAction('switch')} disabled={Boolean(busy) || !vaultPath.trim()}>安全切换</button></div></div>
+      <p className="vault-registry">本机已登记 {registered.length} 个 Vault；切换会重启服务并签发新会话，不会删除任何目录。</p>
+    </section>
 
     <section className="backup-overview" aria-label="备份概览">
       <article><Database /><span>Managed Backups</span><strong>{value?.backups.length ?? 0}</strong></article>
@@ -100,5 +138,11 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
         </> : <div className="backup-empty"><ClockCounterClockwise /><h3>选择一个已验证备份</h3><p>只有当前 Vault 在本机创建并绑定的备份可以恢复。</p></div>}
       </section>
     </div>
+
+    <section className="git-backup" aria-label="GitHub Private Backup">
+      <header><div><p className="eyebrow">OPTIONAL PRIVATE VERSIONING</p><h3>Git / GitHub Private Backup</h3></div><GitBranch size={26} /></header>
+      {git?.configured === false ? <p>{git.message} Web 不会自动初始化仓库或发送网络请求。</p> : <><dl><div><dt>Branch</dt><dd>{git?.branch || '—'}</dd></div><div><dt>Upstream</dt><dd>{git?.upstream || '未配置'}</dd></div><div><dt>Ahead / Behind</dt><dd>{git?.ahead ?? 0} / {git?.behind ?? 0}</dd></div><div><dt>Changes</dt><dd>{git?.dirty.length ?? 0}</dd></div></dl><label>提交说明<input aria-label="Git 提交说明" value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} /></label><div className="git-actions"><button onClick={() => void gitAction('commit')} disabled={Boolean(busy) || !commitMessage.trim()}>Commit</button><button onClick={() => void gitAction('pull')} disabled={Boolean(busy)}>Pull</button><button onClick={() => void gitAction('push')} disabled={Boolean(busy)}>Push</button></div></>}
+      <small>仅支持用户预先配置的私人仓库。分叉、脏状态和非 fast-forward 会拒绝自动处理。</small>
+    </section>
   </section>
 }

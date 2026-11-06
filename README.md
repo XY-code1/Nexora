@@ -508,6 +508,15 @@ npm run dev
 
 Windows用户可直接双击`start-review.vbs`进入React审核界面；Launcher会自动选择端口、传递本次会话并复用已有实例。详细机制见[`docs/WINDOWS_LAUNCHER.md`](docs/WINDOWS_LAUNCHER.md)。
 
+### Vault 产品闭环（P1–P7）
+
+- 每个 Vault 具有随机稳定 identity；Web 与 MCP 可核对同一身份。
+- 「备份与恢复」页面可校验、创建并安全切换 Vault。切换通过重启本地服务完成，旧会话 token 不复用。
+- 外部编辑器（包括 Obsidian）修改会通过 content revision 被检测；应用不会静默覆盖或自动合并。
+- Git/GitHub 私人备份只作用于用户预先配置的 Vault Git 仓库，commit/pull/push 均需显式操作。
+- 应用不保存 GitHub token、不自动创建远程仓库；用户必须自行确认 remote 是 private。
+- 完整架构和限制见 [`docs/PRODUCT_ARCHITECTURE.md`](docs/PRODUCT_ARCHITECTURE.md)、[`docs/VAULT_LIFECYCLE_PLAN.md`](docs/VAULT_LIFECYCLE_PLAN.md) 与 [`docs/GITHUB_BACKUP_PLAN.md`](docs/GITHUB_BACKUP_PLAN.md)。
+
 其他命令：
 
 ```text

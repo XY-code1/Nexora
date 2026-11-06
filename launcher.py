@@ -163,29 +163,35 @@ def launch(args: argparse.Namespace) -> int:
             time.sleep(0.1)
         raise RuntimeError("已有启动进程占用单实例锁，但本地服务尚未就绪。")
 
-    sock: socket.socket | None = None
     try:
-        vault = choose_vault(args.vault)
-        ensure_vault(vault)
         web_dist = ensure_web_build()
-        token = secrets.token_urlsafe(32)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((HOST, args.port))
-        sock.listen(128)
-        port = int(sock.getsockname()[1])
-
-        app = create_app(vault, token=token, web_dist=web_dist)
-        server = uvicorn.Server(uvicorn.Config(app, host=HOST, port=port, log_level="warning"))
-        app.state.request_shutdown = lambda: setattr(server, "should_exit", True)
-        write_runtime(runtime_file, port=port, token=token, vault=vault)
-        threading.Thread(target=wait_and_open, args=(port, token, args.no_browser), daemon=True).start()
-        server.run(sockets=[sock])
-        return 0
+        vault = choose_vault(args.vault)
+        while True:
+            ensure_vault(vault)
+            token = secrets.token_urlsafe(32)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((HOST, args.port))
+            sock.listen(128)
+            port = int(sock.getsockname()[1])
+            requested: list[Path] = []
+            app = create_app(vault, token=token, web_dist=web_dist)
+            server = uvicorn.Server(uvicorn.Config(app, host=HOST, port=port, log_level="warning"))
+            app.state.request_shutdown = lambda: setattr(server, "should_exit", True)
+            def restart(next_vault: Path) -> None:
+                requested.append(next_vault.resolve())
+                server.should_exit = True
+            app.state.request_restart = restart
+            write_runtime(runtime_file, port=port, token=token, vault=vault)
+            threading.Thread(target=wait_and_open, args=(port, token, args.no_browser), daemon=True).start()
+            server.run(sockets=[sock])
+            sock.close()
+            runtime_file.unlink(missing_ok=True)
+            if not requested:
+                return 0
+            vault = requested[-1]
     finally:
         runtime_file.unlink(missing_ok=True)
-        if sock:
-            sock.close()
         lock.release()
         lock_file.unlink(missing_ok=True)
 

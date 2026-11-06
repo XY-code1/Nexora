@@ -1,0 +1,85 @@
+"""Stable Vault identity, local registry, and external-change detection."""
+
+from __future__ import annotations
+
+import json
+import os
+import secrets
+from datetime import datetime, timezone
+from pathlib import Path
+
+from filelock import FileLock
+
+from .profile import atomic_write
+from .vault_management import _content_revision, assert_vault_isolated, require_current_schema
+
+IDENTITY_FILE = Path("90 System") / "vault.json"
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def app_data_root() -> Path:
+    if os.name == "nt":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return base / "PersonalAIProfile"
+
+
+def ensure_identity(vault: Path) -> dict[str, str]:
+    root = vault.expanduser().resolve()
+    assert_vault_isolated(root)
+    require_current_schema(root)
+    path = root / IDENTITY_FILE
+    if path.is_file():
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(value, dict) and isinstance(value.get("vault_id"), str) and value["vault_id"].startswith("vault_"):
+            return {key: str(value.get(key, "")) for key in ("vault_id", "display_name", "created_at")}
+        raise RuntimeError("Vault identity 文件损坏。")
+    value = {"vault_id": f"vault_{secrets.token_hex(16)}", "display_name": root.name, "created_at": _now()}
+    atomic_write(path, json.dumps(value, ensure_ascii=False, indent=2))
+    return value
+
+
+def register_vault(vault: Path) -> dict[str, str]:
+    root = vault.expanduser().resolve()
+    identity = ensure_identity(root)
+    registry = app_data_root() / "vaults.json"
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    entry = {**identity, "path": str(root), "last_opened_at": _now()}
+    with FileLock(str(registry) + ".lock", timeout=10):
+        try:
+            entries = json.loads(registry.read_text(encoding="utf-8")) if registry.is_file() else []
+        except (OSError, ValueError):
+            entries = []
+        if not isinstance(entries, list):
+            entries = []
+        entries = [item for item in entries if isinstance(item, dict) and item.get("vault_id") != identity["vault_id"]]
+        entries.insert(0, entry)
+        atomic_write(registry, json.dumps(entries[:20], ensure_ascii=False, indent=2))
+    return entry
+
+
+def list_registered() -> list[dict[str, object]]:
+    registry = app_data_root() / "vaults.json"
+    try:
+        entries = json.loads(registry.read_text(encoding="utf-8")) if registry.is_file() else []
+    except (OSError, ValueError):
+        return []
+    return [{"vaultId": item.get("vault_id", ""), "displayName": item.get("display_name", ""), "available": Path(str(item.get("path", ""))).is_dir(), "lastOpenedAt": item.get("last_opened_at", "")} for item in entries if isinstance(item, dict)]
+
+
+class VaultMonitor:
+    def __init__(self, vault: Path):
+        self.root = vault.resolve()
+        self.accepted_revision = _content_revision(self.root)
+
+    def view(self) -> dict[str, object]:
+        identity = ensure_identity(self.root)
+        current = _content_revision(self.root)
+        return {"vaultId": identity["vault_id"], "displayName": identity["display_name"], "schemaVersion": 1, "revision": current, "externalChange": current != self.accepted_revision}
+
+    def accept(self) -> None:
+        self.accepted_revision = _content_revision(self.root)

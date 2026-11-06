@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).parents[1]
+sys.path.insert(0, str(ROOT))
+from core.vault_identity import ensure_identity
+
 SERVER = ROOT / "mcp_server.py"
 HOST_WRAPPERS = {"claude-desktop": "mcpServers", "cursor": "mcpServers", "vscode": "servers"}
 
@@ -38,6 +41,7 @@ def build_server_config(
         raise ValueError("客户端 ID 无效。")
     if not token.strip():
         raise ValueError("客户端 Token 不能为空。")
+    vault_id = ensure_identity(vault)["vault_id"]
     entry: dict[str, Any] = {
         "command": str(python_executable),
         "args": [str(server_script)],
@@ -45,6 +49,7 @@ def build_server_config(
             "PROFILE_VAULT": str(vault),
             "PROFILE_AGENT_ID": client_id,
             "PROFILE_CLIENT_TOKEN": token,
+            "PROFILE_VAULT_ID": vault_id,
             "PYTHONUTF8": "1",
         },
     }
