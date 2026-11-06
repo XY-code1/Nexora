@@ -182,7 +182,9 @@ function App() {
     const initialView = connectedViewRef.current ?? viewFromHash(window.location.hash) ?? 'overview'
     connectedViewRef.current = null
     if (initialView === 'review') setView('review')
-    else void openView(initialView, false)
+    // 初始化调用不参与请求竞争：它只负责补齐首屏数据，
+    // 不应让用户在此时发起的导航请求作废（否则会出现视图一直停在加载态）。
+    else void openView(initialView, false, false)
   }, [client])
 
   useEffect(() => {
@@ -286,7 +288,7 @@ function App() {
     setGateError(message)
   }
 
-  async function openView(next: View, updateRoute = true) {
+  async function openView(next: View, updateRoute = true, compete = true) {
     if (!client) return
     if (updateRoute && window.location.hash !== VIEW_ROUTES[next]) {
       window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES[next]}`)
@@ -294,7 +296,8 @@ function App() {
     setView(next)
     setNotice(null)
     visualAbort.current?.abort()
-    viewRequest.current += 1
+    // compete=false 表示这是初始化补数，不应该作废用户同时发起的其他请求。
+    if (compete) viewRequest.current += 1
     setVisualLoading(null)
     if (next === 'review') { void loadCandidates(); return }
     if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections') return
