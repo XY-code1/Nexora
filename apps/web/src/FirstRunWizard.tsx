@@ -128,7 +128,7 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
             <button className="secondary-action" onClick={() => void run('connect')} disabled={busy}>{busy ? '正在连接…' : '连接'}</button>
           </article>
         </div>
-        <div className="wizard-actions"><button className="primary-action" onClick={() => setStep('usage')}>继续使用当前空间 <ArrowRight size={17} /></button><button className="text-button" onClick={() => void finish(false)}>跳过，先看看</button></div>
+        <div className="wizard-actions"><button className="primary-action" onClick={() => setStep('usage')}>继续使用当前空间 <ArrowRight size={17} /></button><button className="text-button" onClick={() => setStep('landing')}>上一步</button><button className="text-button" onClick={() => void finish(false)}>跳过，先看看</button></div>
       </div>}
 
       {step === 'usage' && <div className="wizard-step">
