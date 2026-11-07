@@ -108,6 +108,8 @@ function App() {
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const connectedViewRef = useRef<View | null>(null)
+  const mountedRef = useRef(true)
+  const userNavigatedRef = useRef(false)
 
   const client = useMemo(() => token ? new ApiClient(token) : null, [token])
   const selected = memories.find((memory) => memory.id === selectedId) ?? null
@@ -122,6 +124,7 @@ function App() {
 
   async function connect(nextToken: string) {
     connectedViewRef.current = viewFromHash(window.location.hash) ?? 'overview'
+    userNavigatedRef.current = false
     const epoch = ++sessionEpoch.current
     sessionAbort.current?.abort()
     const controller = new AbortController()
@@ -135,17 +138,18 @@ function App() {
       setToken(nextToken)
       applyMemories(result)
       setMemoryStats(stats)
-      // 首次运行判定：档案为空且没有任何记忆时，先走初始化向导，而不是直接面对完整功能菜单。
-      // 只有在「完全没有记忆」时才发这两个请求，正常使用的会话完全不受影响。
+      // 首次运行判定：未完成初始化、且档案为空、且没有任何记忆时，先走初始化向导。
       // 判定在后台进行，不阻塞连接；结论到达前先按常规界面呈现。
+      // 已初始化过的 Vault 不再重复进入向导（标记存在 Vault 的 90 System/state.json）。
       const noMemories = stats.candidateMemories === 0 && stats.confirmedMemories === 0 && stats.pendingReview === 0
       if (noMemories) {
         void Promise.all([
           nextClient.overview(controller.signal).catch(() => null),
           nextClient.vaultStatus(controller.signal).catch(() => null),
         ]).then(([snapshot, vaultInfo]) => {
-          if (epoch !== sessionEpoch.current || controller.signal.aborted) return
+          if (epoch !== sessionEpoch.current || controller.signal.aborted || !mountedRef.current) return
           const untouched = snapshot !== null
+            && snapshot.initialized !== true
             && snapshot.profile.sections.length === 0
             && stats.candidateMemories === 0
             && stats.confirmedMemories === 0
@@ -166,6 +170,11 @@ function App() {
   }
 
   useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
+  useEffect(() => {
     const initialHash = window.location.hash
     const params = new URLSearchParams(initialHash.slice(1))
     const bootstrapToken = params.get('token')
@@ -179,6 +188,8 @@ function App() {
 
   useEffect(() => {
     if (!client) return
+    // 用户已经主动导航过时，初始化补数不再介入：否则会把视图覆盖回初始页。
+    if (userNavigatedRef.current) return
     const initialView = connectedViewRef.current ?? viewFromHash(window.location.hash) ?? 'overview'
     connectedViewRef.current = null
     if (initialView === 'review') setView('review')
@@ -271,6 +282,7 @@ function App() {
 
   function disconnect(message = '') {
     sessionEpoch.current += 1
+    mountedRef.current = false
     viewRequest.current += 1
     visualAbort.current?.abort()
     sessionAbort.current?.abort()
@@ -290,14 +302,19 @@ function App() {
 
   async function openView(next: View, updateRoute = true, compete = true) {
     if (!client) return
+    // 初始化补数：若用户在此期间已经导航到别处，直接放弃，避免把视图覆盖回去。
     if (updateRoute && window.location.hash !== VIEW_ROUTES[next]) {
       window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES[next]}`)
     }
     setView(next)
+    if (compete) userNavigatedRef.current = true
     setNotice(null)
-    visualAbort.current?.abort()
-    // compete=false 表示这是初始化补数，不应该作废用户同时发起的其他请求。
-    if (compete) viewRequest.current += 1
+    // compete=false 是初始化补数：既不作废用户正在进行的请求，也不抢占它的
+    // AbortController，否则用户点击导航后视图会停在加载态。
+    if (compete) {
+      visualAbort.current?.abort()
+      viewRequest.current += 1
+    }
     setVisualLoading(null)
     if (next === 'review') { void loadCandidates(); return }
     if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections') return
@@ -451,8 +468,10 @@ function App() {
   if (firstRun && client) return <FirstRunWizard
     client={client}
     vaultName={wizardVaultName}
-    onStartProfile={() => { setFirstRun(false); void openView('onboarding') }}
-    onSkip={() => { setFirstRun(false); void openView('overview') }}
+    onFinish={(startProfile) => {
+      setFirstRun(false)
+      void openView(startProfile ? 'onboarding' : 'overview')
+    }}
   />
 
   const navigationGroups: { title: string; items: { label: string; view?: View; icon: typeof House }[] }[] = [

@@ -4,25 +4,27 @@ import type { ApiClient } from './api'
 import { ErrorState } from './components/StateBlocks'
 
 /**
- * 首次启动向导（产品流程阶段一）。
+ * 首次启动向导。
  *
- * 设计要点：
- * - 用户第一次打开时不应面对十一个功能菜单，而是一个清晰的初始化向导。
- * - Obsidian 是可选项，不是必须安装的前置条件。
- * - 页面只显示 Vault 的显示名，绝不显示私人文件系统路径。
+ * 流程（四步）：
+ * 0. 空容器前导页：先让用户看到「容器」的样子——侧边栏只有概览，主区域是空状态。
+ * 1. 创建/连接个人空间。
+ * 2. 选择使用方式（Obsidian 是可选项，不是必装前置条件）。
+ * 3. 开始建立个人档案（对话式建档）。
+ *
+ * 完成后写入 Vault 的 90 System/state.json，之后不再进入向导。
  */
 
 type Props = {
   client: ApiClient
   vaultName: string
-  onStartProfile: () => void
-  onSkip: () => void
+  onFinish: (startProfile: boolean) => void
 }
 
-type Step = 'space' | 'usage' | 'profile'
+type Step = 'landing' | 'space' | 'usage' | 'profile'
 
-export default function FirstRunWizard({ client, vaultName, onStartProfile, onSkip }: Props) {
-  const [step, setStep] = useState<Step>('space')
+export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
+  const [step, setStep] = useState<Step>('landing')
   const [usage, setUsage] = useState<'web' | 'obsidian'>('web')
   const [path, setPath] = useState('')
   const [busy, setBusy] = useState(false)
@@ -51,6 +53,33 @@ export default function FirstRunWizard({ client, vaultName, onStartProfile, onSk
     } finally {
       setBusy(false)
     }
+  }
+
+  async function finish(startProfile: boolean) {
+    try {
+      await client.markInitialized()
+    } catch {
+      // 标记失败不阻断流程：下次启动仍会显示向导，不影响使用。
+    }
+    onFinish(startProfile)
+  }
+
+  // 步骤 0：空容器前导页。
+  if (step === 'landing') {
+    return <main className="wizard-landing" aria-label="初始化前导页">
+      <aside className="landing-sidebar">
+        <div className="brand"><span className="brand-mark"><Sparkle size={22} weight="duotone" /></span><div><strong>Personal AI Profile</strong><small>INTELLIGENCE LIBRARY</small></div></div>
+        <nav><button className="active"><Sparkle size={20} /><span>概览</span></button></nav>
+      </aside>
+      <section className="landing-stage">
+        <div className="landing-empty">
+          <Sparkle size={30} />
+          <h1>暂无已验证的内容</h1>
+          <p>初始化后即可建立自己的个人上下文空间。</p>
+          <button className="primary-action" onClick={() => setStep('space')}>开始初始化 <ArrowRight size={17} /></button>
+        </div>
+      </section>
+    </main>
   }
 
   return <main className="wizard" aria-label="首次启动向导">
@@ -99,7 +128,7 @@ export default function FirstRunWizard({ client, vaultName, onStartProfile, onSk
             <button className="secondary-action" onClick={() => void run('connect')} disabled={busy}>{busy ? '正在连接…' : '连接'}</button>
           </article>
         </div>
-        <div className="wizard-actions"><button className="primary-action" onClick={() => setStep('usage')}>继续使用当前空间 <ArrowRight size={17} /></button><button className="text-button" onClick={onSkip}>跳过，先看看</button></div>
+        <div className="wizard-actions"><button className="primary-action" onClick={() => setStep('usage')}>继续使用当前空间 <ArrowRight size={17} /></button><button className="text-button" onClick={() => void finish(false)}>跳过，先看看</button></div>
       </div>}
 
       {step === 'usage' && <div className="wizard-step">
@@ -122,13 +151,13 @@ export default function FirstRunWizard({ client, vaultName, onStartProfile, onSk
 
       {step === 'profile' && <div className="wizard-step">
         <div className="wizard-step-head"><p className="eyebrow">STEP 3 / BUILD YOUR PROFILE</p><h2>开始建立个人档案</h2></div>
-        <button className="wizard-start" onClick={onStartProfile}>
+        <button className="wizard-start" onClick={() => void finish(true)}>
           <span className="wizard-start-icon"><Sparkle size={22} weight="duotone" /></span>
           <span><strong>开始了解我</strong><small>通过轻量对话逐步建立个人信息。每一条回答都会先成为候选记忆，由你确认后才进入正式档案。</small></span>
           <ArrowRight size={20} />
         </button>
         {usage === 'obsidian' && <p className="wizard-hint">想用 Obsidian 的话，在设置里用「备份与恢复」查看 Vault 位置，再用 Obsidian 打开同一个文件夹即可。</p>}
-        <div className="wizard-actions"><button className="primary-action" onClick={onStartProfile}>开始了解我 <ArrowRight size={17} /></button><button className="text-button" onClick={() => setStep('usage')}>上一步</button></div>
+        <div className="wizard-actions"><button className="primary-action" onClick={() => void finish(true)}>开始了解我 <ArrowRight size={17} /></button><button className="text-button" onClick={() => setStep('usage')}>上一步</button></div>
       </div>}
     </section>
   </main>

@@ -24,6 +24,7 @@ from core.access import extract_summary
 from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
 from core import monthly_reflection
+from core import product_state
 from core import security
 from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
 from core import growth
@@ -394,7 +395,14 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
                 "growth": {"latestMonth": latest_month},
                 "pending": memory["pendingReview"],
                 "vault": "ready",
+                "initialized": product_state.is_initialized(root),
             })
+
+    @app.post("/api/v1/initialized", dependencies=[auth])
+    def mark_initialized() -> dict[str, Any]:
+        with profile.vault_lock(root):
+            product_state.mark_initialized(root)
+        return envelope({"initialized": True})
 
     @app.get("/api/v1/backups", dependencies=[auth])
     def backups() -> dict[str, Any]:

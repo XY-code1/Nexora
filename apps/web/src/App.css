@@ -250,3 +250,19 @@ label{display:block;font-weight:650;margin-bottom:8px}textarea,input,select{widt
 .nav-group-title{margin:0 0 4px;padding:0 12px;color:#5d708a;font:700 .58rem ui-monospace,monospace;letter-spacing:.14em}
 .sidebar nav{gap:0}
 .sidebar nav button svg{width:20px;height:20px}
+
+/* 向导步骤 0：空容器前导页——先让用户看到「容器」的样子。 */
+.wizard-landing{display:grid;grid-template-columns:var(--sidebar-width) minmax(0,1fr);height:100dvh;background:var(--bg-primary)}
+.landing-sidebar{display:flex;flex-direction:column;gap:18px;padding:22px 14px;border-right:1px solid var(--border-subtle);background:#0b1322}
+.landing-sidebar .brand{display:flex;align-items:center;gap:12px;padding:4px 6px}
+.landing-sidebar .brand strong{display:block;font-size:.9rem}
+.landing-sidebar .brand small{display:block;margin-top:3px;color:#6f89aa;font:700 .55rem ui-monospace,monospace;letter-spacing:.12em}
+.landing-sidebar nav{display:grid;gap:5px}
+.landing-sidebar nav button{display:flex;align-items:center;gap:9px;width:100%;padding:10px 12px;color:var(--text-primary);text-align:left;border:1px solid rgba(39,191,255,.34);border-radius:10px;background:#13283f;box-shadow:inset 3px 0 var(--color-cyan)}
+.landing-sidebar nav button svg{color:var(--color-cyan)}
+.landing-stage{display:grid;place-items:center;padding:40px}
+.landing-empty{display:grid;justify-items:center;gap:12px;max-width:420px;padding:48px 36px;text-align:center;color:var(--text-secondary);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);background:var(--bg-secondary)}
+.landing-empty svg{color:var(--color-cyan)}
+.landing-empty h1{margin:6px 0 0;color:var(--text-primary);font-size:1.35rem;letter-spacing:-.02em}
+.landing-empty p{margin:0 0 14px;line-height:1.7}
+@media(max-width:840px){.wizard-landing{grid-template-columns:1fr}.landing-sidebar{display:none}}

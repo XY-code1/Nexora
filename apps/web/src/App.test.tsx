@@ -1,8 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
+// 每个测试后卸载上一棵组件树：否则残留实例会在后续测试里继续响应未完成的
+// promise，造成状态污染与随机的 act(...) 警告（同一输入下时过时不过）。
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
   window.history.replaceState(null, '', '/')
 })
@@ -52,6 +55,12 @@ function mockApi(routes: Record<string, unknown>) {
     const value = routes[key]
     const index = (seen[key] = (seen[key] ?? 0) + 1) - 1
     const body = typeof value === 'function' ? (value as (index: number) => unknown)(index) : value
+    // 值本身是一个 Promise 时直接返回它，用于构造「延迟解析」的请求。
+    if (body instanceof Promise) return body as Promise<Response>
+    // 需要模拟失败响应时，把值写成 { error, status }。
+    if (body && typeof body === 'object' && 'error' in body && 'status' in body) {
+      return response({ error: (body as { error: unknown }).error, requestId: 'mock-error' }, (body as { status: number }).status)
+    }
     return response({ data: body, meta: { requestId: 'mock' } })
   })
   return { spy, calls }
@@ -99,27 +108,33 @@ describe('review workspace', () => {
   })
 
   it('sends a rejection reason and supports disconnect', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: { id: memory.id, action: 'reject', status: 'completed' }, meta: { requestId: '2' } }))
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '3' } }))
-      .mockImplementationOnce(() => response({ data: { ...stats, candidateMemories: 0, pendingReview: 0 }, meta: { requestId: 'stats-2' } }))
+    let rejected = false
+    const { spy } = mockApi({
+      '/api/v1/memories': () => (rejected ? [] : [memory]),
+      '/api/v1/memory-stats': (index: number) => (index === 0 ? stats : { ...stats, candidateMemories: 0, pendingReview: 0 }),
+      '/api/v1/memories/mem-20261102-12345678/reject': () => {
+        rejected = true
+        return { id: memory.id, action: 'reject', status: 'completed' }
+      },
+    })
     render(<App />)
     await connect()
     fireEvent.change(screen.getByLabelText('拒绝原因（可选）'), { target: { value: '不是长期信息' } })
     fireEvent.click(screen.getByRole('button', { name: 'Reject Memory' }))
     await screen.findByText('候选记忆已拒绝。')
-    expect(fetchMock.mock.calls[2]?.[1]?.body).toContain('不是长期信息')
+    // 拒绝原因必须随请求体提交（按端点路由后不再依赖调用顺序）。
+    const rejectCall = spy.mock.calls.find(([, init]) => String(init?.method ?? 'GET').toUpperCase() === 'POST')
+    expect(JSON.stringify(rejectCall?.[1]?.body)).toContain('不是长期信息')
     fireEvent.click(screen.getByRole('button', { name: '断开连接' }))
     expect(screen.getByRole('button', { name: '连接审核空间' })).toBeInTheDocument()
   })
 
   it('shows a refreshable conflict message for 409', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ error: { code: 'REVISION_CONFLICT', message: 'stale', details: {} }, requestId: '2' }, 409))
+    mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/memories/mem-20261102-12345678/confirm': { error: { code: 'REVISION_CONFLICT', message: 'stale', details: {} }, status: 409 },
+    })
 
     render(<App />)
     await connect()
@@ -129,14 +144,15 @@ describe('review workspace', () => {
   })
 
   it('consumes a launcher token from the fragment and closes the local service', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: { profile: { access: 'summary-only', protected: false, sections: [] }, memory: stats, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 1, vault: 'ready' }, meta: { requestId: 'overview' } }))
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: 'timeline' } }))
-      .mockImplementationOnce(() => response({ data: { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false }, meta: { requestId: 'vault' } }))
-      .mockImplementationOnce(() => response({ data: { currentRevision: 'r1', backups: [] }, meta: { requestId: 'backups' } }))
-      .mockImplementationOnce(() => response({ data: { status: 'shutting-down' }, meta: { requestId: '2' } }))
+    const { calls } = mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/overview': { profile: { access: 'summary-only', protected: false, sections: [] }, memory: stats, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 1, vault: 'ready', initialized: true },
+      '/api/v1/visualization/timeline': [],
+      '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/backups': { currentRevision: 'r1', backups: [] },
+      '/api/v1/shutdown': { status: 'shutting-down' },
+    })
     window.history.replaceState(null, '', '/#token=launcher-token')
 
     render(<App />)
@@ -144,7 +160,7 @@ describe('review workspace', () => {
     expect(window.location.hash).toBe('#/overview')
     fireEvent.click(screen.getByRole('button', { name: '关闭服务' }))
     await screen.findByRole('heading', { name: '本地服务已关闭' })
-    expect(fetchMock.mock.calls[6]?.[0]).toBe('/api/v1/shutdown')
+    expect(calls).toContain('/api/v1/shutdown')
   })
 
   it('shows privacy-trimmed visualization pages on demand', async () => {
@@ -197,14 +213,15 @@ describe('review workspace', () => {
   })
 
   it('renders the Human 3.0 growth dashboard', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: { disclaimer: '仅用于自我反思。', dimensions: [] }, meta: { requestId: 'g1' } }))
-      .mockImplementationOnce(() => response({ data: { currentMonth: '2026-11', assessments: [] }, meta: { requestId: 'g2' } }))
-      .mockImplementationOnce(() => response({ data: { disclaimer: '仅用于自我反思。', months: [] }, meta: { requestId: 'g3' } }))
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: 'g4' } }))
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: 'g5' } }))
+    mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/growth/dimensions': { disclaimer: '仅用于自我反思。', dimensions: [] },
+      '/api/v1/growth/assessments': { currentMonth: '2026-11', assessments: [] },
+      '/api/v1/growth/timeline': { disclaimer: '仅用于自我反思。', months: [] },
+      '/api/v1/growth/associations': [],
+      '/api/v1/growth/goals': [],
+    })
     render(<App />)
     await connect()
     fireEvent.click(screen.getByRole('button', { name: '成长仪表盘' }))
@@ -212,13 +229,14 @@ describe('review workspace', () => {
   })
 
   it('renders the overview page from the navigation', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: { profile: { access: 'summary-only', protected: false, sections: [] }, memory: stats, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready' }, meta: { requestId: 'overview' } }))
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: 'timeline' } }))
-      .mockImplementationOnce(() => response({ data: { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false }, meta: { requestId: 'vault' } }))
-      .mockImplementationOnce(() => response({ data: { currentRevision: 'r1', backups: [] }, meta: { requestId: 'backups' } }))
+    mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/overview': { profile: { access: 'summary-only', protected: false, sections: [] }, memory: stats, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready', initialized: true },
+      '/api/v1/visualization/timeline': [],
+      '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/backups': { currentRevision: 'r1', backups: [] },
+    })
     render(<App />)
     await connect()
     fireEvent.click(screen.getByRole('button', { name: '概览' }))
@@ -248,15 +266,15 @@ describe('review workspace', () => {
   it('does not render a stale visualization response after reconnecting', async () => {
     let resolveOld!: (value: Response) => void
     const oldPrivacy = new Promise<Response>((resolve) => { resolveOld = resolve })
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [memory], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: stats, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => oldPrivacy)
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: 'security-clients' } }))
-      .mockImplementationOnce(() => response({ data: emptyAudit, meta: { requestId: 'security-audit' } }))
-      .mockImplementationOnce(() => response({ data: emptyAudit, meta: { requestId: 'security-lifecycle' } }))
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '3' } }))
-      .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-2' } }))
+    mockApi({
+      // 首次连接有候选记忆；断开重连后列表为空，用于验证旧请求结果不会泄漏。
+      '/api/v1/memories': (index: number) => (index === 0 ? [memory] : []),
+      '/api/v1/memory-stats': (index: number) => (index === 0 ? stats : { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }),
+      // 首次进入隐私审计的请求被挂起，断开连接后若仍被渲染即为泄漏。
+      '/api/v1/security/overview': () => oldPrivacy,
+      '/api/v1/security/clients': [],
+      '/api/v1/security/audit-events': emptyAudit,
+    })
     render(<App />)
     await connect()
     fireEvent.click(screen.getByRole('button', { name: '隐私审计' }))
@@ -277,11 +295,12 @@ describe('review workspace', () => {
         { key: 'communication', title: '沟通方式', prompt: '希望如何沟通？', status: 'available' },
       ], nextTopic: 'identity', completed: false, notice: '回答只会保存为候选记忆。',
     }
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: usedStats, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: onboarding, meta: { requestId: '2' } }))
-      .mockImplementationOnce(() => response({ data: { candidateId: 'mem-onboarding', state: { ...onboarding, topics: [{ ...onboarding.topics[0], status: 'pending' }, onboarding.topics[1]], nextTopic: 'communication' } }, meta: { requestId: '3' } }))
+    mockApi({
+      '/api/v1/memories': [],
+      '/api/v1/memory-stats': usedStats,
+      '/api/v1/onboarding': onboarding,
+      '/api/v1/onboarding/responses': { candidateId: 'mem-onboarding', state: { ...onboarding, topics: [{ ...onboarding.topics[0], status: 'pending' }, onboarding.topics[1]], nextTopic: 'communication' } },
+    })
     render(<App />)
     await connect('暂时没有候选记忆')
     fireEvent.click(screen.getByRole('button', { name: '对话式引导' }))
@@ -298,11 +317,11 @@ describe('review workspace', () => {
       id: 'mr-2026-11-1234abcd', month: '2026-11', status: 'draft', dimensions: { mind: '', body: '', spirit: '', vocation: '' },
       events: [], summary: '', summarySource: '', goals: [], completedDimensions: 0, readyToConfirm: false, revision: 'a'.repeat(64), updated: '2026-11-03T10:00:00Z',
     }
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: usedStats, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: { currentMonth: '2026-11', reflections: [] }, meta: { requestId: '2' } }))
-      .mockImplementationOnce(() => response({ data: reflection, meta: { requestId: '3' } }))
+    mockApi({
+      '/api/v1/memories': [],
+      '/api/v1/memory-stats': usedStats,
+      '/api/v1/monthly-reflections': (index: number) => (index === 0 ? { currentMonth: '2026-11', reflections: [] } : reflection),
+    })
     render(<App />)
     await connect('暂时没有候选记忆')
     fireEvent.click(screen.getByRole('button', { name: '月度复盘' }))
@@ -317,10 +336,11 @@ describe('review workspace', () => {
       id: 'mr-2026-11-1234abcd', month: '2026-11', status: 'draft', dimensions: { mind: '事实', body: '', spirit: '', vocation: '' },
       events: [], summary: '', summarySource: '', goals: [], completedDimensions: 1, readyToConfirm: false, revision: 'a'.repeat(64), updated: '2026-11-03T10:00:00Z',
     }
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: usedStats, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: { currentMonth: '2026-11', reflections: [reflection] }, meta: { requestId: '2' } }))
+    mockApi({
+      '/api/v1/memories': [],
+      '/api/v1/memory-stats': usedStats,
+      '/api/v1/monthly-reflections': { currentMonth: '2026-11', reflections: [reflection] },
+    })
     render(<App />)
     await connect('暂时没有候选记忆')
     fireEvent.click(screen.getByRole('button', { name: '月度复盘' }))
@@ -330,29 +350,37 @@ describe('review workspace', () => {
   })
 
   it('shows the first-run wizard instead of the full menu for an untouched vault', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ data: [], meta: { requestId: '1' } }))
-      .mockImplementationOnce(() => response({ data: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, meta: { requestId: 'stats-1' } }))
-      .mockImplementationOnce(() => response({ data: { profile: { access: 'allowed', protected: false, sections: [] }, memory: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready' }, meta: { requestId: 'overview' } }))
-      .mockImplementationOnce(() => response({ data: { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false }, meta: { requestId: 'vault' } }))
+    const { spy, calls } = mockApi({
+      '/api/v1/memories': [],
+      '/api/v1/memory-stats': { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 },
+      '/api/v1/overview': { profile: { access: 'allowed', protected: false, sections: [] }, memory: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready', initialized: false },
+      '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/initialized': { initialized: true },
+    })
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
 
-    // 阶段一：初始化向导，而不是十一个功能菜单。
-    await screen.findByRole('heading', { name: '欢迎来到你的个人智能中枢' })
+    // 步骤 0：空容器前导页——先看到「容器」的样子，而不是完整功能菜单。
+    await screen.findByRole('heading', { name: '暂无已验证的内容' })
     expect(screen.queryByRole('button', { name: '成长仪表盘' })).not.toBeInTheDocument()
-    expect(screen.getByText('创建你的个人空间')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /开始初始化/ }))
 
-    // 第一步 → 第二步：Obsidian 是可选项，不是必装前置条件。
+    // 步骤 1：创建 / 连接个人空间。
+    await screen.findByRole('heading', { name: '欢迎来到你的个人智能中枢' })
+    expect(screen.getByText('创建你的个人空间')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /继续使用当前空间/ }))
+
+    // 步骤 2：Obsidian 是可选项，不是必装前置条件。
     await screen.findByRole('heading', { name: '选择使用方式' })
     expect(screen.getByText('这里的 Obsidian 只是一个可选开关，而不是必须安装的前置条件。')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: /同时使用 Obsidian/ }))
 
-    // 第二步 → 第三步：开始建立个人档案。
+    // 步骤 3：开始建立个人档案，完成后写入初始化标记。
     fireEvent.click(screen.getByRole('button', { name: /下一步/ }))
     await screen.findByRole('heading', { name: '开始建立个人档案' })
-    expect(screen.getAllByRole('button', { name: /开始了解我/ }).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getAllByRole('button', { name: /开始了解我/ })[0])
+    expect(calls).toContain('/api/v1/initialized')
+    expect(spy).toHaveBeenCalled()
   })
 })

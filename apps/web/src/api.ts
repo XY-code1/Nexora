@@ -54,7 +54,7 @@ export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
 export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean }
 export type RegisteredVault = { vaultId: string; displayName: string; available: boolean; lastOpenedAt: string }
 export type GitStatus = { configured?: boolean; message?: string; branch?: string; head?: string; upstream?: string | null; ahead?: number; behind?: number; dirty: string[]; unmerged: string[] }
-export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string }
+export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string; initialized: boolean }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
 type ErrorEnvelope = { error: { code: string; message: string; details: unknown }; requestId: string }
@@ -93,6 +93,7 @@ export class ApiClient {
   listCandidates(signal?: AbortSignal) { return this.request<Memory[]>('/api/v1/memories?status=candidate', { signal }) }
   memoryStats(signal?: AbortSignal) { return this.request<MemoryStats>('/api/v1/memory-stats', { signal }) }
   overview(signal?: AbortSignal) { return this.request<OverviewSnapshot>('/api/v1/overview', { signal }) }
+  markInitialized(signal?: AbortSignal) { return this.request<{ initialized: boolean }>('/api/v1/initialized', { method: 'POST', signal }) }
   profileOverview(signal?: AbortSignal) { return this.request<ProfileOverview>('/api/v1/visualization/profile', { signal }) }
   timeline(signal?: AbortSignal) { return this.request<TimelineItem[]>('/api/v1/visualization/timeline', { signal }) }
   privacyAudit(signal?: AbortSignal) { return this.request<PrivacyAudit>('/api/v1/visualization/privacy', { signal }) }
