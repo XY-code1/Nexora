@@ -1,144 +1,134 @@
+<div align="center">
+
 # Personal AI Profile
 
-> 一个以自然对话为入口、以用户确认作为记忆边界、通过 MCP 在不同 AI 之间共享的开源个人档案框架。
+### Your Personal Intelligence Layer
 
-## 为什么做这个项目
+**A local-first, model-agnostic workspace for personal context, confirmed memory, reflection, and permission-controlled AI access.**
 
-很多人同时使用 ChatGPT、Codex、Claude、Cursor 等 AI，但每个 AI 都彼此隔离：
+[![CI](https://github.com/XY-code1/personal-ai-profile/actions/workflows/test.yml/badge.svg)](https://github.com/XY-code1/personal-ai-profile/actions/workflows/test.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/XY-code1/personal-ai-profile?display_name=tag&sort=semver)](https://github.com/XY-code1/personal-ai-profile/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-27BFFF.svg)](LICENSE)
+[![Local First](https://img.shields.io/badge/architecture-local--first-20D9E8.svg)](#architecture)
+[![MCP](https://img.shields.io/badge/MCP-permission--controlled-936BFF.svg)](#mcp-gateway)
 
-- 更换 AI 后，需要重新介绍自己的背景、偏好和项目；
-- 项目进度、重要决定和长期目标无法自然延续；
-- 平台内置记忆不透明，用户很难知道 AI 保存了什么；
-- 个人数据容易被锁在某个平台，无法迁移和审计；
-- 传统表单和手工维护 Markdown 又像在完成任务，体验不够自然。
+[English](#overview) · [中文](#中文概览) · [Quick Start](#quick-start) · [Security](#privacy-and-security) · [Documentation](#documentation)
 
-Personal AI Profile 希望提供另一种方式：
+<img src="apps/web/src/assets/onboarding-intelligence-orb.webp" alt="Personal AI Profile intelligence orb" width="860" />
 
-> 用户只需要正常交流；AI 在对话中发现可能有长期价值的信息，先提出候选记忆，经用户确认后写入由用户掌控的私人档案。其他 AI 再通过统一接口按需读取同一份已确认资料。
+</div>
 
-## 它是什么
+---
 
-这个项目首先是一套**个人档案系统**，Agent 是交互入口，模型是可替换的分析工具。
+## Overview
 
-```text
-自然对话负责体验
-私人档案负责记忆
-Obsidian负责组织与查看
-MCP负责跨AI共享
-Human 3.0负责周期性反思
-边界系统负责信任
-```
+Personal AI Profile creates a user-owned context layer that can be shared across Codex, Claude, Cursor, and other MCP-compatible AI clients.
 
-它不是一个新的大模型，也不是自动收集所有聊天内容的监控工具。
-
-## 核心原则
-
-1. **用户拥有档案**：资料使用普通 Markdown 保存，不绑定任何 AI 厂商。
-2. **本地优先**：本地 Obsidian Vault 是主要工作副本，GitHub Private Repository 只负责私有同步和版本历史。
-3. **默认不保存完整聊天**：普通对话只作为临时上下文。
-4. **AI 只能提出候选记忆**：未经用户确认，不得进入正式长期档案。
-5. **最小上下文**：每次只向 AI 提供当前任务需要的信息。
-6. **跨 AI 共享的是事实，不是完整会话**：不同 AI 读取同一份已确认档案。
-7. **敏感信息不进入 Git**：密码、Token、验证码、私钥、证件和银行卡资料禁止保存。
-8. **用户可以追溯和撤回**：每条记忆应当可以查看来源、修改、替代、拒绝和删除。
-
-## 产品体验
-
-用户不需要先填写一张很长的个人资料表，而是在日常交流中逐渐建立档案。
+Your private data remains in a local Markdown Vault. AI clients may read only what you explicitly authorize. They can propose candidate memories, but they cannot silently convert a conversation into permanent memory.
 
 ```text
-用户：我更喜欢回答先给结论，再解释原因。
-
-AI：这看起来是一项长期沟通偏好，需要我把它作为候选记忆保存吗？
-
-用户：记住。
+Conversation
+    ↓
+Candidate memory
+    ↓
+Human review: confirm / edit / reject
+    ↓
+Confirmed local memory
+    ↓
+Minimum authorized context for an AI client
 ```
 
-后台流程：
+### Why it exists
+
+Personal context is fragmented across AI products:
+
+- every assistant needs the same background and preferences;
+- decisions, goals, and project context do not carry across tools;
+- platform memory is difficult to inspect, correct, or migrate;
+- copying entire conversations creates unnecessary privacy exposure;
+- maintaining a large profile form by hand feels like work.
+
+Personal AI Profile separates the **experience of conversation** from the **authority of memory**.
+
+## Product
+
+### First-run experience
+
+Setup happens before the daily workspace:
+
+1. Create or connect a private Vault.
+2. Choose Web-only use or optional Obsidian editing.
+3. Complete a lightweight local conversation.
+4. Explicitly submit selected answers as candidate memories.
+5. Review candidates before anything enters the formal profile.
+
+Conversational onboarding is intentionally not duplicated in the permanent workspace navigation.
+
+### Daily workspace
+
+| Surface | Purpose |
+| --- | --- |
+| **Overview** | Profile status, recent memory activity, recommended next action, AI authorization, and Vault health |
+| **Memory Review** | Inspect, edit, confirm, or reject candidate memories |
+| **Personal Profile** | View confirmed and currently permitted long-term information |
+| **Monthly Reflection** | Local-first Mind, Body, Spirit, and Vocation reflection |
+| **Human 3.0 / Growth** | User-authored self-assessment, goals, associations, and timeline |
+| **Privacy Audit** | Client permissions, access events, denials, and lifecycle evidence |
+| **Backup & Recovery** | Verified snapshots, safe restore, Vault switching, and optional Git operations |
+| **AI Connections** | Register, authorize, rotate, revoke, and configure individual AI clients |
+
+Human 3.0 is a reflection framework. It does not provide medical or psychological diagnosis.
+
+## Core principles
+
+1. **User-owned data** — portable Markdown instead of a vendor-locked profile.
+2. **Local-first** — the Vault remains the single source of truth.
+3. **Human confirmation** — unconfirmed content never becomes formal memory.
+4. **Minimum disclosure** — each client receives only task-relevant context.
+5. **Explicit permissions** — every AI client has its own identity, credential, and scopes.
+6. **No raw-chat archive by default** — submitted candidate facts are stored, not complete conversations.
+7. **Traceable lifecycle** — memories can be reviewed, edited, rejected, superseded, archived, and traced.
+8. **Fail closed** — unsafe paths, invalid credentials, mismatched Vault identities, and denied access are rejected.
+
+## Architecture
 
 ```text
-自然对话
-   ↓
-识别可能有长期价值的信息
-   ↓
-生成候选记忆
-   ↓
-用户确认 / 修改 / 拒绝
-   ↓
-写入私人档案
-   ↓
-其他AI按需检索
+React + TypeScript + Vite Web
+              │
+              │ authenticated JSON API on 127.0.0.1
+              ▼
+        FastAPI Local Service
+              │
+              ▼
+Core / Domain / Security / Storage
+              │
+              ▼
+      Local Markdown Vault
+       ├── optional Obsidian editing
+       ├── verified local backups
+       ├── optional private Git history
+       └── permission-controlled MCP Gateway
+                    │
+                    └── Codex / Claude / Cursor / other clients
 ```
 
-用户还可以直接说：
+### Components
 
-```text
-记住这件事
-这只是临时讨论，不要保存
-把它加入当前项目
-你现在对我了解多少
-这条信息是怎么得到的
-忘掉关于某件事的记录
-开始本月复盘
-```
+- **Web workspace** — primary user interface.
+- **Markdown Vault** — single source of truth.
+- **Python Core** — lifecycle, storage, revision, locking, backup, and security rules.
+- **FastAPI local service** — authenticated loopback API for the Web UI.
+- **MCP Gateway** — bounded, permission-controlled AI access.
+- **Obsidian** — optional editor for the same Vault; never a requirement.
+- **Git/GitHub** — optional private backup configured by the user.
 
-## 信息从哪里来
+The public framework repository contains code, templates, schemas, and documentation. A personal Vault must live outside this repository and must never share its public Git history.
 
-系统支持三类信息来源，但它们不能被混为一谈：
-
-1. **自然对话**：获取目标、偏好、想法、感受以及决定背后的原因；
-2. **用户主动记录**：Obsidian 笔记、语音、图片、网页、文件和快速灵感；
-3. **用户授权的数据源**：未来可以接入 GitHub、日历、任务清单和项目文件，用于观察客观活动。
-
-数据状态必须区分：
-
-```text
-Observed Activity    系统观察到的活动
-Candidate Memory     AI提出、等待确认的记忆
-Confirmed Memory     用户确认的正式长期记忆
-```
-
-没有对话时，系统可以整理已授权的客观活动并准备问题；涉及感受、动机、价值观和身份判断时，必须询问用户。
-
-## 整体架构
-
-```text
-                         用户
-                          ↓
-                Codex / Claude / Cursor
-                          ↓ MCP
-               Personal Profile Gateway
-          检索 / 隐私过滤 / 候选记忆 / 审计
-                          ↓
-                 Private Obsidian Vault
-                          ↕
-              GitHub Private Repository
-                          ↓
-          Dashboard / 项目 / 记忆 / Human 3.0
-```
-
-公开仓库只保存程序、模板、Schema、Prompt 和文档。真实档案必须位于用户自己的私人仓库中。
-
-## 公开框架与私人档案
-
-### 公开框架仓库
-
-包含档案标准、Obsidian空白模板、本地MCP Gateway、隐私规则、复盘模板、初始化与验证工具、虚构示例和测试。
-
-### 私人档案仓库
-
-包含个人背景、偏好、目标、项目、已确认记忆、重要决定和周期复盘。
-
-两个仓库完全分离，不能用公开仓库的分支保存私人资料，也不能共享 Git 历史。
-
-## Obsidian Vault结构
+## Vault model
 
 ```text
 my-ai-profile/
 ├─ 00 Dashboard/
-│  ├─ Home.md
-│  ├─ Current Context.md
-│  └─ Pending Memories.md
 ├─ 10 Profile/
 │  └─ Profile.md
 ├─ 20 Projects/
@@ -147,32 +137,67 @@ my-ai-profile/
 ├─ 30 Memory/
 │  ├─ Inbox/
 │  ├─ Confirmed/
-│  └─ Decisions/
+│  ├─ Rejected/
+│  └─ Archived/
 ├─ 40 Reviews/
-│  └─ Human3/
 ├─ 90 System/
-│  └─ Indexes/
+│  └─ vault.json
 ├─ AGENTS.md
 └─ profile.config.yml
 ```
 
-Obsidian 是查看、编辑、双向链接和可视化的界面；Markdown 才是可迁移的数据格式。
+Each Vault receives a random stable identity. The Web service and MCP Gateway can verify that they use the same Vault without exposing its private path in the interface.
 
-## 跨AI共享
-
-本地 MCP Gateway 为不同 AI 提供统一工具：
+### Memory lifecycle
 
 ```text
-get_profile             读取稳定个人档案
-get_current_context     读取当前目标与项目
-search_memory           搜索允许访问的确认记忆
-list_projects           读取活跃项目
-propose_memory          创建候选记忆
-list_pending            查看待确认内容
-get_human3_summary      读取最近一次确认的复盘
+candidate → confirmed
+candidate → rejected
+confirmed → superseded / archived
 ```
 
-MCP 不向 Agent 提供任意文件写入、确认、删除或公开能力。高风险操作应保留给可信的本地界面。
+### AI access levels
+
+| Level | Meaning |
+| --- | --- |
+| `allowed` | Full permitted content |
+| `summary-only` | Confirmed summary only |
+| `local-only` | Local processing only; never returned through MCP |
+| `denied` | No model access |
+
+Example record:
+
+```yaml
+---
+id: mem-20261107-001
+type: preference
+status: confirmed
+created: 2026-11-07
+source: conversation
+visibility: private
+ai_access: summary-only
+confidence: explicit
+---
+```
+
+## MCP Gateway
+
+The local stdio gateway exposes bounded tools:
+
+```text
+get_vault_identity
+get_profile
+get_current_context
+search_memory
+list_projects
+propose_memory
+list_pending
+get_human3_summary
+```
+
+MCP clients cannot confirm memories, delete formal records, publish content, or write arbitrary Vault files.
+
+Each client is created in **AI Connections / Security Center** and receives an independent credential with minimal scopes. Generated host configuration includes the expected Vault identity; a mismatch fails closed.
 
 ```json
 {
@@ -182,6 +207,7 @@ MCP 不向 Agent 提供任意文件写入、确认、删除或公开能力。高
       "args": ["ABSOLUTE_PATH_TO_FRAMEWORK/mcp_server.py"],
       "env": {
         "PROFILE_VAULT": "ABSOLUTE_PATH_TO_PRIVATE_VAULT",
+        "PROFILE_VAULT_ID": "vault_random_identity",
         "PROFILE_AGENT_ID": "client-issued-by-security-center",
         "PROFILE_CLIENT_TOKEN": "one-time-issued-credential"
       }
@@ -190,375 +216,239 @@ MCP 不向 Agent 提供任意文件写入、确认、删除或公开能力。高
 }
 ```
 
-当前使用本地 `stdio`，不把档案服务暴露到公网。客户端授权、最小权限 Scope、立即撤销和防篡改审计由本地 Security Center 管理。
+See [MCP host connection](docs/MCP_HOST_CONNECTION.md) and [Security Center](docs/SECURITY_CENTER.md).
 
-每个 AI 客户端必须在 Security Center 中显式授权，并配置独立的 `PROFILE_AGENT_ID` 与 `PROFILE_CLIENT_TOKEN`。Gateway 每次调用都读取 Vault 内的持久授权；缺失、失效或已撤销凭据默认拒绝。详见 [`docs/SECURITY_CENTER.md`](docs/SECURITY_CENTER.md)。
+## Privacy and security
 
-Claude Desktop、Cursor 和 VS Code 的绝对路径配置生成方法见 [`docs/MCP_HOST_CONNECTION.md`](docs/MCP_HOST_CONNECTION.md)。生成器不会覆盖 Host 现有配置。
+### Automated operations
 
-## 记忆模型
+The system may:
 
-```yaml
----
-id: mem-20261101-001
-type: preference
-status: confirmed
-created: 2026-11-01
-source: conversation
-visibility: private
-ai_access: summary-only
-confidence: explicit
-related:
-  - project-personal-ai-profile
----
-```
+- read permitted profile summaries;
+- search confirmed and authorized memories;
+- detect duplicate or conflicting candidates;
+- propose candidate memories;
+- generate local reflection drafts;
+- create and verify local backups;
+- build minimum task-specific context.
 
-推荐状态：
+### Human confirmation required
 
-```text
-candidate      AI提出，尚未确认
-confirmed      用户已经确认
-disputed       与现有信息冲突
-superseded     已被新信息替代
-archived       不再活跃但保留历史
-```
+- confirming formal long-term memory;
+- changing stable profile facts;
+- destructive lifecycle actions;
+- confirming a formal reflection;
+- authorizing a client or changing its scopes;
+- sending private content to an external model;
+- publishing or exporting personal information.
 
-访问等级：
+### Never store
 
-```text
-allowed        可以按任务发送给配置的模型
-summary-only   只允许发送确认后的摘要
-local-only     只允许本地模型处理
-denied         禁止任何模型读取
-```
+- passwords, tokens, OTPs, API keys, private keys, or cookies;
+- identity documents or payment-card data;
+- unredacted third-party private information;
+- conversations the user did not choose to preserve.
 
-## Human 3.0复盘
+> A private Git repository is not a password vault. Removing a secret from the working tree does not remove it from Git history.
 
-Human 3.0在这里是一个**可选的对话式自我反思模块**，不是医学或心理诊断。
+Security foundations include loopback-only serving, bearer sessions, trusted-host checks, path isolation, SHA-256 revisions, inter-process locks, transaction journals, secret scanning, hashed client credentials, immediate revocation, and tamper-evident audit records.
 
-它从四个维度帮助用户复盘：
+## Current status
 
-```text
-Mind       心智与认知
-Body       身体与精力
-Spirit     意义、关系与价值观
-Vocation   工作、技能与创造
-```
+### Available
 
-理想体验不是填写十二道固定表单，而是一段自然访谈：
+- [x] React + TypeScript + Vite local Web workspace
+- [x] FastAPI versioned local API
+- [x] Shared Python Core for CLI, API, MCP, and compatibility UI
+- [x] Candidate creation, review, editing, confirmation, and rejection
+- [x] Confirmed profile, timeline, and privacy-safe visualization
+- [x] Monthly Reflection and Human 3.0 local workflows
+- [x] Security Center and AI Connections lifecycle
+- [x] MCP stdio gateway with per-client authorization
+- [x] Stable Vault identity and multi-Vault isolation
+- [x] Web Vault creation, validation, and restart-based switching
+- [x] External-change revision detection for Obsidian and other editors
+- [x] Verified backup, safety snapshot, and transactional restore
+- [x] Conservative Git commit, pull, and push for a preconfigured private repository
+- [x] Windows single-instance launcher and installer pipeline
+- [x] Python, frontend, protocol, security, release-gate, and E2E tests
 
-```text
-近期状态
-→ Agent根据回答追问
-→ 覆盖四个维度
-→ 生成评估草稿和判断依据
-→ 用户修改或确认
-→ 生成未来30天行动计划
-```
+### Known limitations
 
-被动活动数据只能作为观察材料，不能直接推断用户的情绪、动机或发展等级。
+- GitHub OAuth/Device Flow and automatic private-repository creation are not implemented.
+- The user must verify that a configured GitHub remote is private.
+- External editor changes are detected by content revision; there is no permanent filesystem watcher.
+- The project does not capture screens, keyboard input, microphone data, or full browsing history.
+- No cloud account or cloud-hosted personal profile service is included.
 
-## 隐私边界
+## Quick Start
 
-### 可以自动完成
+### Windows
 
-- 读取允许访问的个人摘要；
-- 搜索已确认记忆；
-- 整理授权来源中的客观活动；
-- 检测重复和冲突；
-- 创建候选记忆；
-- 生成复盘草稿；
-- 构建最小AI上下文。
-
-### 必须等待用户
-
-- 确认长期记忆；
-- 修改稳定个人资料；
-- 判断感受、动机和价值观；
-- 确认Human 3.0正式评估；
-- 删除重要记录；
-- 连接新的数据源；
-- 将敏感内容发送给云端模型；
-- 对外公开任何档案内容。
-
-### 永远不应保存
-
-- 密码、Token、验证码、API Key、私钥和Cookie；
-- 身份证件和银行卡资料；
-- 未经脱敏的第三方隐私；
-- 用户没有意愿长期保留的原始聊天。
-
-Private Repository 不等于密码保险箱。秘密一旦进入Git历史，删除当前文件并不能自动清除历史。
-
-## 当前状态
-
-- [x] 公开框架与私人档案分离
-- [x] Obsidian兼容Vault模板
-- [x] 本地MCP Gateway
-- [x] Codex、Claude Code和Cursor配置示例
-- [x] 读取个人摘要和当前上下文
-- [x] 搜索确认记忆
-- [x] 创建候选记忆
-- [x] 查看待确认记忆
-- [x] Human 3.0基础目录和问题模板
-- [x] 基础秘密扫描
-- [x] GitHub Actions冒烟测试
-- [x] Python Core抽取，CLI、MCP和Web入口共用领域逻辑
-- [x] 统一`ai_access`权限策略
-- [x] FastAPI版本化本地API
-- [x] Bearer启动会话、Host白名单和统一错误响应
-- [x] SHA-256 revision乐观并发控制
-- [x] Vault跨进程文件锁
-- [x] 记忆生命周期事务日志与异常恢复
-- [x] API、并发和事务恢复自动化测试
-- [x] React + TypeScript + Vite 本地审核界面
-- [x] 候选记忆的列表、编辑、确认、拒绝与冲突刷新提示
-- [x] 浏览器端到端审核流程测试
-- [x] Windows单实例Launcher、自动端口、浏览器连接与优雅关闭
-- [x] 本地可视化Profile、记忆时间线、隐私审计和Human 3.0趋势
-- [x] 不依赖模型的对话式首次引导与渐进候选记忆收集
-- [x] Human 3.0四维对话式复盘、证据状态、自评、行动计划与确认闭环
-- [x] Git跨设备同步、冲突检测与同步状态展示
-- [x] 公开内容脱敏预览、泄露拦截与白名单导出
-- [x] Windows安装包、升级卸载、条件代码签名与GitHub Release
-
-当前版本提供本地审核界面和一键 Windows 安装包，无需 Python 或 Node 环境。
-
-### 无命令行审核
-
-Windows用户可以直接双击：
+Use the installer from [GitHub Releases](https://github.com/XY-code1/personal-ai-profile/releases) when available, or run:
 
 ```text
 start-review.vbs
 ```
 
-浏览器会打开本地审核界面，用于查看、修改、确认或拒绝候选记忆。服务只监听`127.0.0.1`，不会向局域网或公网开放。出现问题时可运行`start-review.cmd`查看诊断信息。
+The launcher selects a local port, creates a short-lived session, opens the browser, and binds only to `127.0.0.1`.
 
-## 工程进展报告（2026-11-04）
+### Developer setup
 
-### 已完成
+Requirements:
 
-1. **档案与记忆核心**：初始化、验证、候选、编辑、确认、拒绝、遗忘、替代、冲突检测、来源记录和Human 3.0草稿。
-2. **Core分层**：`core/profile.py`成为领域和Vault操作的权威实现，`core/access.py`统一AI读取策略；原`profile.py`保留为兼容CLI。
-3. **跨AI访问**：MCP支持档案、上下文、项目、确认记忆、待审核记忆和Human 3.0摘要；高风险确认、删除和发布能力不向AI开放。
-4. **本地Web界面**：React + TypeScript + Vite界面已上线，支持候选审核、可视化档案、记忆时间线、隐私审计和Human 3.0趋势；旧 review_app.py 保留为兼容入口。
-5. **本地API**：`apps/api`提供`/api/v1`接口，覆盖候选创建、查询、编辑以及confirm、reject、forget、supersede生命周期。
-6. **一致性与恢复**：所有本地入口共用Vault文件锁；修改要求revision；关键多文件操作通过事务日志在异常后回滚。
-7. **安全边界**：API仅监听loopback，使用随机Bearer令牌、Host白名单、输入模型、记录ID寻址、秘密扫描和默认拒绝策略。
-8. **自动化验证**：CLI、MCP协议与权限、完整记忆生命周期、可视化页面、Core契约、API认证、并发冲突、事务恢复和发布门禁均已进入CI。
-9. **渐进式引导**：本地Web按主题逐步提问，只在用户明确提交后创建候选记忆，不保存完整聊天或直接修改Profile。
-10. **Human 3.0复盘**：四维反思草稿、信息充分度、用户自评、摘要、30天行动计划和显式确认已形成闭环，明确保持非诊断边界。
-11. **跨设备同步**：`core/sync.py`提供 sync-status/commit/pull/push，只操作私人Vault自己的Git仓库，fast-forward-only，分叉和脏状态拒绝。
-12. **公开发布**：逐文件 `visibility: public` 白名单、脱敏预览、敏感扫描拦截和独立staging导出已形成闭环。
-13. **Windows安装与发布**：PyInstaller + Inno Setup 打包为无需 Python/Node 的安装程序（安装/升级/卸载），条件代码签名，tag 触发 GitHub Release。
-14. **Privacy Audit & Security Center**：客户端凭据哈希存储、最小 Scope、即时撤销、防篡改审计链和真实访问时间线。
-15. **Human 3.0 Growth Intelligence**：四维成长自评、跨月时间线、用户主动关联、目标行动与全息成长仪表盘；不自动诊断或推断成长分数。
-16. **可视化备份与恢复**：本机绑定快照、文件哈希校验、并发保护、恢复前安全备份和事务回滚。
-
-### 尚未完成
-
-- Overview 产品总览页。
-- AI Connections 客户端注册、授权、Token 重签、撤销、状态展示与本地 Host 配置向导。
-
-### 阶段编号说明
-
-仓库历史中的 **Engineering Phase 4–11** 描述底层工程能力；2026-11 的 **Product UI Phase 1–8** 描述产品页面升级。两套编号互不覆盖，后续文档必须显式写出 Engineering 或 Product UI，避免把 Product Phase 8（Human 3.0 Growth）误认为旧 Engineering Phase 8（对话式引导）。
-
-### Engineering 基础阶段（历史编号）
-
-| 阶段 | 内容 | 验收标准 |
-|---|---|---|
-| Phase 4 ✅ | Windows本地运行闭环 | 双击启动、单实例、自动选端口、健康检查、安全会话、正常关闭与崩溃恢复 |
-| Phase 5 ✅ | Vault隔离、Schema与恢复 | migration回滚、自动备份、路径隔离、安全恢复和白名单公开导出已通过审计 |
-| Phase 6 ✅ | MCP统一测试与发布门禁 | 真实MCP协议测试、依赖锁定、SBOM、泄漏扫描和干净Windows验证已通过审计 |
-| Phase 7 ✅ | 可视化档案、时间线与隐私审计 | 四个本地只读视图、权限负测试、组件测试和E2E可视化流程 |
-| Phase 8 ✅ | 对话式首次引导与渐进收集 | 五类渐进问题、明确同意、候选记忆、可跳过及不保存原始对话 |
-| Phase 9 ✅ | Human 3.0对话式复盘闭环 | 四维反思、依据状态、自评分、摘要、30天计划、用户确认与趋势展示 |
-| Phase 10 ✅ | 跨设备同步与公开发布 | Git同步子命令（fast-forward-only、冲突拒绝）、脱敏预览、泄露拦截和白名单导出已通过审计 |
-| Phase 11 ✅ | Windows安装、签名与发布 | PyInstaller + Inno Setup 安装/升级/卸载、条件代码签名、tag 触发 GitHub Release |
-| 后续 | 可视化备份恢复向导与产品打磨 | 每项功能继续遵守人工确认和最小披露边界 |
-
-### Product UI 阶段
-
-| 阶段 | 内容 | 状态 |
-|---|---|---|
-| Product Phase 1–3 | 全局设计系统、公共框架、Personal Profile | ✅ |
-| Product Phase 4 | Memory Review | ✅ |
-| Product Phase 5 | Conversational Onboarding | ✅ |
-| Product Phase 6 | Monthly Reflection | ✅ |
-| Product Phase 7 | Privacy Audit & Security Center | ✅ |
-| Product Phase 8 | Human 3.0 Growth Intelligence | ✅ 专项验收通过 |
-| Product Phase 9 | Visual Backup & Recovery Wizard | ✅ 专项验收通过 |
-| AI Connections C1–C6 | 客户端生命周期、权限、Host 配置、原子审计与可视化向导 | ✅ 完成 |
-
-下一阶段建议进入 **Overview 总览**；AI Connections 保留到最后，因为它涉及客户端发现、外部配置写入和更复杂的权限边界。
-
-依赖锁定、SBOM、漏洞/泄漏扫描和干净Windows验证见[`docs/RELEASE_GATES.md`](docs/RELEASE_GATES.md)。
-
-跨设备同步和公开发布工作流见[`docs/SYNC_AND_PUBLISH.md`](docs/SYNC_AND_PUBLISH.md)。
-
-Windows安装包、代码签名和正式发布见[`docs/WINDOWS_INSTALLER.md`](docs/WINDOWS_INSTALLER.md)。
-
-## MVP成功标准
-
-第一阶段只证明一条完整链路：
-
-```text
-用户与AI A对话
-→ AI A创建候选记忆
-→ 用户在本地界面确认
-→ 记忆进入Confirmed
-→ AI B可以搜索到
-→ 禁止访问的内容不会返回
-```
-
-只要这条链路稳定、透明、可撤回，项目的核心价值就成立。
-
-## 路线图
-
-### V0.1 档案标准
-
-- [x] Markdown目录结构、候选与确认状态、隐私等级、Private同步模式
-
-### V0.2 跨AI读取
-
-- [x] 本地MCP stdio、基础工具、Codex/Claude Code/Cursor接入
-
-### V0.3 记忆闭环
-
-- [x] 候选记忆预览
-- [x] 本地确认、修改和拒绝
-- [x] 记忆来源查看与冲突处理
-- [x] 遗忘和替代记录
-- [x] 无命令行本地审核界面
-
-### V0.4 对话式引导
-
-- [x] 空档案首次引导
-- [x] 渐进式了解用户
-- [ ] 严格、平衡、主动三种记忆模式
-- [ ] 无对话时的低频复盘提示
-
-### V0.5 Obsidian控制中心
-
-- [ ] 待确认记忆面板
-- [x] 记忆时间线
-- [x] Human 3.0趋势
-- [x] 隐私审计视图
-
-### V0.6 普通用户安装
-
-- [x] Windows安装程序
-- [x] 首次启动创建私人Vault
-- [ ] 自动检测AI客户端并配置MCP
-- [x] 本地服务、Vault、MCP客户端与审计诊断
-- [ ] 自动连接修复
-
-### V0.7 Human 3.0
-
-- [x] 对话式月度访谈
-- [x] 证据与信息不足标记
-- [x] 用户确认后的正式报告
-- [x] 30天行动计划
-
-### V1.0
-
-- [x] 版本化Schema、迁移、备份与事务恢复基础
-- [x] Core、API、MCP、Launcher、Frontend与E2E自动化测试
-- [ ] 模型无关适配
-- [x] 公开内容白名单导出和脱敏预览
-- [ ] 通用数据导入
-
-## 快速开始（当前开发者版本）
+- Python 3.12+
+- Node.js 24+
+- Git
 
 ```powershell
 git clone https://github.com/XY-code1/personal-ai-profile.git
 cd personal-ai-profile
-pip install -r requirements.txt
 
-# 创建新的私人Vault
-python profile.py init ../my-ai-profile
+python -m pip install -r requirements.txt
 
-# 验证结构和疑似秘密
-python profile.py validate ../my-ai-profile
+# Create a private Vault outside the framework repository
+python profile.py init ..\my-ai-profile
+python profile.py validate ..\my-ai-profile
 
-# 启动本地MCP Gateway
-$env:PROFILE_VAULT="C:\absolute\path\my-ai-profile"
-python mcp_server.py
+# Build the Web UI
+cd apps\web
+npm ci
+npm run build
+cd ..\..
 
-# 启动开发者本地API（令牌会显示在当前终端）
-python -m apps.api.main --vault ../my-ai-profile
+# Start the integrated local product
+python launcher.py --vault ..\my-ai-profile
 ```
 
-本地API设计、认证和响应格式参见[`docs/LOCAL_API.md`](docs/LOCAL_API.md)，行为兼容契约参见[`docs/BEHAVIOR_CONTRACT.md`](docs/BEHAVIOR_CONTRACT.md)。
-
-### React审核界面（开发者）
+Split frontend/backend development:
 
 ```powershell
-# 终端一：启动本地API，复制输出的Bearer token
-python -m apps.api.main --vault C:\absolute\path\my-ai-profile
+# Terminal 1
+python -m apps.api.main --vault ..\my-ai-profile
 
-# 终端二：启动React审核界面
-cd apps/web
-npm install
+# Terminal 2
+cd apps\web
 npm run dev
 ```
 
-浏览器中填入本次启动显示的令牌后，即可审核候选记忆。令牌只保存在当前页面内存，不写入浏览器存储或构建产物。完整说明见[`docs/WEB_REVIEW_UI.md`](docs/WEB_REVIEW_UI.md)。
+The bearer token remains in page memory and is removed from the URL after bootstrap. It is not stored in `localStorage` or bundled assets.
 
-Windows用户可直接双击`start-review.vbs`进入React审核界面；Launcher会自动选择端口、传递本次会话并复用已有实例。详细机制见[`docs/WINDOWS_LAUNCHER.md`](docs/WINDOWS_LAUNCHER.md)。
+## Testing
 
-### Vault 产品闭环（P1–P7）
+```powershell
+# Python regression and release gate
+Get-ChildItem tests\test_*.py | ForEach-Object { python $_.FullName }
+python scripts\check_release.py
 
-- 每个 Vault 具有随机稳定 identity；Web 与 MCP 可核对同一身份。
-- 「备份与恢复」页面可校验、创建并安全切换 Vault。切换通过重启本地服务完成，旧会话 token 不复用。
-- 外部编辑器（包括 Obsidian）修改会通过 content revision 被检测；应用不会静默覆盖或自动合并。
-- Git/GitHub 私人备份只作用于用户预先配置的 Vault Git 仓库，commit/pull/push 均需显式操作。
-- 应用不保存 GitHub token、不自动创建远程仓库；用户必须自行确认 remote 是 private。
-- 完整架构和限制见 [`docs/PRODUCT_ARCHITECTURE.md`](docs/PRODUCT_ARCHITECTURE.md)、[`docs/VAULT_LIFECYCLE_PLAN.md`](docs/VAULT_LIFECYCLE_PLAN.md) 与 [`docs/GITHUB_BACKUP_PLAN.md`](docs/GITHUB_BACKUP_PLAN.md)。
-
-其他命令：
-
-```text
-remember PATH TEXT      创建候选记忆
-list-pending PATH       列出待确认记忆
-preview PATH FILE       预览候选记忆和元数据
-edit PATH FILE TEXT     修改候选记忆
-confirm PATH FILE       确认候选记忆
-reject PATH FILE        拒绝并保留审计记录
-show-source PATH FILE   查看记忆来源
-forget PATH FILE        从有效记忆移除并归档
-supersede PATH FILE TEXT 用新事实替代旧记忆
-build-context PATH      生成最小AI上下文
-human3 PATH             创建Human 3.0复盘草稿
+# Frontend verification
+cd apps\web
+npm run typecheck
+npm test
+npm run lint
+npm run build
+npm run e2e
 ```
 
-> 当前CLI是底层能力，不是最终普通用户入口。最终用户应通过对话、Obsidian控制中心和安装向导使用系统。
+Tests use temporary synthetic Vaults. They must never read or copy a real private Vault.
 
-## 暂时不做
+## Documentation
 
-- 自动保存所有聊天；
-- 屏幕、键盘、麦克风或完整浏览历史监控；
-- 复杂3D知识图谱；
-- 云端账户系统；
-- 常驻自主Agent；
-- 无确认自动写入；
-- 自动心理判断；
-- 公网裸露的MCP服务。
+| Topic | Document |
+| --- | --- |
+| Product architecture | [PRODUCT_ARCHITECTURE.md](docs/PRODUCT_ARCHITECTURE.md) |
+| Vault lifecycle | [VAULT_LIFECYCLE_PLAN.md](docs/VAULT_LIFECYCLE_PLAN.md) |
+| Local API | [LOCAL_API.md](docs/LOCAL_API.md) |
+| Memory lifecycle | [MEMORY_LIFECYCLE.md](docs/MEMORY_LIFECYCLE.md) |
+| Privacy model | [PRIVACY.md](docs/PRIVACY.md) |
+| Security Center | [SECURITY_CENTER.md](docs/SECURITY_CENTER.md) |
+| MCP clients | [MCP_HOST_CONNECTION.md](docs/MCP_HOST_CONNECTION.md) |
+| Backup and recovery | [PHASE9_BACKUP_RECOVERY.md](docs/PHASE9_BACKUP_RECOVERY.md) |
+| GitHub backup | [GITHUB_BACKUP_PLAN.md](docs/GITHUB_BACKUP_PLAN.md) |
+| Windows launcher | [WINDOWS_LAUNCHER.md](docs/WINDOWS_LAUNCHER.md) |
+| Windows installer | [WINDOWS_INSTALLER.md](docs/WINDOWS_INSTALLER.md) |
+| Release gates | [RELEASE_GATES.md](docs/RELEASE_GATES.md) |
 
-## 开源与私人数据
+## Roadmap
 
-本项目的程序、模板和文档可以开源；使用者填写的私人档案始终属于使用者本人。
+1. Refine first-run setup and Vault selection.
+2. Add safer GitHub private-repository setup and privacy verification.
+3. Improve backup history browsing and guided recovery.
+4. Add explicit model-provider authorization.
+5. Provide user-controlled import tools.
+
+The project will not add silent memory confirmation, automatic psychological labels, unrestricted AI file access, or default cloud collection.
+
+---
+
+## 中文概览
+
+Personal AI Profile 是一个**本地优先、模型无关、由用户控制**的个人 AI 上下文系统。
+
+它不会让 AI 自动保存所有聊天，而是建立一条清晰的记忆边界：
 
 ```text
-Public Framework Repository   开源程序和模板
-Private Personal Vault        真实私人档案
-Optional Public Export        经选择、脱敏和人工确认的公开内容
+自然对话
+→ 用户明确提交
+→ 生成候选记忆
+→ 用户审核、修改或拒绝
+→ 已确认内容进入私人 Vault
+→ 获得授权的 AI 按最小范围读取
 ```
 
-私人仓库不能直接合并到公开仓库。公开内容必须经过独立导出、敏感扫描和人工预览。
+### 核心特点
+
+- Web 是主要使用界面，Obsidian 是可选编辑器。
+- Markdown Vault 是唯一事实数据源，可以迁移、备份和审计。
+- 首次对话建档发生在进入工作台之前，不会在侧边栏重复出现。
+- 未经用户确认的内容不会进入正式个人档案。
+- 每个 AI 客户端必须独立授权，并使用最小权限 Scope。
+- `local-only` 和 `denied` 内容不会通过 MCP 返回。
+- GitHub 只作为用户主动配置的私人备份，不是事实数据源。
+- 项目不会默认保存完整聊天，也不会监控屏幕、键盘、麦克风或完整浏览记录。
+- Human 3.0 仅用于个人反思，不提供医学或心理诊断。
+
+### 公开框架与私人数据
+
+```text
+Public Framework Repository   程序、模板、Schema 和文档
+Private Personal Vault        用户的真实档案、记忆和复盘
+Optional Public Export        经过选择、脱敏和人工确认的公开内容
+```
+
+公共仓库与私人 Vault 必须完全分离，不能共享 Git 历史。密码、Token、验证码、API Key、私钥、证件和银行卡信息不应写入 Vault。
+
+### 中文快速开始
+
+```powershell
+git clone https://github.com/XY-code1/personal-ai-profile.git
+cd personal-ai-profile
+python -m pip install -r requirements.txt
+
+# 在框架仓库之外创建私人 Vault
+python profile.py init ..\my-ai-profile
+python profile.py validate ..\my-ai-profile
+
+cd apps\web
+npm ci
+npm run build
+cd ..\..
+
+python launcher.py --vault ..\my-ai-profile
+```
+
+更多中文技术说明请查看 [`docs/`](docs/) 目录。
+
+## Contributing
+
+Contributions are welcome. Please preserve the project boundaries:
+
+- do not include real personal data in issues, fixtures, screenshots, or commits;
+- use temporary synthetic Vaults in tests;
+- do not bypass Core lifecycle or permission checks for UI convenience;
+- do not add silent memory confirmation;
+- keep private Vault paths, credentials, and content out of logs and public artifacts.
 
 ## License
 
 [MIT](LICENSE)
-
