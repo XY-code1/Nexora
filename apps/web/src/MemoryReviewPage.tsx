@@ -70,7 +70,7 @@ export default function MemoryReviewPage(props: Props) {
       <aside className="candidate-queue" aria-label="候选记忆列表">
         <div className="queue-heading"><div><p className="eyebrow">CANDIDATE QUEUE</p><h3>等待你的判断</h3></div><span>{filtered.length} / {memories.length}</span></div>
         {loading && <div className="skeletons" aria-label="加载中"><i /><i /><i /></div>}
-        {!loading && memories.length === 0 && <EmptyState icon={<FileText size={26} />} title="暂时没有候选记忆" description="通过对话式引导提交愿意长期保存的信息，再回到这里审核。" action={<button className="primary-action" onClick={props.onOnboarding}>开始对话建档</button>} />}
+        {!loading && memories.length === 0 && <EmptyState icon={<FileText size={26} />} title="暂时没有候选记忆" description="首次建档完成后，明确提交的回答会在这里等待审核。" action={<button className="primary-action" onClick={props.onOnboarding}>查看个人档案</button>} />}
         {!loading && memories.length > 0 && filtered.length === 0 && <EmptyState icon={<MagnifyingGlass size={26} />} title="没有匹配结果" description="调整搜索词或筛选条件后重试。" />}
         {!loading && filtered.map((memory) => <button key={memory.id} className={`candidate-row ${memory.id === selected?.id ? 'selected' : ''}`} aria-pressed={memory.id === selected?.id} onClick={() => select(memory)}>
           <span className="candidate-icon"><FileText size={20} /></span><span className="candidate-copy"><small>{memory.type} · {memory.status}</small><strong>{memory.subject || '未命名候选记忆'}</strong><span>{memory.content}</span><em>{memory.sourceAgent} · {displayTime(memory.created)}</em></span>
@@ -78,7 +78,7 @@ export default function MemoryReviewPage(props: Props) {
       </aside>
 
       <section className="memory-inspector" aria-live="polite">
-        {!selected && !loading && <EmptyState icon={<FileText size={30} />} title={memories.length ? '选择一条候选记忆' : '从一次对话开始'} description={memories.length ? '在左侧队列中点选一条候选记忆，这里会显示完整内容和生命周期操作。' : '只有你明确提交的回答才会成为候选记忆。先完成一次对话，再回来确认。'} action={memories.length === 0 ? <button className="secondary-action" onClick={props.onOnboarding}>前往对话式引导</button> : undefined} />}
+        {!selected && !loading && <EmptyState icon={<FileText size={30} />} title={memories.length ? '选择一条候选记忆' : '等待候选记忆'} description={memories.length ? '在左侧队列中点选一条候选记忆，这里会显示完整内容和生命周期操作。' : '只有你明确提交的内容才会成为候选记忆；系统不会自动写入正式档案。'} action={memories.length === 0 ? <button className="secondary-action" onClick={props.onOnboarding}>查看个人档案</button> : undefined} />}
         {selected && <>
           <header className="inspector-heading"><div><p className="eyebrow">MEMORY INSPECTOR / {selected.status.toUpperCase()}</p><h3>{selected.subject || '未命名候选记忆'}</h3></div><span className="lifecycle-badge">Candidate</span></header>
           <div className="lifecycle-track" aria-label="记忆生命周期"><strong>Candidate</strong><i /><span>Explicit confirmation</span><i /><span>Formal memory</span></div>

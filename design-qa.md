@@ -362,3 +362,57 @@ final result: passed
 - 390px 截图：`artifacts/ai-connections-c6/mobile.png`
 
 已知限制：当前环境没有 Claude Desktop，Host 内实际 UI 状态仍需在安装并登录 Claude Desktop 的设备上人工确认；真实 stdio 子进程协议已由 C4 自动化验证。
+
+## 2026-11-07 — First-run & Overview redesign
+
+### Scope
+
+- Rebuilt the first-run experience from the supplied onboarding reference as one continuous setup journey.
+- Kept the daily Overview information architecture because it already matches the supplied four-question dashboard brief: profile, recent memory, next action, and AI authorization.
+- Removed the obsolete pre-wizard landing screen, CSS-drawn orb/halo/chip artwork, old stepper-only layout styles, stale responsive selectors, and the unused `WizardError` export.
+
+### Visual comparison
+
+| Area | Reference intent | Result |
+| --- | --- | --- |
+| Welcome hierarchy | Large Chinese welcome title with a quiet onboarding badge | Matched with a single clear heading and restrained badge |
+| Hero | Premium personal-intelligence orb | Replaced CSS art with a real generated WebP asset; 96 KB production output |
+| Setup | Three understandable steps in one scroll | Implemented: Vault, usage mode, conversational profile |
+| Vault actions | Create or connect without CLI-first wording | Both actions use the real existing API and reveal path input only on selection |
+| Obsidian | Optional, not a prerequisite | Explicitly labeled optional; Web remains the default |
+| Consent boundary | Profile input cannot silently become formal memory | Final copy states that answers remain candidates until Memory Review confirmation |
+| Overview | Answer four daily-use questions | Existing real-data Overview retained; no fake counts or decorative telemetry added |
+
+### QA findings and fixes
+
+- P1: the previous empty-container landing created an unnecessary extra click before setup. Removed.
+- P1: the previous hero used CSS-drawn sphere and decorative chips rather than a real visual asset. Replaced with an optimized WebP.
+- P2: initial first-run rendering could retain the token gate scroll position. Wizard now resets window scroll on mount.
+- P2: obsolete wizard selectors remained in old responsive media rules. Removed.
+- P2: generated PNG was 1.87 MB. Converted to a 96 KB WebP.
+- P3: the desktop hero intentionally uses a darker brand treatment than the light reference to remain consistent with the existing Holographic Library system.
+
+### Verification
+
+- In-app browser inspection: passed at desktop width; title, hero, Vault actions, usage choices, and final CTA are visible and aligned.
+- `npm run typecheck`: passed.
+- `npm test`: 15/15 passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run e2e`: 13/13 passed.
+- No Core, API contract, Vault schema, memory lifecycle, or private Vault content changed.
+
+final result: passed
+
+## 2026-11-07 — Onboarding information architecture cleanup
+
+- Removed Conversational Onboarding from the persistent workspace navigation and hash-route model.
+- Moved the real consent-gated conversation into the first-run flow, before the workspace shell appears.
+- After initialization, Overview, Memory Review and Personal Profile no longer send users back into onboarding.
+- Empty states now point to Personal Profile or Memory Review and explain the candidate/confirmation boundary.
+- Removed obsolete workspace onboarding state, fetch branch, mutation handler, title, icon import and E2E route assumptions.
+- Legacy `#/onboarding` now follows the existing invalid-route fallback to Overview; no token is placed in the URL.
+- Browser verification confirmed the pre-workspace interview and the absence of the sidebar/workspace shell during that interview.
+- Unit tests: 15/15 passed. E2E: 13/13 passed. Typecheck, lint and production build passed.
+
+final result: passed

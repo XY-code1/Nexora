@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Brain, ChatCircle, Clock, ShieldCheck, Stack, UserCircle } from '@phosphor-icons/react'
+import { ArrowRight, Brain, Clock, ShieldCheck, Stack, UserCircle } from '@phosphor-icons/react'
 import type { ApiClient, AuditEvent, OverviewSnapshot, TimelineItem, VaultBackup, VaultStatus } from './api'
 import { EmptyState, ErrorState, LoadingState } from './components/StateBlocks'
 
 type Props = {
   client: ApiClient
-  onNavigate: (view: 'review' | 'onboarding' | 'profile' | 'privacy' | 'reflection' | 'growth') => void
+  onNavigate: (view: 'review' | 'profile' | 'privacy' | 'reflection' | 'growth') => void
 }
 
 type Snapshot = {
@@ -33,8 +33,6 @@ function recentSummary(events: AuditEvent[]) {
 }
 
 /**
- * 阶段二：日常使用的首页。
- *
  * 首页回答用户真正关心的四个问题：
  * 1. 我的个人档案目前是什么状态？      → 已确认的个人信息
  * 2. 最近有什么新记忆？                → 最近的记忆变化
@@ -78,7 +76,7 @@ export default function OverviewPage({ client, onNavigate }: Props) {
       return { label: '审核候选记忆', detail: `${pending} 条内容等待你的判断，确认后才进入正式档案。`, view: 'review' as const, icon: <Stack size={22} /> }
     }
     if (memory.confirmedMemories === 0) {
-      return { label: '开始建立个人档案', detail: '通过几步轻量对话，提交你愿意长期保留的信息。', view: 'onboarding' as const, icon: <ChatCircle size={22} /> }
+      return { label: '查看个人档案', detail: '档案目前为空，可在个人档案中查看完善建议。', view: 'profile' as const, icon: <UserCircle size={22} /> }
     }
     if (overview.growth.latestMonth === null) {
       return { label: '完成本月复盘', detail: '整理这个月发生了什么，并写下下一步。', view: 'reflection' as const, icon: <Brain size={22} /> }
@@ -119,7 +117,7 @@ export default function OverviewPage({ client, onNavigate }: Props) {
       <section className="home-panel home-profile" aria-label="已确认的个人信息">
         <header><h2>已确认的个人信息</h2><button className="text-button" onClick={() => onNavigate('profile')}>查看档案</button></header>
         {sections.length === 0
-          ? <EmptyState icon={<UserCircle size={24} />} title="档案还是空的" description={`完成一次对话并确认候选记忆后，这里会显示你已确认的信息。当前档案访问等级：${accessLabel(profile.access)}。`} action={<button className="primary-action" onClick={() => onNavigate('onboarding')}>开始建档</button>} />
+          ? <EmptyState icon={<UserCircle size={24} />} title="档案还是空的" description={`只有经过审核确认的信息才会显示在这里。当前档案访问等级：${accessLabel(profile.access)}。`} action={<button className="primary-action" onClick={() => onNavigate('profile')}>查看个人档案</button>} />
           : <div className="home-sections">{sections.map((section) => <article key={section.title}><h3>{section.title}</h3><ul>{section.items.map((item) => <li key={item}>{item}</li>)}</ul></article>)}</div>}
       </section>
 

@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, CalendarDots, ChartLineUp, ChatCircleDots, CirclesFour, Database, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
-import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type MonthlyTrend, type OnboardingState, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
+import { Brain, CalendarDots, ChartLineUp, CirclesFour, Database, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
+import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type MonthlyTrend, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
-import ConversationalOnboardingPage from './ConversationalOnboardingPage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
 import SecurityCenterPage from './SecurityCenterPage'
 import MonthlyTrendPage from './MonthlyTrendPage'
@@ -17,10 +16,10 @@ import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'overview' | 'review' | 'onboarding' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections'
+type View = 'overview' | 'review' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections'
 
 const VIEW_ROUTES: Record<View, string> = {
-  overview: '#/overview', review: '#/memory-review', onboarding: '#/onboarding', profile: '#/profile',
+  overview: '#/overview', review: '#/memory-review', profile: '#/profile',
   timeline: '#/memory-timeline', privacy: '#/privacy-audit', reflection: '#/monthly-reflection',
   human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections',
 }
@@ -90,7 +89,6 @@ function App() {
   const [securityView, setSecurityView] = useState<SecurityCenter | null>(null)
   const [clientCredential, setClientCredential] = useState('')
   const [human3View, setHuman3View] = useState<Human3Trend | null>(null)
-  const [onboardingView, setOnboardingView] = useState<OnboardingState | null>(null)
   const [monthlyView, setMonthlyView] = useState<MonthlyOverview | null>(null)
   const [reflectionView, setReflectionView] = useState<MonthlyReflection | null>(null)
   const [monthlyTrendView, setMonthlyTrendView] = useState<MonthlyTrend | null>(null)
@@ -158,7 +156,7 @@ function App() {
           setFirstRun(untouched)
         })
       }
-      setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null); setMonthlyTrendView(null)
+      setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setMonthlyView(null); setReflectionView(null); setMonthlyTrendView(null)
       setNotice(null)
     } catch (error) {
       if (controller.signal.aborted || epoch !== sessionEpoch.current) return
@@ -294,7 +292,7 @@ function App() {
     setNotice(null)
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES.review}`)
     setView('review')
-    setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setOnboardingView(null); setMonthlyView(null); setReflectionView(null); setClientCredential('')
+    setProfileView(null); setTimelineView(null); setSecurityView(null); setHuman3View(null); setMonthlyView(null); setReflectionView(null); setClientCredential('')
     setVisualLoading(null)
     setFirstRun(false)
     setGateError(message)
@@ -323,7 +321,6 @@ function App() {
     const epoch = sessionEpoch.current
     const request = viewRequest.current
     if (next === 'profile') setProfileView(null)
-    if (next === 'onboarding') setOnboardingView(null)
     if (next === 'reflection') { setReflectionView(null); setMonthlyView(null) }
     if (next === 'timeline') setTimelineView(null)
     if (next === 'privacy') setSecurityView(null)
@@ -332,14 +329,12 @@ function App() {
     setVisualLoading(next)
     try {
       const result = next === 'reflection' ? await client.monthlyOverview(controller.signal)
-        : next === 'onboarding' ? await client.onboarding(controller.signal)
         : next === 'profile' ? await client.profileOverview(controller.signal)
         : next === 'timeline' ? await client.timeline(controller.signal)
           : next === 'privacy' ? await client.securityCenter(controller.signal)
             : next === 'monthly' ? await client.monthlyTrend(controller.signal)
               : await client.human3Trend(controller.signal)
       if (epoch !== sessionEpoch.current || request !== viewRequest.current) return
-      if (next === 'onboarding') setOnboardingView(result as OnboardingState)
       if (next === 'reflection') { const monthly = result as MonthlyOverview; setMonthlyView(monthly); setReflectionView(monthly.reflections.find((item) => item.month === monthly.currentMonth) ?? monthly.reflections[0] ?? null) }
       if (next === 'profile') setProfileView(result as ProfileOverview)
       if (next === 'timeline') setTimelineView(result as TimelineItem[])
@@ -353,24 +348,6 @@ function App() {
     } finally {
       if (epoch === sessionEpoch.current && request === viewRequest.current) setVisualLoading(null)
     }
-  }
-
-  async function saveOnboarding(topic: string, content: string) {
-    if (!client) return false
-    const epoch = sessionEpoch.current
-    const signal = sessionAbort.current?.signal
-    setSaving(true)
-    try {
-      const result = await client.onboardingResponse(topic, content, signal)
-      if (epoch !== sessionEpoch.current || signal?.aborted) return false
-      setOnboardingView(result.state)
-      setNotice({ kind: 'success', text: '回答已保存为候选记忆，确认前不会成为长期事实。' })
-      return true
-    } catch (error) {
-      if (epoch !== sessionEpoch.current || signal?.aborted) return false
-      setNotice({ kind: 'error', text: messageFor(error) })
-      return false
-    } finally { if (epoch === sessionEpoch.current) setSaving(false) }
   }
 
   async function monthlyAction(action: (client: ApiClient, signal?: AbortSignal) => Promise<MonthlyReflection>) {
@@ -464,13 +441,12 @@ function App() {
 
   if (closed) return <main className="gate"><section className="gate-panel"><p className="eyebrow">PERSONAL AI PROFILE / CLOSED</p><h1>本地服务已关闭</h1><p>你的私人档案仍保存在本地。现在可以关闭此浏览器标签页。</p></section></main>
   if (!token) return <TokenGate error={gateError} connecting={connecting} onConnect={connect} />
-  // 阶段一：第一次打开产品时先走初始化向导，不直接暴露完整功能菜单。
   if (firstRun && client) return <FirstRunWizard
     client={client}
     vaultName={wizardVaultName}
-    onFinish={(startProfile) => {
+    onFinish={(destination) => {
       setFirstRun(false)
-      void openView(startProfile ? 'onboarding' : 'overview')
+      void openView(destination)
     }}
   />
 
@@ -480,7 +456,6 @@ function App() {
       items: [
         { label: '概览', view: 'overview', icon: House },
         { label: '记忆审核', view: 'review', icon: Stack },
-        { label: '对话式引导', view: 'onboarding', icon: ChatCircleDots },
         { label: '个人档案', view: 'profile', icon: UserCircle },
       ],
     },
@@ -503,7 +478,7 @@ function App() {
       ],
     },
   ]
-  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', onboarding: '对话式引导', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接' }
+  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接' }
 
   function closeNavigation() {
     setNavigationOpen(false)
@@ -530,7 +505,6 @@ function App() {
       <div className="content-shell">
         {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
 
-        {view === 'onboarding' && <ConversationalOnboardingPage value={onboardingView} loading={visualLoading === 'onboarding'} saving={saving} onSave={saveOnboarding} onReview={() => void openView('review')} />}
         {view === 'reflection' && <MonthlyReflectionPage overview={monthlyView} selected={reflectionView} loading={visualLoading === 'reflection'} saving={saving} onSelect={setReflectionView} onCreate={createReflection} onDimension={saveReflectionDimension} onAddEvent={addReflectionEvent} onDeleteEvent={deleteReflectionEvent} onGoals={saveReflectionGoals} onGenerateSummary={generateReflectionSummary} onSummary={saveReflectionSummary} onConfirm={confirmReflection} />}
         {view === 'profile' && <ProfilePage value={profileView} loading={visualLoading === 'profile'} relationshipMap={relationshipMap} onReview={() => void openView('review')} onTimeline={() => void openView('timeline')} />}
         {view === 'timeline' && <TimelinePage value={timelineView} loading={visualLoading === 'timeline'} />}
@@ -541,11 +515,10 @@ function App() {
         {view === 'backup' && client && <BackupRecoveryPage client={client} />}
         {view === 'overview' && client && <OverviewPage client={client} onNavigate={(next) => void openView(next)} />}
         {view === 'connections' && client && <AIConnectionsPage client={client} />}
-        {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} onOnboarding={() => void openView('onboarding')} />}
+        {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} onOnboarding={() => void openView('profile')} />}
       </div>
     </section>
 
-    {/* 阶段二：首页不再以系统运行状态为主，这些信息已收进 Vault Status 区域。 */}
     {view === 'overview' && <aside className="status-panel" aria-label="个人空间状态">
       <div className="status-panel-head"><p className="eyebrow">PERSONAL SPACE</p><h2>空间状态</h2></div>
       <dl className="status-list">
@@ -567,7 +540,7 @@ function ProfilePage({ value, loading, relationshipMap, onReview, onTimeline }: 
     {value.protected ? <div className="protected"><LockKey size={20} />此档案标记为 <code>{value.access}</code>，当前视图不会显示受保护内容。</div> : <div className="profile-layout">
       <section className="profile-library" aria-label="个人档案内容">
         <div className="profile-summary"><span className="profile-avatar"><UserCircle size={42} weight="duotone" /></span><div><p className="eyebrow">PROFILE SUMMARY</p><h3>你的长期智能档案</h3><p>只显示本地 Profile 中明确保存且当前允许展示的内容。</p></div><button className="secondary-action" onClick={onTimeline}>查看生命周期</button></div>
-        <div className="profile-sections">{value.sections.length === 0 ? <div className="profile-empty"><Sparkle size={24} /><h3>档案还是空的</h3><p>完成对话式引导并确认候选记忆后，你可以逐步完善长期档案。</p><button className="primary-action" onClick={onReview}>前往记忆审核</button></div> : value.sections.map((section) => <article key={section.title}><span className="section-icon"><Sparkle size={20} /></span><div><h3>{section.title}</h3>{section.items.length ? <ul>{section.items.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="muted">尚未填写。</p>}</div></article>)}</div>
+        <div className="profile-sections">{value.sections.length === 0 ? <div className="profile-empty"><Sparkle size={24} /><h3>档案还是空的</h3><p>首次建档产生的候选记忆需要由你确认，之后才会进入长期档案。</p><button className="primary-action" onClick={onReview}>前往记忆审核</button></div> : value.sections.map((section) => <article key={section.title}><span className="section-icon"><Sparkle size={20} /></span><div><h3>{section.title}</h3>{section.items.length ? <ul>{section.items.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="muted">尚未填写。</p>}</div></article>)}</div>
       </section>
       <aside className={`relationship-panel ${value.hasConfirmedMemories ? '' : 'inactive'}`}>
         <div><p className="eyebrow">RELATIONSHIP MAP</p><h3>全息关系图谱</h3><p>用于呈现可见的已确认记忆空间，不会自动推断真实关系。</p></div>
@@ -575,7 +548,7 @@ function ProfilePage({ value, loading, relationshipMap, onReview, onTimeline }: 
         <img src={relationshipMap} alt="全息关系图谱的视觉框架，当前不代表具体个人数据关系" />
         <div className="relationship-empty"><Network size={20} /><span>{value.hasConfirmedMemories ? '存在可展示的已确认记忆' : '暂无可展示的已确认记忆'}</span></div>
       </aside>
-      <aside className="profile-inspector"><p className="eyebrow">NEXT ACTION</p><h3>{value.sections.length ? '继续完善档案' : '建立第一条长期信息'}</h3><p>{value.sections.length ? '审核新的候选记忆，让档案保持准确。' : '完成对话式引导后，在审核页确认愿意长期保留的信息。'}</p><button className="primary-action" onClick={onReview}><Stack size={18} />前往记忆审核</button><hr /><h3>确认优先</h3><p>候选、拒绝和归档记忆不会进入智能视图。</p><hr /><h3>本地优先</h3><p>内容保留在本地 Vault，页面不显示私人路径。</p></aside>
+      <aside className="profile-inspector"><p className="eyebrow">NEXT ACTION</p><h3>{value.sections.length ? '继续完善档案' : '建立第一条长期信息'}</h3><p>{value.sections.length ? '审核新的候选记忆，让档案保持准确。' : '在审核页确认首次建档中愿意长期保留的信息。'}</p><button className="primary-action" onClick={onReview}><Stack size={18} />前往记忆审核</button><hr /><h3>确认优先</h3><p>候选、拒绝和归档记忆不会进入智能视图。</p><hr /><h3>本地优先</h3><p>内容保留在本地 Vault，页面不显示私人路径。</p></aside>
     </div>}
   </section>
 }

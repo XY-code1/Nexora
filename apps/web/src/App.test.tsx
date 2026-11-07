@@ -246,7 +246,7 @@ describe('review workspace', () => {
     expect(screen.getByText('最近的记忆变化')).toBeInTheDocument()
     expect(screen.getByText('已授权的 AI 工具')).toBeInTheDocument()
     expect(screen.getByText('本地文件与备份')).toBeInTheDocument()
-    expect(screen.getByText('开始建立个人档案')).toBeInTheDocument()
+    expect(screen.getAllByText('查看个人档案').length).toBeGreaterThan(0)
   })
 
   it('renders an honest empty profile without inventing relationships', async () => {
@@ -288,28 +288,11 @@ describe('review workspace', () => {
     expect(screen.getByText('暂时没有候选记忆')).toBeInTheDocument()
   })
 
-  it('collects one onboarding answer as a reviewable candidate', async () => {
-    const onboarding = {
-      topics: [
-        { key: 'identity', title: '称呼与基本偏好', prompt: '我应该怎么称呼你？', status: 'available' },
-        { key: 'communication', title: '沟通方式', prompt: '希望如何沟通？', status: 'available' },
-      ], nextTopic: 'identity', completed: false, notice: '回答只会保存为候选记忆。',
-    }
-    mockApi({
-      '/api/v1/memories': [],
-      '/api/v1/memory-stats': usedStats,
-      '/api/v1/onboarding': onboarding,
-      '/api/v1/onboarding/responses': { candidateId: 'mem-onboarding', state: { ...onboarding, topics: [{ ...onboarding.topics[0], status: 'pending' }, onboarding.topics[1]], nextTopic: 'communication' } },
-    })
+  it('keeps conversational onboarding out of the daily workspace navigation', async () => {
+    mockApi({ '/api/v1/memories': [], '/api/v1/memory-stats': usedStats })
     render(<App />)
     await connect('暂时没有候选记忆')
-    fireEvent.click(screen.getByRole('button', { name: '对话式引导' }))
-    await screen.findByText('我应该怎么称呼你？')
-    fireEvent.change(screen.getByLabelText('你的回答'), { target: { value: '请称呼我为小明' } })
-    fireEvent.click(screen.getByRole('checkbox', { name: /我同意将这次回答创建为候选记忆/ }))
-    fireEvent.click(screen.getByRole('button', { name: '保存为候选并继续' }))
-    await screen.findByText('回答已保存为候选记忆，确认前不会成为长期事实。')
-    expect(screen.getByText('希望如何沟通？')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '对话式引导' })).not.toBeInTheDocument()
   })
 
   it('creates a persistent monthly reflection draft', async () => {
@@ -356,30 +339,23 @@ describe('review workspace', () => {
       '/api/v1/overview': { profile: { access: 'allowed', protected: false, sections: [] }, memory: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready', initialized: false },
       '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false },
       '/api/v1/initialized': { initialized: true },
+      '/api/v1/onboarding': { topics: [{ key: 'identity', title: '称呼与基本偏好', prompt: '我应该怎么称呼你？', status: 'available' }], nextTopic: 'identity', completed: false, notice: '回答只会保存为候选记忆。' },
     })
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
 
-    // 步骤 0：空容器前导页——先看到「容器」的样子，而不是完整功能菜单。
-    await screen.findByRole('heading', { name: '暂无已验证的内容' })
-    expect(screen.queryByRole('button', { name: '成长仪表盘' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /开始初始化/ }))
-
-    // 步骤 1：创建 / 连接个人空间。
+    // 首次启动直接进入一页式引导，不展示完整功能菜单。
     await screen.findByRole('heading', { name: '欢迎来到你的个人智能中枢' })
+    expect(screen.queryByRole('button', { name: '成长仪表盘' })).not.toBeInTheDocument()
     expect(screen.getByText('创建你的个人空间')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /继续使用当前空间/ }))
-
-    // 步骤 2：Obsidian 是可选项，不是必装前置条件。
-    await screen.findByRole('heading', { name: '选择使用方式' })
-    expect(screen.getByText('这里的 Obsidian 只是一个可选开关，而不是必须安装的前置条件。')).toBeInTheDocument()
+    expect(screen.getByText('Obsidian 是可选编辑器，不是使用产品的前置条件。')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: /同时使用 Obsidian/ }))
 
-    // 步骤 3：开始建立个人档案，完成后写入初始化标记。
-    fireEvent.click(screen.getByRole('button', { name: /下一步/ }))
-    await screen.findByRole('heading', { name: '开始建立个人档案' })
-    fireEvent.click(screen.getAllByRole('button', { name: /开始了解我/ })[0])
+    fireEvent.click(screen.getByRole('button', { name: /开始对话建档/ }))
+    await screen.findByText('我应该怎么称呼你？')
+    expect(screen.queryByRole('button', { name: '成长仪表盘' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '暂时结束并进入工作台' }))
     expect(calls).toContain('/api/v1/initialized')
     expect(spy).toHaveBeenCalled()
   })
