@@ -20,7 +20,6 @@ from core import profile
 from core import sync as git_sync
 from core.vault_identity import VaultMonitor, list_registered, register_vault
 from core.repository import list_markdown
-from core.access import extract_summary
 from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
 from core import monthly_reflection
@@ -219,7 +218,9 @@ def memory_view(root: Path, path: Path) -> dict[str, Any]:
         "visibility": metadata.get("visibility", "private"),
         "aiAccess": metadata.get("ai_access", "denied"),
         "tags": [item.strip() for item in metadata.get("tags", "").split(",") if item.strip()][:20],
-        "content": extract_summary(body),
+        # This authenticated loopback API is the local user's review surface.
+        # ai_access controls AI egress through MCP, not the user's local view.
+        "content": body,
         "revision": profile.revision(path),
     }
 

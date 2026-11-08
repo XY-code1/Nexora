@@ -32,14 +32,16 @@ candidate -> confirmed -> forgotten
 - 同 `subject` 和 `type` 的不同内容进入 `disputed`。
 - 拒绝和遗忘保留记录，不做无痕删除。
 
-## AI 访问矩阵
+## 本地用户与 AI 客户端权限
 
-| `ai_access` | MCP 读取 | 搜索/列表 |
+认证的 loopback API 是本地用户的审核界面，返回完整记录正文，不按 `ai_access` 过滤。`ai_access` 只控制是否可把内容发给 AI；本地可见不等于 AI 获准读取。`visibility` 是独立的发布规则。
+
+| `ai_access` | 本地用户审核 API | MCP AI 客户端 |
 |---|---|---|
-| `allowed` | 截断后的正文 | 可见 |
-| `summary-only` | 仅显式 `摘要/Summary` 段 | 可见，但仅摘要 |
-| `local-only` | 拒绝正文 | 不可见 |
-| `denied`、缺失或非法值 | 默认拒绝 | 不可见 |
+| `allowed` | 完整正文 | 可返回截断后的正文；可搜索 |
+| `summary-only` | 完整正文 | 仅显式 `摘要/Summary` 段；仅按该摘要搜索 |
+| `local-only` | 完整正文 | 不返回、不搜索；stdio MCP 无法验证客户端是否为本地模型 |
+| `denied`、缺失或非法值 | 完整正文 | 默认拒绝，不返回、不搜索 |
 
 MCP 还必须同时满足已授权的 `PROFILE_AGENT_ID`、有效 `PROFILE_CLIENT_TOKEN` 和 Vault 本地注册表中的所需 scope。环境变量 `PROFILE_SCOPES` 不再被信任。MCP 不提供 confirm、reject、forget、supersede、Profile 修改或公开发布工具。
 
