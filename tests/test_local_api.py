@@ -1,17 +1,42 @@
 import sys
 import tempfile
+from contextlib import redirect_stdout
 from concurrent.futures import ThreadPoolExecutor
+from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from apps.api import create_app
+import apps.api.main as api_main
 from core import profile
 
 
+def test_startup_token_is_hidden_unless_requested():
+    app = SimpleNamespace(state=SimpleNamespace(token="test-admin-token"))
+    hidden_output = StringIO()
+    with patch.object(api_main, "create_app", return_value=app), patch.object(api_main.uvicorn, "run"), patch.object(
+        sys, "argv", ["api-main", "--vault", "unused"]
+    ), redirect_stdout(hidden_output):
+        api_main.main()
+    assert "Local API: http://127.0.0.1:8765" in hidden_output.getvalue()
+    assert "Bearer token" not in hidden_output.getvalue()
+    assert "test-admin-token" not in hidden_output.getvalue()
+
+    visible_output = StringIO()
+    with patch.object(api_main, "create_app", return_value=app), patch.object(api_main.uvicorn, "run"), patch.object(
+        sys, "argv", ["api-main", "--vault", "unused", "--show-token"]
+    ), redirect_stdout(visible_output):
+        api_main.main()
+    assert "Bearer token: test-admin-token" in visible_output.getvalue()
+
+
 def main():
+    test_startup_token_is_hidden_unless_requested()
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "vault"
         profile.init(str(vault))

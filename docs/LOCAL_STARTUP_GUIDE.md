@@ -37,13 +37,13 @@ cd "<REPO>"
 python -m apps.api.main --vault "C:\你的\Vault路径"
 ```
 
-它会打印：
+默认只打印 API 地址，不会把管理令牌写入启动日志。若正在本机分窗口开发、需要手动把令牌填入前端，请使用下面的显式调试选项启动 API：
 
-```text
-Local API: http://127.0.0.1:8765  Bearer token: <一串令牌>
+```powershell
+python -m apps.api.main --vault "C:\你的\Vault路径" --show-token
 ```
 
-**把这个令牌留着**，下一步要用。
+该选项会额外打印管理令牌。仅在可信的本机终端中使用；令牌拥有管理权限，不要复制到共享日志或截图。
 
 窗口二，启动前端：
 
@@ -52,7 +52,7 @@ cd "<REPO>\apps\web"
 npm run dev
 ```
 
-浏览器打开 **http://localhost:5173** ，在页面上的「本地启动令牌」输入框里填窗口一打印的令牌，点连接。
+浏览器打开 **http://localhost:5173** ，在页面上的「本地启动令牌」输入框里填窗口一用 `--show-token` 显示的令牌，点连接。
 
 vite 会把 `/api` 自动代理到 `http://127.0.0.1:8765`，所以不需要额外配置。
 

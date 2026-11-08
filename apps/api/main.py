@@ -900,9 +900,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="启动本地 Personal AI Profile API")
     parser.add_argument("--vault", required=True, type=Path)
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument(
+        "--show-token",
+        action="store_true",
+        help="显式在本地启动日志中显示管理 Bearer token",
+    )
     args = parser.parse_args()
     app = create_app(args.vault)
-    print(f"Local API: http://127.0.0.1:{args.port}  Bearer token: {app.state.token}")
+    print(f"Local API: http://127.0.0.1:{args.port}")
+    if args.show_token:
+        print(f"Bearer token: {app.state.token}")
     uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 
