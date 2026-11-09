@@ -109,7 +109,7 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   if (interview) return <main className="wizard wizard-interview" aria-label="首次对话建档">
     <header className="wizard-interview-header"><div><p className="wizard-badge"><Sparkle size={14} weight="fill" />首次建档 · Local only</p><h1>先完成一次轻量对话</h1><p>回答只会成为候选记忆，确认前不会进入正式档案。</p></div><button className="text-button" onClick={() => void finish('overview')}>暂时结束并进入工作台</button></header>
     {error && <p className="wizard-error" role="alert">{error}</p>}
-    <ConversationalOnboardingPage value={interviewState} loading={interviewLoading} saving={busy} onSave={saveInterview} onReview={() => void finish('review')} />
+    <ConversationalOnboardingPage value={interviewState} loading={interviewLoading} saving={Boolean(busy)} onSave={saveInterview} onReview={() => void finish('review')} />
   </main>
 
   return <main className="wizard" aria-label="首次启动向导">
@@ -131,8 +131,8 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
         <button className={mode === 'create' ? 'selected' : ''} onClick={() => { setMode('create'); setError(''); setDone('') }}><FolderPlus size={25} /><span><strong>创建新的 Vault</strong><small>系统自动创建标准目录和 Markdown 文件</small></span><ArrowRight size={18} /></button>
         <button className={mode === 'connect' ? 'selected' : ''} onClick={() => { setMode('connect'); setError(''); setDone('') }}><FolderOpen size={25} /><span><strong>连接已有 Vault</strong><small>校验并连接已有的个人知识库目录</small></span><ArrowRight size={18} /></button>
       </div>
-      {mode && <div className="wizard-path-row"><label><span>{mode === 'create' ? '新 Vault 目录' : '已有 Vault 目录'}</span><input aria-label={mode === 'create' ? '新 Vault 的文件夹路径' : '已有 Vault 的文件夹路径'} value={path} onChange={(event) => { setPath(event.target.value); setError('') }} placeholder={defaultPath || '例如 D:\\Nexora\\vault'} /></label><button className="secondary-action" onClick={() => void browse()} disabled={busy}>{busy === 'browse' ? '正在打开…' : '浏览…'}</button><button className="secondary-action" onClick={() => void run(mode)} disabled={busy}>{busy ? '处理中…' : mode === 'create' ? '创建 Vault' : '验证并连接'}</button></div>}
-      {mode === 'create' && <div className="wizard-path-row"><label><span>文件夹名称（可选）</span><input aria-label="文件夹名称" value={folderName} onChange={(event) => { setFolderName(event.target.value); setError('') }} placeholder="my-ai-profile" /></label><button className="secondary-action" onClick={useRecommended} disabled={busy || !defaultPath}>使用推荐目录</button></div>}
+      {mode && <div className="wizard-path-row"><label><span>{mode === 'create' ? '新 Vault 目录' : '已有 Vault 目录'}</span><input aria-label={mode === 'create' ? '新 Vault 的文件夹路径' : '已有 Vault 的文件夹路径'} value={path} onChange={(event) => { setPath(event.target.value); setError('') }} placeholder={defaultPath || '例如 D:\\Nexora\\vault'} /></label><button className="secondary-action" onClick={() => void browse()} disabled={Boolean(busy)}>{busy === 'browse' ? '正在打开…' : '浏览…'}</button><button className="secondary-action" onClick={() => void run(mode)} disabled={Boolean(busy)}>{busy ? '处理中…' : mode === 'create' ? '创建 Vault' : '验证并连接'}</button></div>}
+      {mode === 'create' && <div className="wizard-path-row"><label><span>文件夹名称（可选）</span><input aria-label="文件夹名称" value={folderName} onChange={(event) => { setFolderName(event.target.value); setError('') }} placeholder="my-ai-profile" /></label><button className="secondary-action" onClick={useRecommended} disabled={Boolean(busy) || !defaultPath}>使用推荐目录</button></div>}
       {mode === 'create' && folderName.trim() && <p className="wizard-hint">将创建：{joinPath(defaultPath || 'C:\\Nexora\\vault', folderName.trim())}</p>}
       {registered.length > 0 && <div className="wizard-registered">
         <p className="wizard-registered-title">最近使用的个人空间</p>
