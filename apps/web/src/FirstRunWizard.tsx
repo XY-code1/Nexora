@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Check, FolderOpen, FolderPlus, Globe, Note, Sparkle } from '@phosphor-icons/react'
+import { ArrowRight, Check, FolderOpen, FolderPlus, Globe, Note, Sparkle, Trash } from '@phosphor-icons/react'
 import type { ApiClient, OnboardingState, RegisteredVault } from './api'
 import ConversationalOnboardingPage from './ConversationalOnboardingPage'
 import { vaultHint } from './vaultHints'
 import onboardingOrb from './assets/onboarding-intelligence-orb.webp'
+
+function joinPath(base: string, name: string) {
+  return `${base.replace(/[\\/]+$/, '')}/${name.replace(/^[\\/]+/, '')}`
+}
 
 type Props = { client: ApiClient; vaultName: string; onFinish: (destination: 'overview' | 'review') => void }
 
@@ -11,7 +15,7 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   const [usage, setUsage] = useState<'web' | 'obsidian'>('web')
   const [mode, setMode] = useState<'create' | 'connect' | null>(null)
   const [path, setPath] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
   const [interview, setInterview] = useState(false)
@@ -20,24 +24,57 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   const [registered, setRegistered] = useState<RegisteredVault[]>([])
   const [currentVaultId, setCurrentVaultId] = useState('')
   const [connecting, setConnecting] = useState('')
+  const [defaultPath, setDefaultPath] = useState('')
+  const [folderName, setFolderName] = useState('')
 
   useEffect(() => {
     document.documentElement.scrollTop = 0
     document.body.scrollTop = 0
     void client.vaultStatus().then((status) => setCurrentVaultId(status.vaultId)).catch(() => undefined)
     void client.registeredVaults().then(setRegistered).catch(() => undefined)
+    void client.vaultDefaultPath().then((result) => {
+      if (!result.path) return
+      setDefaultPath(result.path)
+      setPath((current) => current || joinPath(result.path, 'my-ai-profile'))
+    }).catch(() => undefined)
   }, [client])
 
   async function run(action: 'create' | 'connect') {
     const target = path.trim()
     if (!target) { setError('请填写文件夹的完整路径。'); return }
-    setBusy(true); setError(''); setDone('')
+    setBusy('run'); setError(''); setDone('')
     try {
       const result = action === 'create' ? await client.createVault(target) : await client.validateVault(target)
       setDone(`${action === 'create' ? '已创建' : '已连接'}个人空间「${result.displayName}」。`)
     } catch (reason) {
       setError(vaultHint(reason instanceof Error ? reason.message : '操作失败，请检查路径后重试。'))
-    } finally { setBusy(false) }
+    } finally { setBusy('') }
+  }
+
+  async function browse() {
+    setBusy('browse'); setError('')
+    try {
+      const result = await client.browseVault()
+      setPath(result.path)
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '无法打开文件夹选择器。') }
+    finally { setBusy('') }
+  }
+
+  function useRecommended() {
+    const name = folderName.trim() || 'my-ai-profile'
+    setPath(joinPath(defaultPath || 'C:\\Nexora\\vault', name))
+    setError('')
+  }
+
+  async function forget(item: RegisteredVault) {
+    if (!window.confirm(`忘记个人空间「${item.displayName}」？只会从本机登记中移除，不会删除任何文件。`)) return
+    setBusy(`forget:${item.vaultId}`); setError('')
+    try {
+      await client.forgetVault(item.vaultId)
+      setRegistered((current) => current.filter((entry) => entry.vaultId !== item.vaultId))
+      setDone('已从登记中移除，磁盘文件未改动。')
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '移除失败。') }
+    finally { setBusy('') }
   }
 
   async function connect(item: RegisteredVault) {
@@ -63,16 +100,16 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   }
 
   async function saveInterview(topic: string, content: string) {
-    setBusy(true); setError('')
+    setBusy('interview'); setError('')
     try { const result = await client.onboardingResponse(topic, content); setInterviewState(result.state); return true }
     catch (reason) { setError(reason instanceof Error ? reason.message : '候选记忆创建失败。'); return false }
-    finally { setBusy(false) }
+    finally { setBusy('') }
   }
 
   if (interview) return <main className="wizard wizard-interview" aria-label="首次对话建档">
     <header className="wizard-interview-header"><div><p className="wizard-badge"><Sparkle size={14} weight="fill" />首次建档 · Local only</p><h1>先完成一次轻量对话</h1><p>回答只会成为候选记忆，确认前不会进入正式档案。</p></div><button className="text-button" onClick={() => void finish('overview')}>暂时结束并进入工作台</button></header>
     {error && <p className="wizard-error" role="alert">{error}</p>}
-    <ConversationalOnboardingPage value={interviewState} loading={interviewLoading} saving={busy} onSave={saveInterview} onReview={() => void finish('review')} />
+    <ConversationalOnboardingPage value={interviewState} loading={interviewLoading} saving={Boolean(busy)} onSave={saveInterview} onReview={() => void finish('review')} />
   </main>
 
   return <main className="wizard" aria-label="首次启动向导">
@@ -94,15 +131,20 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
         <button className={mode === 'create' ? 'selected' : ''} onClick={() => { setMode('create'); setError(''); setDone('') }}><FolderPlus size={25} /><span><strong>创建新的 Vault</strong><small>系统自动创建标准目录和 Markdown 文件</small></span><ArrowRight size={18} /></button>
         <button className={mode === 'connect' ? 'selected' : ''} onClick={() => { setMode('connect'); setError(''); setDone('') }}><FolderOpen size={25} /><span><strong>连接已有 Vault</strong><small>校验并连接已有的个人知识库目录</small></span><ArrowRight size={18} /></button>
       </div>
-      {mode && <div className="wizard-path-row"><label><span>{mode === 'create' ? '新 Vault 目录' : '已有 Vault 目录'}</span><input aria-label={mode === 'create' ? '新 Vault 的文件夹路径' : '已有 Vault 的文件夹路径'} value={path} onChange={(event) => { setPath(event.target.value); setError('') }} placeholder="例如 D:\PersonalAIProfile\my-ai-profile" /></label><button className="secondary-action" onClick={() => void run(mode)} disabled={busy}>{busy ? '处理中…' : mode === 'create' ? '创建 Vault' : '验证并连接'}</button></div>}
+      {mode && <div className="wizard-path-row"><label><span>{mode === 'create' ? '新 Vault 目录' : '已有 Vault 目录'}</span><input aria-label={mode === 'create' ? '新 Vault 的文件夹路径' : '已有 Vault 的文件夹路径'} value={path} onChange={(event) => { setPath(event.target.value); setError('') }} placeholder={defaultPath || '例如 D:\\Nexora\\vault'} /></label><button className="secondary-action" onClick={() => void browse()} disabled={Boolean(busy)}>{busy === 'browse' ? '正在打开…' : '浏览…'}</button><button className="secondary-action" onClick={() => void run(mode)} disabled={Boolean(busy)}>{busy ? '处理中…' : mode === 'create' ? '创建 Vault' : '验证并连接'}</button></div>}
+      {mode === 'create' && <div className="wizard-path-row"><label><span>文件夹名称（可选）</span><input aria-label="文件夹名称" value={folderName} onChange={(event) => { setFolderName(event.target.value); setError('') }} placeholder="my-ai-profile" /></label><button className="secondary-action" onClick={useRecommended} disabled={Boolean(busy) || !defaultPath}>使用推荐目录</button></div>}
+      {mode === 'create' && folderName.trim() && <p className="wizard-hint">将创建：{joinPath(defaultPath || 'C:\\Nexora\\vault', folderName.trim())}</p>}
       {registered.length > 0 && <div className="wizard-registered">
-        <p className="wizard-registered-title">已登记的个人空间（点击直接打开）</p>
+        <p className="wizard-registered-title">最近使用的个人空间</p>
         <div className="wizard-registered-list">
-          {registered.map((item) => <button key={item.vaultId} disabled={!item.available || connecting === item.vaultId} onClick={() => void connect(item)}>
-            <FolderOpen size={20} />
-            <span><strong>{item.displayName}</strong><small>{item.vaultId.slice(0, 18)}</small></span>
-            <em>{item.vaultId === currentVaultId ? '当前空间' : item.available ? (connecting === item.vaultId ? '正在打开…' : '打开') : '目录不存在'}</em>
-          </button>)}
+          {registered.map((item) => <div key={item.vaultId} className="wizard-registered-item">
+            <button disabled={!item.available || connecting === item.vaultId} onClick={() => void connect(item)}>
+              <FolderOpen size={20} />
+              <span><strong>{item.displayName}</strong><small>{item.vaultId.slice(0, 18)}</small></span>
+              <em>{item.vaultId === currentVaultId ? '当前空间' : item.available ? (connecting === item.vaultId ? '正在打开…' : '打开') : '目录不存在'}</em>
+            </button>
+            <button className="wizard-forget" onClick={() => void forget(item)} disabled={Boolean(busy)} aria-label={`忘记个人空间 ${item.vaultId.slice(0, 8)}`} title={`只移除登记，不删除文件：${item.displayName}`}><Trash size={16} /></button>
+          </div>)}
         </div>
       </div>}
       {done && <p className="wizard-done" role="status"><Check size={17} />{done}</p>}

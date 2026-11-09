@@ -161,6 +161,9 @@ export class ApiClient {
   vaultEvents(signal?: AbortSignal) { return this.request<VaultEvents>('/api/v1/vault/events', { signal }) }
   registeredVaults(signal?: AbortSignal) { return this.request<RegisteredVault[]>('/api/v1/vaults', { signal }) }
   connectVault(vaultId: string, signal?: AbortSignal) { return this.request<{ status: string; vaultId: string }>('/api/v1/vaults/connect', { method: 'POST', body: JSON.stringify({ vault_id: vaultId }), signal }) }
+  vaultDefaultPath(signal?: AbortSignal) { return this.request<{ path: string }>('/api/v1/vaults/default-path', { signal }) }
+  browseVault(signal?: AbortSignal) { return this.request<{ path: string }>('/api/v1/vaults/browse', { method: 'POST', signal }) }
+  forgetVault(vaultId: string, signal?: AbortSignal) { return this.request<{ vaultId: string; forgotten: boolean }>(`/api/v1/vaults/${encodeURIComponent(vaultId)}`, { method: 'DELETE', signal }) }
   validateVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; valid: boolean }>('/api/v1/vaults/validate', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   switchVault(path: string, signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/vault/switch', { method: 'POST', body: JSON.stringify({ path }), signal }) }
