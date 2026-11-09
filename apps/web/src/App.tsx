@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, CalendarDots, ChartLineUp, CirclesFour, CloudArrowUp, Database, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, Warning, X } from '@phosphor-icons/react'
+import { Brain, CalendarDots, ChartLineUp, CirclesFour, CloudArrowUp, Database, GithubLogo, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, Warning, X } from '@phosphor-icons/react'
 import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type MonthlyTrend, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
@@ -9,6 +9,8 @@ import MonthlyTrendPage from './MonthlyTrendPage'
 import GrowthDashboard from './GrowthDashboard'
 import OverviewPage from './OverviewPage'
 import BackupRecoveryPage from './BackupRecoveryPage'
+import GitHubBackupPage from './GitHubBackupPage'
+
 import ProviderAuthPage from './ProviderAuthPage'
 
 import ImportPage from './ImportPage'
@@ -19,12 +21,12 @@ import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'overview' | 'review' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections' | 'import' | 'providers'
+type View = 'overview' | 'review' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections' | 'import' | 'providers' | 'github'
 
 const VIEW_ROUTES: Record<View, string> = {
   overview: '#/overview', review: '#/memory-review', profile: '#/profile',
   timeline: '#/memory-timeline', privacy: '#/privacy-audit', reflection: '#/monthly-reflection',
-  human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections', providers: '#/providers', import: '#/import',
+  human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections', providers: '#/providers', import: '#/import', github: '#/github-backup',
 }
 const ROUTE_VIEWS = new Map(Object.entries(VIEW_ROUTES).map(([view, route]) => [route, view as View]))
 function viewFromHash(hash: string): View | null { return ROUTE_VIEWS.get(hash) ?? null }
@@ -343,7 +345,7 @@ function App() {
     }
     setVisualLoading(null)
     if (next === 'review') { void loadCandidates(); return }
-    if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections' || next === 'providers' || next === 'import') return
+    if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections' || next === 'providers' || next === 'import' || next === 'github') return
     const controller = new AbortController()
     visualAbort.current = controller
     const epoch = sessionEpoch.current
@@ -504,11 +506,12 @@ function App() {
         { label: '隐私审计', view: 'privacy', icon: ShieldCheck },
         { label: '备份与恢复', view: 'backup', icon: HardDrives },
         { label: 'AI 连接', view: 'connections', icon: PlugsConnected },
+        { label: 'GitHub 备份', view: 'github', icon: GithubLogo },
         { label: 'AI Provider', view: 'providers', icon: LockKey },
       ],
     },
   ]
-  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接', providers: 'AI Provider', import: '导入' }
+  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接', providers: 'AI Provider', import: '导入', github: 'GitHub 备份' }
 
   function closeNavigation() {
     setNavigationOpen(false)
@@ -546,6 +549,8 @@ function App() {
         {view === 'backup' && client && <BackupRecoveryPage client={client} refreshKey={vaultEpoch} />}
         {view === 'overview' && client && <OverviewPage client={client} onNavigate={(next) => void openView(next)} refreshKey={vaultEpoch} />}
         {view === 'connections' && client && <AIConnectionsPage client={client} />}
+        {view === 'github' && client && <GitHubBackupPage client={client} />}
+
         {view === 'providers' && client && <ProviderAuthPage client={client} />}
 
         {view === 'import' && client && <ImportPage client={client} />}

@@ -361,6 +361,20 @@ describe('review workspace', () => {
     expect(spy).toHaveBeenCalled()
   })
 
+  it('shows the GitHub onboarding page and its token-safety boundary', async () => {
+    const { calls } = mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/github/status': { configured: false, sessionActive: false, connected: false, repository: '', visibilityVerified: '', remoteName: '', remoteHost: '', lastVerifiedAt: '' },
+    })
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: 'GitHub 备份' }))
+    await screen.findByText('当前状态')
+    expect(screen.getByText(/不保存 token/)).toBeInTheDocument()
+    expect(calls).toContain('/api/v1/github/status')
+  })
+
   it('shows the provider authorization module and its empty state', async () => {
     const { calls } = mockApi({
       '/api/v1/memories': [memory],

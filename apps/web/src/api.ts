@@ -56,6 +56,13 @@ export type VaultEvent = { revision: string; detectedAt: string }
 export type VaultEvents = VaultStatus & { events: VaultEvent[] }
 export type RegisteredVault = { vaultId: string; displayName: string; available: boolean; lastOpenedAt: string }
 export type GitStatus = { configured?: boolean; message?: string; branch?: string; head?: string; upstream?: string | null; ahead?: number; behind?: number; dirty: string[]; unmerged: string[] }
+export type GitHubStatus = { configured: boolean; sessionActive: boolean; connected: boolean; repository: string; visibilityVerified: string; remoteName: string; remoteHost: string; lastVerifiedAt: string }
+export type GitHubDeviceCode = { userCode: string; verificationUri: string; expiresIn: number; interval: number }
+export type GitHubDevicePoll = { status: 'pending' | 'slow_down' | 'expired' | 'authorized' }
+export type GitHubRepository = { name: string; fullName: string; private: boolean; permissions: Record<string, boolean> }
+export type GitHubVerification = { fullName: string; private: boolean; defaultBranch: string; permissions: Record<string, boolean> }
+export type GitHubConnection = { provider: string; repository: string; visibilityVerified: string; remoteName: string; remoteHost: string; lastVerifiedAt: string; sessionActive: boolean }
+
 export type ProviderAuthorization = { provider: string; enabled: boolean; scopes: string[]; createdAt: string; updatedAt: string }
 export type PendingCall = { requestId: string; provider: string; scope: string; preview: Record<string, unknown>; droppedFields: string[]; preparedAt: string; status: string }
 export type ProviderOverview = { providers: ProviderAuthorization[]; pending: PendingCall[]; scopes: Record<string, string[]> }
@@ -155,6 +162,16 @@ export class ApiClient {
   createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   switchVault(path: string, signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/vault/switch', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   gitStatus(signal?: AbortSignal) { return this.request<GitStatus>('/api/v1/git/status', { signal }) }
+  githubStatus(signal?: AbortSignal) { return this.request<GitHubStatus>('/api/v1/github/status', { signal }) }
+  githubConfigureClientId(clientId: string, signal?: AbortSignal) { return this.request<{ configured: boolean }>('/api/v1/github/client-id', { method: 'POST', body: JSON.stringify({ client_id: clientId }), signal }) }
+  githubDeviceCode(signal?: AbortSignal) { return this.request<GitHubDeviceCode>('/api/v1/github/device-code', { method: 'POST', signal }) }
+  githubDevicePoll(signal?: AbortSignal) { return this.request<GitHubDevicePoll>('/api/v1/github/device-poll', { method: 'POST', signal }) }
+  githubRepositories(signal?: AbortSignal) { return this.request<GitHubRepository[]>('/api/v1/github/repositories', { signal }) }
+  githubVerify(repository: string, signal?: AbortSignal) { return this.request<GitHubVerification>('/api/v1/github/verify', { method: 'POST', body: JSON.stringify({ repository }), signal }) }
+  githubCreate(name: string, signal?: AbortSignal) { return this.request<{ fullName: string; private: boolean; created: boolean }>('/api/v1/github/create', { method: 'POST', body: JSON.stringify({ name }), signal }) }
+  githubConnect(repository: string, signal?: AbortSignal) { return this.request<GitHubConnection>('/api/v1/github/connect', { method: 'POST', body: JSON.stringify({ repository }), signal }) }
+  githubDisconnect(signal?: AbortSignal) { return this.request<{ connected: boolean }>('/api/v1/github/connection', { method: 'DELETE', signal }) }
+
   providers(signal?: AbortSignal) { return this.request<ProviderOverview>('/api/v1/providers', { signal }) }
   authorizeProvider(provider: string, scopes: string[], signal?: AbortSignal) { return this.request<ProviderAuthorization>('/api/v1/providers', { method: 'POST', body: JSON.stringify({ provider, scopes }), signal }) }
   revokeProvider(provider: string, signal?: AbortSignal) { return this.request<{ provider: string; revoked: boolean }>(`/api/v1/providers/${encodeURIComponent(provider)}`, { method: 'DELETE', signal }) }

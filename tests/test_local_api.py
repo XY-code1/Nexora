@@ -171,6 +171,55 @@ def main():
         assert rollback_source.read_text(encoding="utf-8") == "original"
         assert not rollback_destination.exists() and not journal.exists()
 
+        # GitHub onboarding endpoints (fake transport, no network).
+        from core import github as github_mod
+
+        class _FakeGitHub:
+            def __init__(self) -> None:
+                self.repo = {"full_name": "alice/vault", "private": True, "default_branch": "main", "permissions": {}}
+
+            def __call__(self, method: str, url: str, *, data: dict | None = None, headers: dict | None = None) -> dict:
+                if url == github_mod.GITHUB_DEVICE_URL:
+                    return {"device_code": "dev-1", "user_code": "ABCD-1234", "verification_uri": "https://github.com/login/device", "expires_in": 900, "interval": 1}
+                if url == github_mod.GITHUB_TOKEN_URL:
+                    return {"access_token": "gho_fake"}
+                if "/user/repos?" in url:
+                    return [{"name": "vault", "full_name": "alice/vault", "private": True, "permissions": {}}] if "page=1" in url else []
+                if url.startswith(github_mod.GITHUB_API + "/repos/"):
+                    return dict(self.repo, full_name=url.rsplit("/", 1)[-1])
+                if url == github_mod.GITHUB_API + "/user/repos":
+                    return {"full_name": "alice/new-vault", "private": True}
+                raise AssertionError(f"unexpected request: {method} {url}")
+
+        fake = _FakeGitHub()
+        github_mod.set_transport(fake)
+        github_mod.configure_client_id("Iv1.test")
+        try:
+            status = client.get("/api/v1/github/status", headers=headers)
+            assert status.status_code == 200 and status.json()["data"]["configured"] is True, status.text
+
+            device = client.post("/api/v1/github/device-code", headers=headers)
+            assert device.status_code == 200 and device.json()["data"]["userCode"] == "ABCD-1234", device.text
+
+            poll = client.post("/api/v1/github/device-poll", headers=headers)
+            assert poll.status_code == 200 and poll.json()["data"]["status"] == "authorized", poll.text
+
+            repos = client.get("/api/v1/github/repositories", headers=headers)
+            assert repos.status_code == 200 and repos.json()["data"][0]["fullName"] == "alice/vault", repos.text
+
+            verified = client.post("/api/v1/github/verify", headers=headers, json={"repository": "alice/vault"})
+            assert verified.status_code == 200 and verified.json()["data"]["private"] is True, verified.text
+
+            fake.repo = {"full_name": "alice/public", "private": False}
+            public = client.post("/api/v1/github/verify", headers=headers, json={"repository": "alice/public"})
+            assert public.status_code == 200 and public.json()["data"]["private"] is False, public.text
+
+            created = client.post("/api/v1/github/create", headers=headers, json={"name": "new-vault"})
+            assert created.status_code == 201 and created.json()["data"]["private"] is True, created.text
+        finally:
+            github_mod.configure_client_id("")
+            github_mod.set_transport(None)
+
         # Provider authorization: start from a clean registry.
         for item in client.get("/api/v1/providers", headers=headers).json()["data"]["providers"]:
             client.delete(f"/api/v1/providers/{item['provider']}", headers=headers)
