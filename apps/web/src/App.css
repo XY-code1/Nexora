@@ -209,6 +209,17 @@ label{display:block;font-weight:650;margin-bottom:8px}textarea,input,select{widt
 .wizard-profile-start{padding-bottom:0}
 .wizard-final-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .wizard-final-actions .primary-action{display:inline-flex;align-items:center;gap:8px}
+.wizard-note{margin:0;color:var(--text-secondary);font-size:.82rem;line-height:1.6;max-width:60ch}
+.wizard-registered{display:grid;gap:10px;padding:14px;border:1px solid var(--border-subtle);border-radius:14px;background:#0b1525}
+.wizard-registered-title{margin:0;color:var(--text-secondary);font-size:.76rem}
+.wizard-registered-list{display:grid;gap:8px}
+.wizard-registered-list button{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;width:100%;padding:12px 14px;text-align:left;color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:11px;background:rgba(8,13,24,.48)}
+.wizard-registered-list button:hover:not(:disabled),.wizard-registered-list button.selected{border-color:rgba(39,191,255,.58);background:rgba(39,191,255,.08)}
+.wizard-registered-list button:disabled{opacity:.55;cursor:not-allowed}
+.wizard-registered-list button>svg{color:var(--color-cyan)}
+.wizard-registered-list button span{display:grid;gap:3px;min-width:0}
+.wizard-registered-list button small{color:var(--text-secondary);font:600 .68rem ui-monospace,monospace;overflow-wrap:anywhere}
+.wizard-registered-list button em{flex:none;padding:3px 9px;color:var(--text-secondary);border:1px solid var(--border-subtle);border-radius:999px;font-size:.66rem;font-style:normal;white-space:nowrap}
 .wizard-interview{display:block}
 .wizard-interview-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;width:min(1280px,100%);margin:0 auto 28px}
 .wizard-interview-header>div{display:grid;gap:10px}

@@ -137,6 +137,7 @@ export class ApiClient {
   restoreBackup(id: string, confirmation: string, revision: string, signal?: AbortSignal) { return this.request<{ restoredBackupId: string; safetyBackup: VaultBackup; currentRevision: string }>(`/api/v1/backups/${encodeURIComponent(id)}/restore`, { method: 'POST', body: JSON.stringify({ confirmation, expected_vault_revision: revision }), signal }) }
   vaultStatus(signal?: AbortSignal) { return this.request<VaultStatus>('/api/v1/vault', { signal }) }
   registeredVaults(signal?: AbortSignal) { return this.request<RegisteredVault[]>('/api/v1/vaults', { signal }) }
+  connectVault(vaultId: string, signal?: AbortSignal) { return this.request<{ status: string; vaultId: string }>('/api/v1/vaults/connect', { method: 'POST', body: JSON.stringify({ vault_id: vaultId }), signal }) }
   validateVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; valid: boolean }>('/api/v1/vaults/validate', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   switchVault(path: string, signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/vault/switch', { method: 'POST', body: JSON.stringify({ path }), signal }) }

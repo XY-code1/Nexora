@@ -71,6 +71,22 @@ def list_registered() -> list[dict[str, object]]:
     return [{"vaultId": item.get("vault_id", ""), "displayName": item.get("display_name", ""), "available": Path(str(item.get("path", ""))).is_dir(), "lastOpenedAt": item.get("last_opened_at", "")} for item in entries if isinstance(item, dict)]
 
 
+def find_registered(vault_id: str) -> dict[str, str] | None:
+    """Return the raw registry entry (including its local path) for server-side use.
+
+    The path never leaves the local service; the Web only ever sees a vault id.
+    """
+    registry = app_data_root() / "vaults.json"
+    try:
+        entries = json.loads(registry.read_text(encoding="utf-8")) if registry.is_file() else []
+    except (OSError, ValueError):
+        return None
+    for item in entries:
+        if isinstance(item, dict) and item.get("vault_id") == vault_id:
+            return item
+    return None
+
+
 class VaultMonitor:
     def __init__(self, vault: Path):
         self.root = vault.resolve()

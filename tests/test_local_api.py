@@ -194,6 +194,19 @@ def main():
         bad = client.post("/api/v1/imports/preview", headers=headers, json={"format": "json", "content": "{"})
         assert bad.status_code == 400 and bad.json()["error"]["code"] == "IMPORT_PARSE_FAILED", bad.text
 
+        # 按 vault_id 连接已登记的个人空间（路径不经过 Web）。
+        current_id = client.get("/api/v1/vault", headers=headers).json()["data"]["vaultId"]
+        registered = client.get("/api/v1/vaults", headers=headers).json()["data"]
+        current = next((item for item in registered if item["vaultId"] == current_id), None)
+        assert current is not None and "path" not in current, registered
+        app.state.request_restart = lambda next_vault: None
+        connected = client.post("/api/v1/vaults/connect", headers=headers, json={"vault_id": current_id})
+        assert connected.status_code == 200, connected.text
+        assert connected.json()["data"]["status"] == "restarting"
+
+        missing = client.post("/api/v1/vaults/connect", headers=headers, json={"vault_id": "vault_missing"})
+        assert missing.status_code == 404 and missing.json()["error"]["code"] == "VAULT_NOT_FOUND", missing.text
+
     print("local API and consistency tests passed")
 
 

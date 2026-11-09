@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowCounterClockwise, ArrowLeft, ArrowRight, CheckCircle, ClockCounterClockwise, Database, GitBranch, MagnifyingGlass, ShieldCheck, Warning } from '@phosphor-icons/react'
 import type { ApiClient, BackupOverview, GitChanges, GitStatus, RegisteredVault, VaultBackup, VaultStatus } from './api'
 import { LoadingState } from './components/StateBlocks'
+import { vaultHint } from './vaultHints'
 
 function time(value: string) {
   if (!value) return '时间未知'
@@ -216,7 +217,7 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
       if (action === 'switch') { if (!window.confirm('切换会重启本地服务并使当前会话失效。继续吗？')) return; await client.switchVault(vaultPath.trim()) }
       setMessage({ kind: 'success', text: action === 'switch' ? '正在安全重启到目标 Vault…' : action === 'create' ? '新 Vault 已创建，可在确认后切换。' : 'Vault 校验通过。' })
       if (action !== 'switch') await load()
-    } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : 'Vault 操作失败。' }) }
+    } catch (error) { setMessage({ kind: 'error', text: vaultHint(error instanceof Error ? error.message : 'Vault 操作失败。') }) }
     finally { setBusy('') }
   }
 
