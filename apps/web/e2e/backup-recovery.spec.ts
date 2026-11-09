@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 const shots = resolve(import.meta.dirname, '../../../artifacts/backup-recovery-qa')
 test.beforeAll(() => mkdirSync(shots, { recursive: true }))
 
-test('managed backup is verified and restored through the guarded local flow', async ({ page }) => {
+test('managed backup is verified and restored through the guarded guided wizard', async ({ page }) => {
   test.setTimeout(60_000)
   const errors: string[] = []
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
@@ -23,16 +23,44 @@ test('managed backup is verified and restored through the guarded local flow', a
   await page.getByRole('button', { name: '创建完整备份' }).click()
   await expect(page.getByText('完整备份已创建并通过哈希校验。')).toBeVisible()
   await expect(page.getByText('hash verified')).toBeVisible()
-  await page.getByRole('button', { name: '重新校验备份' }).click()
-  await expect(page.getByText('备份结构、Schema 和文件哈希均已验证。')).toBeVisible()
-  await page.screenshot({ path: resolve(shots, 'backup-recovery-1440.png'), fullPage: true })
 
+  // 备份历史支持按完整性筛选、搜索和排序。
+  await expect(page.getByRole('group', { name: '备份筛选与排序' })).toBeVisible()
+  await page.getByRole('button', { name: /^全部/ }).click()
+  await page.getByLabel('排序方式').selectOption('size')
+  await page.getByLabel('搜索备份').fill('zzzz-no-match')
+  await expect(page.getByText('没有符合条件的备份')).toBeVisible()
+  await page.getByLabel('搜索备份').fill('')
+  await page.getByLabel('排序方式').selectOption('created')
+
+  // 进入分步恢复向导：选择 → 校验 → 确认 → 完成。
+  await page.getByRole('button', { name: '开始恢复向导' }).click()
+  await expect(page.getByRole('heading', { name: '选择要恢复的备份' })).toBeVisible()
+  await page.locator('.backup-list > button').first().click()
+  await page.getByRole('button', { name: '下一步' }).click()
+
+  await expect(page.getByRole('heading', { name: '校验备份完整性' })).toBeVisible()
+  await page.getByRole('button', { name: '校验备份' }).click()
+  await expect(page.getByText('备份结构、Schema 和文件哈希均已验证。')).toBeVisible()
+  await page.getByRole('button', { name: '下一步' }).click()
+
+  await expect(page.getByRole('heading', { name: '确认恢复' })).toBeVisible()
   const phrase = await page.locator('.restore-confirm code').innerText()
   await expect(page.getByRole('button', { name: /创建安全备份并恢复/ })).toBeDisabled()
   await page.getByLabel('恢复确认文字').fill(phrase)
   await page.getByRole('button', { name: /创建安全备份并恢复/ }).click()
+
+  await expect(page.getByRole('heading', { name: '恢复完成' })).toBeVisible()
   await expect(page.getByText(/恢复完成。系统已先创建安全备份/)).toBeVisible()
-  await expect(page.locator('.backup-list>button')).toHaveCount(2)
+  const safetyBackupId = (await page.locator('.wizard-done-panel dl > div').filter({ hasText: '安全备份' }).locator('dd').innerText()).trim()
+  expect(safetyBackupId).not.toBe('')
+  await page.screenshot({ path: resolve(shots, 'backup-recovery-1440.png'), fullPage: true })
+
+  await page.getByRole('button', { name: '返回备份列表' }).click()
+  await expect(page.locator('.backup-list > button')).toHaveCount(2)
+  await page.getByLabel('搜索备份').fill(safetyBackupId)
+  await expect(page.locator('.backup-list > button')).toHaveCount(1)
+  await page.getByLabel('搜索备份').fill('')
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.evaluate(() => window.scrollTo(0, 0))

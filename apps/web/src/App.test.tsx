@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { vaultHint } from './vaultHints'
 
 // 每个测试后卸载上一棵组件树：否则残留实例会在后续测试里继续响应未完成的
 // promise，造成状态污染与随机的 act(...) 警告（同一输入下时过时不过）。
@@ -360,6 +361,32 @@ describe('review workspace', () => {
     expect(spy).toHaveBeenCalled()
   })
 
+  it('previews and imports candidate memories without confirming them', async () => {
+    const { calls } = mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/imports/preview': {
+        items: [
+          { index: 0, type: 'preference', subject: '回答风格', content: '回答先给结论。', preview: '回答先给结论。', status: 'ready', reason: '' },
+          { index: 1, type: 'note', subject: '项目背景', content: '本地优先。', preview: '本地优先。', status: 'duplicate', reason: '与现有记忆内容重复' },
+        ],
+        summary: { total: 2, ready: 1, duplicate: 1, invalid: 0 },
+      },
+      '/api/v1/imports': { created: [{ id: 'mem-import-1', type: 'preference', subject: '回答风格' }], skipped: [] },
+    })
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: '导入' }))
+    fireEvent.change(screen.getByLabelText('导入内容'), { target: { value: '---\ntype: preference\n---\n回答先给结论。' } })
+    fireEvent.click(screen.getByRole('button', { name: '预览' }))
+    await screen.findByText('确认要导入的条目')
+    expect(screen.getByText('与现有记忆内容重复')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /导入 1 条候选/ }))
+    await screen.findByText('已导入 1 条候选记忆')
+    expect(calls).toContain('/api/v1/imports/preview')
+    expect(calls).toContain('/api/v1/imports')
+  })
+
   it('shows a unified local backup and Git commit timeline', async () => {
     mockApi({
       '/api/v1/memories': [memory],
@@ -376,5 +403,58 @@ describe('review workspace', () => {
     await screen.findByRole('heading', { name: '版本历史' })
     expect(screen.getByText('chore: update')).toBeInTheDocument()
     expect(screen.getByText(/本地备份/)).toBeInTheDocument()
+  })
+
+  it('previews pending Git changes and blocks commit on sensitive files', async () => {
+    mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/backups': { currentRevision: 'r1', backups: [] },
+      '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/vaults': [],
+      '/api/v1/git/status': { configured: true, branch: 'main', upstream: 'origin/main', ahead: 0, behind: 0, dirty: ['30 Memory/Inbox/new-note.md'], unmerged: [] },
+      '/api/v1/git/history': { branch: 'main', commits: [] },
+      '/api/v1/git/changes': { changes: [{ path: '30 Memory/Inbox/new-note.md', status: 'untracked', code: '??' }], sensitive: [{ path: 'id_rsa', reason: 'sensitive file name' }], unmerged: [], can_commit: false },
+    })
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: '备份与恢复' }))
+    await screen.findByRole('button', { name: '预览变更' })
+    fireEvent.click(screen.getByRole('button', { name: '预览变更' }))
+    await waitFor(() => expect(screen.getByText('检测到疑似敏感文件，已禁止提交')).toBeInTheDocument())
+    expect(screen.getByText('id_rsa')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Commit' })).toBeDisabled()
+  })
+
+  it('lists registered vaults in the first-run wizard and connects by id', async () => {
+    mockApi({
+      '/api/v1/memories': [],
+      '/api/v1/memory-stats': { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 },
+      '/api/v1/overview': { profile: { access: 'allowed', protected: false, sections: [] }, memory: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready', initialized: false },
+      '/api/v1/vault': { vaultId: 'vault_current', displayName: '当前空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/vaults': [
+        { vaultId: 'vault_current', displayName: '当前空间', available: true, lastOpenedAt: '2026-11-09T00:00:00Z' },
+        { vaultId: 'vault_other', displayName: '旧空间', available: true, lastOpenedAt: '2026-11-08T00:00:00Z' },
+      ],
+      '/api/v1/vaults/connect': { status: 'restarting', vaultId: 'vault_other' },
+      '/api/v1/initialized': { initialized: true },
+      '/api/v1/onboarding': { topics: [], nextTopic: null, completed: true, notice: '' },
+    })
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByText(/已登记的个人空间/)
+    expect(screen.getAllByText('当前空间').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: /旧空间/ }))
+    await screen.findByText('正在打开「旧空间」…')
+  })
+})
+
+describe('vault hints', () => {
+  it('maps technical vault errors to actionable guidance', () => {
+    expect(vaultHint('目标目录非空：D:/foo')).toContain('空文件夹')
+    expect(vaultHint('Vault 结构不完整：AGENTS.md')).toContain('必要文件')
+    expect(vaultHint('私人Vault与公共框架仓库不能相互包含')).toContain('独立')
+    expect(vaultHint('未知错误')).toBe('未知错误')
   })
 })

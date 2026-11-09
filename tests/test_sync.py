@@ -96,4 +96,39 @@ with tempfile.TemporaryDirectory() as temporary:
         assert {"id", "created", "subject", "author"} <= set(item), item
     expect_failure(lambda: sync_mod.git_history(str(base)), "不是Git仓库")
 
+    # 变更预览：干净 Vault 没有待提交内容
+    preview = sync_mod.git_changes(str(vault))
+    assert preview["changes"] == [] and preview["sensitive"] == [], preview
+    assert preview["can_commit"] is True, preview
+
+    # 未跟踪文件会出现在预览中，且不影响提交
+    (vault / "30 Memory/Inbox" / "new-note.md").write_text("hello\n", encoding="utf-8")
+    preview = sync_mod.git_changes(str(vault))
+    assert [item["path"] for item in preview["changes"]] == ["30 Memory/Inbox/new-note.md"], preview
+    assert preview["changes"][0]["status"] == "untracked", preview
+    assert preview["can_commit"] is True, preview
+    (vault / "30 Memory/Inbox" / "new-note.md").unlink()
+
+    # 敏感文件名：预览告警并 fail closed
+    (vault / "id_rsa").write_text("private\n", encoding="utf-8")
+    preview = sync_mod.git_changes(str(vault))
+    assert [item["path"] for item in preview["sensitive"]] == ["id_rsa"], preview
+    assert preview["can_commit"] is False, preview
+    expect_failure(lambda: sync_mod.sync_commit(str(vault), "with secret file"), "敏感")
+    (vault / "id_rsa").unlink()
+
+    # 敏感内容：预览告警并 fail closed
+    key_file = vault / "30 Memory/Inbox" / "leaked.txt"
+    # Assemble a synthetic PEM marker at runtime; no key material is checked in.
+    key_type = "RSA PRIVATE KEY"
+    key_file.write_text(f"-----BEGIN {key_type}-----\nsynthetic-test-data\n-----END {key_type}-----\n", encoding="utf-8")
+    preview = sync_mod.git_changes(str(vault))
+    assert [item["path"] for item in preview["sensitive"]] == ["30 Memory/Inbox/leaked.txt"], preview
+    expect_failure(lambda: sync_mod.sync_commit(str(vault), "with secret content"), "敏感")
+    key_file.unlink()
+
+    # 清理后恢复可用
+    preview = sync_mod.git_changes(str(vault))
+    assert preview["changes"] == [] and preview["can_commit"] is True, preview
+
 print("cross-device sync tests passed")

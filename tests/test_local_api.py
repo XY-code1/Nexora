@@ -1,18 +1,43 @@
 import subprocess
 import sys
 import tempfile
+from contextlib import redirect_stdout
 from concurrent.futures import ThreadPoolExecutor
+from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from apps.api import create_app
+import apps.api.main as api_main
 from core import profile
 
 
+def test_startup_token_is_hidden_unless_requested():
+    app = SimpleNamespace(state=SimpleNamespace(token="test-admin-token"))
+    hidden_output = StringIO()
+    with patch.object(api_main, "create_app", return_value=app), patch.object(api_main.uvicorn, "run"), patch.object(
+        sys, "argv", ["api-main", "--vault", "unused"]
+    ), redirect_stdout(hidden_output):
+        api_main.main()
+    assert "Local API: http://127.0.0.1:8765" in hidden_output.getvalue()
+    assert "Bearer token" not in hidden_output.getvalue()
+    assert "test-admin-token" not in hidden_output.getvalue()
+
+    visible_output = StringIO()
+    with patch.object(api_main, "create_app", return_value=app), patch.object(api_main.uvicorn, "run"), patch.object(
+        sys, "argv", ["api-main", "--vault", "unused", "--show-token"]
+    ), redirect_stdout(visible_output):
+        api_main.main()
+    assert "Bearer token: test-admin-token" in visible_output.getvalue()
+
+
 def main():
+    test_startup_token_is_hidden_unless_requested()
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "vault"
         profile.init(str(vault))
@@ -23,6 +48,27 @@ def main():
         app = create_app(vault, token="test-token", web_dist=web_dist)
         client = TestClient(app, base_url="http://localhost")
         headers = {"Authorization": "Bearer test-token"}
+
+        # ai_access governs AI egress, not what the authenticated local user can review.
+        for case, access in {
+            "allowed": "allowed",
+            "summary-only": "summary-only",
+            "local-only": "local-only",
+            "denied": "denied",
+            "missing": None,
+            "invalid": "not-a-policy",
+        }.items():
+            record_id = f"mem-policy-{case}"
+            access_line = f"ai_access: {access}\n" if access is not None else ""
+            record = vault / "30 Memory" / "Rejected" / f"{case}.md"
+            record.write_text(
+                f"---\nid: {record_id}\nstatus: rejected\n{access_line}---\n\n"
+                "## 摘要\n\n显式摘要。\n\n## 私密正文\n\n完整正文仅用于本地审核。\n",
+                encoding="utf-8",
+            )
+            view = client.get(f"/api/v1/memories/{record_id}", headers=headers).json()["data"]
+            assert "完整正文仅用于本地审核。" in view["content"]
+            assert view["aiAccess"] == (access or "denied")
 
         assert client.get("/api/v1/health").status_code == 200
         assert "review app" in client.get("/").text
@@ -133,6 +179,43 @@ def main():
         data = history.json()["data"]
         assert data["branch"] == "main" and len(data["commits"]) == 1, data
         assert data["commits"][0]["subject"] == "init", data
+
+        # 导入：预览后可写入候选，重复内容被去重，解析失败返回 400。
+        preview = client.post("/api/v1/imports/preview", headers=headers, json={
+            "format": "markdown",
+            "content": "---\ntype: preference\nsubject: 工作流程\n---\n先计划后执行。\n",
+        })
+        assert preview.status_code == 200, preview.text
+        assert preview.json()["data"]["summary"]["ready"] == 1, preview.text
+
+        imported = client.post("/api/v1/imports", headers=headers, json={
+            "items": [{"type": "preference", "subject": "工作流程", "content": "先计划后执行。"}],
+            "source": "test-import",
+        })
+        assert imported.status_code == 201, imported.text
+        assert len(imported.json()["data"]["created"]) == 1, imported.text
+
+        again = client.post("/api/v1/imports", headers=headers, json={
+            "items": [{"type": "preference", "subject": "工作流程", "content": "先计划后执行。"}],
+        })
+        assert again.status_code == 201
+        assert again.json()["data"]["created"] == [], again.text
+
+        bad = client.post("/api/v1/imports/preview", headers=headers, json={"format": "json", "content": "{"})
+        assert bad.status_code == 400 and bad.json()["error"]["code"] == "IMPORT_PARSE_FAILED", bad.text
+
+        # 按 vault_id 连接已登记的个人空间（路径不经过 Web）。
+        current_id = client.get("/api/v1/vault", headers=headers).json()["data"]["vaultId"]
+        registered = client.get("/api/v1/vaults", headers=headers).json()["data"]
+        current = next((item for item in registered if item["vaultId"] == current_id), None)
+        assert current is not None and "path" not in current, registered
+        app.state.request_restart = lambda next_vault: None
+        connected = client.post("/api/v1/vaults/connect", headers=headers, json={"vault_id": current_id})
+        assert connected.status_code == 200, connected.text
+        assert connected.json()["data"]["status"] == "restarting"
+
+        missing = client.post("/api/v1/vaults/connect", headers=headers, json={"vault_id": "vault_missing"})
+        assert missing.status_code == 404 and missing.json()["error"]["code"] == "VAULT_NOT_FOUND", missing.text
 
     print("local API and consistency tests passed")
 
