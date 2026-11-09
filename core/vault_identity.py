@@ -92,6 +92,21 @@ def _fast_signature(root: Path) -> tuple[float, int]:
             count += 1
     return newest, count
 
+def find_registered(vault_id: str) -> dict[str, str] | None:
+    """Return the raw registry entry (including its local path) for server-side use.
+
+    The path never leaves the local service; the Web only ever sees a vault id.
+    """
+    registry = app_data_root() / "vaults.json"
+    try:
+        entries = json.loads(registry.read_text(encoding="utf-8")) if registry.is_file() else []
+    except (OSError, ValueError):
+        return None
+    for item in entries:
+        if isinstance(item, dict) and item.get("vault_id") == vault_id:
+            return item
+    return None
+
 
 class VaultMonitor:
     """Tracks Vault identity, external edits, and a resident change watcher.

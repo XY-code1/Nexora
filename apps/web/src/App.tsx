@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, CalendarDots, ChartLineUp, CirclesFour, Database, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, Warning, X } from '@phosphor-icons/react'
+import { Brain, CalendarDots, ChartLineUp, CirclesFour, CloudArrowUp, Database, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, Warning, X } from '@phosphor-icons/react'
 import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type MonthlyTrend, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
@@ -9,6 +9,7 @@ import MonthlyTrendPage from './MonthlyTrendPage'
 import GrowthDashboard from './GrowthDashboard'
 import OverviewPage from './OverviewPage'
 import BackupRecoveryPage from './BackupRecoveryPage'
+import ImportPage from './ImportPage'
 import AIConnectionsPage from './AIConnectionsPage'
 import FirstRunWizard from './FirstRunWizard'
 import { LoadingState } from './components/StateBlocks'
@@ -16,12 +17,12 @@ import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'overview' | 'review' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections'
+type View = 'overview' | 'review' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections' | 'import'
 
 const VIEW_ROUTES: Record<View, string> = {
   overview: '#/overview', review: '#/memory-review', profile: '#/profile',
   timeline: '#/memory-timeline', privacy: '#/privacy-audit', reflection: '#/monthly-reflection',
-  human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections',
+  human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections', import: '#/import',
 }
 const ROUTE_VIEWS = new Map(Object.entries(VIEW_ROUTES).map(([view, route]) => [route, view as View]))
 function viewFromHash(hash: string): View | null { return ROUTE_VIEWS.get(hash) ?? null }
@@ -340,7 +341,7 @@ function App() {
     }
     setVisualLoading(null)
     if (next === 'review') { void loadCandidates(); return }
-    if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections') return
+    if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections' || next === 'import') return
     const controller = new AbortController()
     visualAbort.current = controller
     const epoch = sessionEpoch.current
@@ -487,6 +488,7 @@ function App() {
     {
       title: '记录',
       items: [
+        { label: '导入', view: 'import', icon: CloudArrowUp },
         { label: '月度复盘', view: 'reflection', icon: CalendarDots },
         { label: '月度趋势', view: 'monthly', icon: ChartLineUp },
         { label: 'Human 3.0', view: 'human3', icon: Brain },
@@ -503,7 +505,7 @@ function App() {
       ],
     },
   ]
-  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接' }
+  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接', import: '导入' }
 
   function closeNavigation() {
     setNavigationOpen(false)
@@ -541,6 +543,7 @@ function App() {
         {view === 'backup' && client && <BackupRecoveryPage client={client} refreshKey={vaultEpoch} />}
         {view === 'overview' && client && <OverviewPage client={client} onNavigate={(next) => void openView(next)} refreshKey={vaultEpoch} />}
         {view === 'connections' && client && <AIConnectionsPage client={client} />}
+        {view === 'import' && client && <ImportPage client={client} />}
         {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} onOnboarding={() => void openView('profile')} />}
       </div>
     </section>

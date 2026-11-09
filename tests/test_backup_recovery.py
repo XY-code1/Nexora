@@ -1,7 +1,8 @@
 """Managed backup/recovery API and boundary acceptance tests."""
 
-import tempfile
+import json
 import sys
+import tempfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -10,6 +11,36 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from apps.api import create_app
 from core import profile, vault_management as vm
+
+
+def test_interrupted_swap_recovery() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        base = Path(temporary)
+        vault = base / "vault"
+        workspace = base / ".vault-restore-work"
+        journal = base / ".vault-restore.json"
+        vault.mkdir()
+        (vault / "state.txt").write_text("before interruption", encoding="utf-8")
+        workspace.mkdir()
+        vault.replace(workspace / "previous")
+        (workspace / "candidate").mkdir()
+        journal.write_text(json.dumps({"format": 1, "target": str(vault)}), encoding="utf-8")
+
+        vm.recover_vault_swap(vault)
+
+        assert (vault / "state.txt").read_text(encoding="utf-8") == "before interruption"
+        assert not workspace.exists() and not journal.exists()
+
+        workspace.mkdir()
+        (workspace / "previous").mkdir()
+        (workspace / "previous" / "state.txt").write_text("previous state", encoding="utf-8")
+        (vault / "state.txt").write_text("restored candidate", encoding="utf-8")
+        journal.write_text(json.dumps({"format": 1, "target": str(vault)}), encoding="utf-8")
+
+        vm.recover_vault_swap(vault)
+
+        assert (vault / "state.txt").read_text(encoding="utf-8") == "restored candidate"
+        assert not workspace.exists() and not journal.exists()
 
 
 def main() -> None:
@@ -53,6 +84,23 @@ def main() -> None:
             )
             assert stale.status_code == 409 and profile_file.read_text(encoding="utf-8") == "changed after backup\n"
 
+            preserved_files = {
+                ".env": "local environment\n",
+                ".git/config": "local repository metadata\n",
+                "private/client.key": "private key\n",
+                "private/client.pem": "certificate\n",
+            }
+            for relative, contents in preserved_files.items():
+                local_file = vault / relative
+                local_file.parent.mkdir(parents=True, exist_ok=True)
+                local_file.write_text(contents, encoding="utf-8")
+            local_only = vault / "created-after-backup.txt"
+            local_only.write_text("remove on restore\n", encoding="utf-8")
+            for runtime_name in ("Locks", "Transactions"):
+                runtime = vault / "90 System" / runtime_name
+                runtime.mkdir(parents=True, exist_ok=True)
+                (runtime / "runtime.tmp").write_text("do not resurrect\n", encoding="utf-8")
+
             current = api.get("/api/v1/backups", headers=headers).json()["data"]
             wrong_phrase = api.post(
                 f"/api/v1/backups/{created['id']}/restore",
@@ -70,6 +118,14 @@ def main() -> None:
             assert profile_file.read_text(encoding="utf-8") == "original snapshot\n"
             assert result["safetyBackup"]["id"] != created["id"] and result["safetyBackup"]["integrity"] == "verified"
             assert str(vault) not in str(result)
+            for relative, contents in preserved_files.items():
+                assert (vault / relative).read_text(encoding="utf-8") == contents
+                assert not (backups / result["safetyBackup"]["id"] / "vault" / relative).exists()
+            assert not local_only.exists()
+            assert not (vault / "90 System" / "Locks").exists()
+            assert not (vault / "90 System" / "Transactions").exists()
+            post_restore = api.get("/api/v1/backups", headers=headers).json()["data"]
+            assert result["currentRevision"] == post_restore["currentRevision"]
 
             # A backup is bound to one Vault and cannot be selected by another.
             other = base / "other-vault"
@@ -86,9 +142,29 @@ def main() -> None:
             assert invalid.status_code == 400 and invalid.json()["error"]["code"] == "BACKUP_INVALID"
             listed_invalid = api.get("/api/v1/backups", headers=headers).json()["data"]["backups"]
             assert next(item for item in listed_invalid if item["id"] == created["id"])["integrity"] == "invalid"
+
+            # Creating a backup reports how many old backups were pruned.
+            (vault / "10 Profile" / "Profile.md").write_text("snapshot for prune\n", encoding="utf-8")
+            created_again = api.post("/api/v1/backups", headers=headers).json()["data"]["backup"]
+            assert "pruned" in created_again and isinstance(created_again["pruned"], list)
+
+            # Retention policy: only the newest `keep` backups survive.
+            for index in range(5):
+                (vault / "10 Profile" / "Profile.md").write_text(f"snapshot {index}\n", encoding="utf-8")
+                api.post("/api/v1/backups", headers=headers)
+            removed = vm.prune_managed_backups(vault, keep=3, quota_bytes=10**12)
+            remaining = vm._managed_backup_dirs(vault)
+            assert len(remaining) == 3, remaining
+            assert len(removed) >= 2, removed
+
+            # Disk quota: the oldest backups are removed until under the cap.
+            removed = vm.prune_managed_backups(vault, keep=20, quota_bytes=1)
+            assert vm._managed_backup_dirs(vault) == []
+            assert len(removed) == 3, removed
         finally:
             vm.backup_root = original_backup_root
 
+    test_interrupted_swap_recovery()
     print("managed backup, verification, safety snapshot, restore, and isolation tests passed")
 
 

@@ -176,7 +176,18 @@ def launch(args: argparse.Namespace) -> int:
             port = int(sock.getsockname()[1])
             requested: list[Path] = []
             app = create_app(vault, token=token, web_dist=web_dist, watch=True)
-            server = uvicorn.Server(uvicorn.Config(app, host=HOST, port=port, log_level="warning"))
+            # The packaged Windows GUI executable has no stdout/stderr. Skip
+            # Uvicorn's default formatter, which assumes sys.stdout.isatty().
+            server = uvicorn.Server(
+                uvicorn.Config(
+                    app,
+                    host=HOST,
+                    port=port,
+                    log_level="warning",
+                    log_config=None,
+                    access_log=False,
+                )
+            )
             app.state.request_shutdown = lambda: setattr(server, "should_exit", True)
             def restart(next_vault: Path) -> None:
                 requested.append(next_vault.resolve())

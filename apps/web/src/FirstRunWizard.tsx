@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ArrowRight, Check, FolderOpen, FolderPlus, Globe, Note, Sparkle } from '@phosphor-icons/react'
-import type { ApiClient, OnboardingState } from './api'
+import type { ApiClient, OnboardingState, RegisteredVault } from './api'
 import ConversationalOnboardingPage from './ConversationalOnboardingPage'
+import { vaultHint } from './vaultHints'
 import onboardingOrb from './assets/onboarding-intelligence-orb.webp'
 
 type Props = { client: ApiClient; vaultName: string; onFinish: (destination: 'overview' | 'review') => void }
@@ -16,11 +17,16 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   const [interview, setInterview] = useState(false)
   const [interviewState, setInterviewState] = useState<OnboardingState | null>(null)
   const [interviewLoading, setInterviewLoading] = useState(false)
+  const [registered, setRegistered] = useState<RegisteredVault[]>([])
+  const [currentVaultId, setCurrentVaultId] = useState('')
+  const [connecting, setConnecting] = useState('')
 
   useEffect(() => {
     document.documentElement.scrollTop = 0
     document.body.scrollTop = 0
-  }, [])
+    void client.vaultStatus().then((status) => setCurrentVaultId(status.vaultId)).catch(() => undefined)
+    void client.registeredVaults().then(setRegistered).catch(() => undefined)
+  }, [client])
 
   async function run(action: 'create' | 'connect') {
     const target = path.trim()
@@ -30,8 +36,18 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
       const result = action === 'create' ? await client.createVault(target) : await client.validateVault(target)
       setDone(`${action === 'create' ? '已创建' : '已连接'}个人空间「${result.displayName}」。`)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '操作失败，请检查路径后重试。')
+      setError(vaultHint(reason instanceof Error ? reason.message : '操作失败，请检查路径后重试。'))
     } finally { setBusy(false) }
+  }
+
+  async function connect(item: RegisteredVault) {
+    setConnecting(item.vaultId); setError(''); setDone('')
+    try {
+      await client.connectVault(item.vaultId)
+      setDone(`正在打开「${item.displayName}」…`)
+    } catch (reason) {
+      setError(vaultHint(reason instanceof Error ? reason.message : '连接失败，请稍后重试。'))
+    } finally { setConnecting('') }
   }
 
   async function finish(destination: 'overview' | 'review') {
@@ -64,6 +80,7 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
       <p className="wizard-badge"><Sparkle size={14} weight="fill" />首次启动 · Onboarding</p>
       <h1>欢迎来到你的个人智能中枢</h1>
       <p>建立一个属于自己的长期个人上下文空间。你的数据默认保存在本地。</p>
+      <p className="wizard-note">Vault 是一个本地文件夹：数据只留在本机，路径与内容都不会上传到任何服务。</p>
     </header>
 
     <figure className="wizard-hero-image">
@@ -78,6 +95,16 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
         <button className={mode === 'connect' ? 'selected' : ''} onClick={() => { setMode('connect'); setError(''); setDone('') }}><FolderOpen size={25} /><span><strong>连接已有 Vault</strong><small>校验并连接已有的个人知识库目录</small></span><ArrowRight size={18} /></button>
       </div>
       {mode && <div className="wizard-path-row"><label><span>{mode === 'create' ? '新 Vault 目录' : '已有 Vault 目录'}</span><input aria-label={mode === 'create' ? '新 Vault 的文件夹路径' : '已有 Vault 的文件夹路径'} value={path} onChange={(event) => { setPath(event.target.value); setError('') }} placeholder="例如 D:\PersonalAIProfile\my-ai-profile" /></label><button className="secondary-action" onClick={() => void run(mode)} disabled={busy}>{busy ? '处理中…' : mode === 'create' ? '创建 Vault' : '验证并连接'}</button></div>}
+      {registered.length > 0 && <div className="wizard-registered">
+        <p className="wizard-registered-title">已登记的个人空间（点击直接打开）</p>
+        <div className="wizard-registered-list">
+          {registered.map((item) => <button key={item.vaultId} disabled={!item.available || connecting === item.vaultId} onClick={() => void connect(item)}>
+            <FolderOpen size={20} />
+            <span><strong>{item.displayName}</strong><small>{item.vaultId.slice(0, 18)}</small></span>
+            <em>{item.vaultId === currentVaultId ? '当前空间' : item.available ? (connecting === item.vaultId ? '正在打开…' : '打开') : '目录不存在'}</em>
+          </button>)}
+        </div>
+      </div>}
       {done && <p className="wizard-done" role="status"><Check size={17} />{done}</p>}
       {error && <p className="wizard-error" role="alert">{error}</p>}
     </section>
