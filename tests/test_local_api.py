@@ -171,6 +171,31 @@ def main():
         assert rollback_source.read_text(encoding="utf-8") == "original"
         assert not rollback_destination.exists() and not journal.exists()
 
+        # Provider authorization: start from a clean registry.
+        for item in client.get("/api/v1/providers", headers=headers).json()["data"]["providers"]:
+            client.delete(f"/api/v1/providers/{item['provider']}", headers=headers)
+        overview = client.get("/api/v1/providers", headers=headers)
+        assert overview.status_code == 200 and overview.json()["data"]["providers"] == [], overview.text
+        assert set(overview.json()["data"]["scopes"]) == {"reflection:summary", "profile:summary", "memory:search"}, overview.text
+
+        denied = client.post("/api/v1/providers/preview", headers=headers, json={"provider": "local-llm", "scope": "reflection:summary", "context": {"summary": "x"}})
+        assert denied.status_code == 409, denied.text
+
+        granted = client.post("/api/v1/providers", headers=headers, json={"provider": "local-llm", "scopes": ["reflection:summary"]})
+        assert granted.status_code == 201, granted.text
+
+        preview = client.post("/api/v1/providers/preview", headers=headers, json={"provider": "local-llm", "scope": "reflection:summary", "context": {"summary": "x", "secret": "y"}})
+        assert preview.status_code == 200, preview.text
+        data = preview.json()["data"]
+        assert data["preview"] == {"summary": "x"} and data["droppedFields"] == ["secret"], data
+
+        decided = client.post("/api/v1/providers/calls", headers=headers, json={"request_id": data["requestId"], "action": "approve"})
+        assert decided.status_code == 200 and decided.json()["data"]["payload"] == {"summary": "x"}, decided.text
+
+        log = client.get("/api/v1/providers/audit", headers=headers)
+        assert log.status_code == 200 and log.json()["data"]["integrity"]["events"] >= 1, log.text
+        assert log.json()["data"]["items"][0]["details"]["provider"] == "local-llm", log.text
+
         # Events endpoint and resident watcher.
         events = client.get("/api/v1/vault/events", headers=headers)
         assert events.status_code == 200 and "events" in events.json()["data"], events.text

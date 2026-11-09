@@ -361,6 +361,21 @@ describe('review workspace', () => {
     expect(spy).toHaveBeenCalled()
   })
 
+  it('shows the provider authorization module and its empty state', async () => {
+    const { calls } = mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/providers': { providers: [], pending: [], scopes: { 'reflection:summary': ['dimension', 'summary'] } },
+      '/api/v1/providers/audit': { integrity: { status: 'verified', events: 0, lastHash: '' }, items: [] },
+    })
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: 'AI Provider' }))
+    await screen.findByText('已授权 Provider')
+    expect(screen.getByText(/还没有授权任何 Provider/)).toBeInTheDocument()
+    expect(calls).toContain('/api/v1/providers')
+  })
+
   it('surfaces external edits with a non-blocking refresh banner', async () => {
     mockApi({
       '/api/v1/memories': [memory],
