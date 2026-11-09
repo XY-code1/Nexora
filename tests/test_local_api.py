@@ -350,6 +350,20 @@ def main():
         finally:
             adapters_mod._post_json = original_post
 
+        # Vault directory helpers: default recommendation, native picker, forget.
+        default = client.get("/api/v1/vaults/default-path", headers=headers)
+        assert default.status_code == 200 and default.json()["data"]["path"], default.text
+
+        browse = client.post("/api/v1/vaults/browse", headers=headers)
+        assert browse.status_code in (200, 409), browse.text
+
+        forget = client.delete(f"/api/v1/vaults/{current_id}", headers=headers)
+        assert forget.status_code == 200 and forget.json()["data"]["forgotten"] is True, forget.text
+        remaining = client.get("/api/v1/vaults", headers=headers).json()["data"]
+        assert all(item["vaultId"] != current_id for item in remaining), remaining
+        missing = client.delete(f"/api/v1/vaults/{current_id}", headers=headers)
+        assert missing.status_code == 404 and missing.json()["error"]["code"] == "VAULT_NOT_FOUND", missing.text
+
     print("local API and consistency tests passed")
 
 

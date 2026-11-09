@@ -19,6 +19,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from core import profile
 from core import sync as git_sync
 from core.vault_identity import VaultMonitor, find_registered, list_registered, register_vault
+from core import vault_identity
 from core.repository import list_markdown
 from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
@@ -250,6 +251,23 @@ class ImportItemInput(BaseModel):
 class ImportCommitInput(BaseModel):
     items: list[ImportItemInput] = Field(min_length=1, max_length=100)
     source: str = Field(default="local-import", max_length=64)
+
+
+def browse_directory(title: str) -> str:
+    """Open the platform folder picker and return the chosen directory."""
+    try:
+        from tkinter import Tk, filedialog
+    except Exception as exc:  # noqa: BLE001 - headless / unsupported platform
+        raise RuntimeError(f"当前环境不支持系统文件夹选择器：{exc}") from None
+    root = Tk()
+    root.withdraw()
+    try:
+        selected = filedialog.askdirectory(title=title)
+    finally:
+        root.destroy()
+    if not selected:
+        raise RuntimeError("未选择文件夹。")
+    return str(Path(selected).expanduser().resolve())
 
 
 def safe_git_error(message: str, root: Path) -> str:
@@ -984,6 +1002,24 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             return envelope(github.disconnect(str(root)))
         except RuntimeError as exc:
             raise ApiError(409, "GITHUB_DISCONNECT_FAILED", str(exc)) from None
+
+    @app.get("/api/v1/vaults/default-path", dependencies=[auth])
+    def vault_default_path() -> dict[str, Any]:
+        return envelope({"path": vault_identity.default_vault_directory()})
+
+    @app.post("/api/v1/vaults/browse", dependencies=[auth])
+    def vault_browse() -> dict[str, Any]:
+        try:
+            return envelope({"path": browse_directory("选择 NEXORA 私人 Vault 文件夹")})
+        except RuntimeError as exc:
+            raise ApiError(409, "BROWSE_UNAVAILABLE", str(exc)) from None
+
+    @app.delete("/api/v1/vaults/{vault_id}", dependencies=[auth])
+    def vault_forget(vault_id: str) -> dict[str, Any]:
+        try:
+            return envelope(vault_identity.forget_vault(vault_id))
+        except RuntimeError as exc:
+            raise ApiError(404, "VAULT_NOT_FOUND", str(exc)) from None
 
     @app.get("/api/v1/providers", dependencies=[auth])
     def list_provider_authorizations() -> dict[str, Any]:

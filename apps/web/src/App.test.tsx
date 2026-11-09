@@ -486,7 +486,7 @@ describe('review workspace', () => {
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-    await screen.findByText(/已登记的个人空间/)
+    await screen.findByText(/最近使用的个人空间/)
     expect(screen.getAllByText('当前空间').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /旧空间/ }))
     await screen.findByText('正在打开「旧空间」…')
@@ -510,6 +510,40 @@ describe('review workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '恢复到此提交' }))
     await screen.findByText(/已恢复到提交/)
     expect(calls).toContain('/api/v1/git/restore')
+  })
+
+  it('recommends a default directory, browses, and forgets a registered vault', async () => {
+    mockApi({
+      '/api/v1/memories': [],
+      '/api/v1/memory-stats': { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 },
+      '/api/v1/overview': { profile: { access: 'allowed', protected: false, sections: [] }, memory: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready', initialized: false },
+      '/api/v1/vault': { vaultId: 'vault_current', displayName: '当前空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/vaults': [
+        { vaultId: 'vault_current', displayName: '当前空间', available: true, lastOpenedAt: '2026-11-09T00:00:00Z' },
+        { vaultId: 'vault_old', displayName: '旧空间', available: true, lastOpenedAt: '2026-11-08T00:00:00Z' },
+      ],
+      '/api/v1/vaults/default-path': { path: 'C:\\Users\\test\\Nexora\\vault' },
+      '/api/v1/vaults/browse': { path: 'D:\\Picked\\vault' },
+      '/api/v1/vaults/vault_old': { vaultId: 'vault_old', forgotten: true },
+      '/api/v1/initialized': { initialized: true },
+      '/api/v1/onboarding': { topics: [], nextTopic: null, completed: true, notice: '' },
+    })
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByText('欢迎来到 NEXORA 个人智能中枢')
+    fireEvent.click(screen.getByRole('button', { name: /创建新的 Vault/ }))
+    await waitFor(() => expect(screen.getByLabelText('新 Vault 的文件夹路径')).toHaveValue('C:\\Users\\test\\Nexora\\vault/my-ai-profile'))
+
+    fireEvent.change(screen.getByLabelText('文件夹名称'), { target: { value: 'my-space' } })
+    fireEvent.click(screen.getByRole('button', { name: '使用推荐目录' }))
+    expect(screen.getByLabelText('新 Vault 的文件夹路径')).toHaveValue('C:\\Users\\test\\Nexora\\vault/my-space')
+
+    fireEvent.click(screen.getByRole('button', { name: '浏览…' }))
+    await waitFor(() => expect(screen.getByLabelText('新 Vault 的文件夹路径')).toHaveValue('D:\\Picked\\vault'))
+
+    fireEvent.click(screen.getByRole('button', { name: '忘记个人空间 vault_ol' }))
+    await waitFor(() => expect(screen.queryByText('旧空间')).not.toBeInTheDocument())
   })
 
   it('configures a connector and calls an approved provider', async () => {

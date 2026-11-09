@@ -223,6 +223,10 @@ label{display:block;font-weight:650;margin-bottom:8px}textarea,input,select{widt
 .wizard-registered{display:grid;gap:10px;padding:14px;border:1px solid var(--border-subtle);border-radius:14px;background:#0b1525}
 .wizard-registered-title{margin:0;color:var(--text-secondary);font-size:.76rem}
 .wizard-registered-list{display:grid;gap:8px}
+.wizard-registered-item{display:flex;align-items:center;gap:6px}
+.wizard-registered-item>button:first-child{flex:1}
+.wizard-forget{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;flex:none;color:#ff889b;border:1px solid rgba(255,120,146,.32);border-radius:9px;background:transparent;cursor:pointer}
+.wizard-forget:hover{background:rgba(255,120,146,.08)}
 .wizard-registered-list button{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;width:100%;padding:12px 14px;text-align:left;color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:11px;background:rgba(8,13,24,.48)}
 .wizard-registered-list button:hover:not(:disabled),.wizard-registered-list button.selected{border-color:rgba(39,191,255,.58);background:rgba(39,191,255,.08)}
 .wizard-registered-list button:disabled{opacity:.55;cursor:not-allowed}

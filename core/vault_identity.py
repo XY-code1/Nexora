@@ -72,6 +72,30 @@ def list_registered() -> list[dict[str, object]]:
     return [{"vaultId": item.get("vault_id", ""), "displayName": item.get("display_name", ""), "available": Path(str(item.get("path", ""))).is_dir(), "lastOpenedAt": item.get("last_opened_at", "")} for item in entries if isinstance(item, dict)]
 
 
+def default_vault_directory() -> str:
+    """A safe, user-writable default location for a new Vault."""
+    base = Path(os.environ.get("USERPROFILE") or os.environ.get("HOME") or Path.home())
+    return str(base / "Nexora" / "vault")
+
+
+def forget_vault(vault_id: str) -> dict[str, object]:
+    """Remove a Vault from the local registry. Never touches files on disk."""
+    registry = app_data_root() / "vaults.json"
+    try:
+        entries = json.loads(registry.read_text(encoding="utf-8")) if registry.is_file() else []
+    except (OSError, ValueError):
+        entries = []
+    if not isinstance(entries, list):
+        entries = []
+    kept = [item for item in entries if not (isinstance(item, dict) and item.get("vault_id") == vault_id)]
+    if len(kept) == len(entries):
+        raise RuntimeError(f"未找到已登记的 Vault：{vault_id}")
+    with FileLock(str(registry) + ".lock", timeout=10):
+        registry.parent.mkdir(parents=True, exist_ok=True)
+        registry.write_text(json.dumps(kept, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"vaultId": vault_id, "forgotten": True}
+
+
 _WATCHER_BLOCKED = {".git", ".env", "Locks", "Transactions"}
 
 
