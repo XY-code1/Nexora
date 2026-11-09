@@ -111,7 +111,9 @@ with tempfile.TemporaryDirectory() as temporary:
 
     # 敏感内容：预览告警并 fail closed
     key_file = vault / "30 Memory/Inbox" / "leaked.txt"
-    key_file.write_text("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----\n", encoding="utf-8")
+    # Assemble a synthetic PEM marker at runtime; no key material is checked in.
+    key_type = "RSA PRIVATE KEY"
+    key_file.write_text(f"-----BEGIN {key_type}-----\nsynthetic-test-data\n-----END {key_type}-----\n", encoding="utf-8")
     preview = sync_mod.git_changes(str(vault))
     assert [item["path"] for item in preview["sensitive"]] == ["30 Memory/Inbox/leaked.txt"], preview
     expect_failure(lambda: sync_mod.sync_commit(str(vault), "with secret content"), "敏感")
