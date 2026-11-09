@@ -88,6 +88,14 @@ with tempfile.TemporaryDirectory() as temporary:
     assert result["status"] == "pulled", result
     assert (vault_c / "10 Profile" / "Profile.md").read_text(encoding="utf-8") == "from-b-2\n"
 
+    # Git 历史：只读提交列表，不改动工作区。
+    history = sync_mod.git_history(str(vault))
+    assert history["branch"] == "main", history
+    assert len(history["commits"]) >= 1, history
+    for item in history["commits"]:
+        assert {"id", "created", "subject", "author"} <= set(item), item
+    expect_failure(lambda: sync_mod.git_history(str(base)), "不是Git仓库")
+
     # 变更预览：干净 Vault 没有待提交内容
     preview = sync_mod.git_changes(str(vault))
     assert preview["changes"] == [] and preview["sensitive"] == [], preview

@@ -170,6 +170,31 @@ def sync_status(vault: str) -> dict[str, object]:
         }
 
 
+def git_history(vault: str, limit: int = 50) -> dict[str, object]:
+    """Read-only commit history for the Vault's private Git repository."""
+    root = Path(vault).expanduser().resolve()
+    assert_vault_isolated(root)
+    _require_git_repo(root)
+    with vault_operation_lock(root):
+        count = max(1, min(limit, 200))
+        result = _git(root, "log", f"-n{count}", "--pretty=format:%H%x1f%cI%x1f%s%x1f%an")
+        commits: list[dict[str, str]] = []
+        for line in result.stdout.splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("\x1f")
+            if len(parts) < 4:
+                continue
+            commits.append({
+                "id": parts[0].strip(),
+                "created": parts[1].strip(),
+                "subject": parts[2].strip(),
+                "author": parts[3].strip(),
+            })
+        branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        return {"branch": branch, "commits": commits}
+
+
 def sync_commit(vault: str, message: str = "chore: local memory update") -> str:
     """Stage and commit every Vault change (respecting the Vault .gitignore)."""
     root = Path(vault).expanduser().resolve()

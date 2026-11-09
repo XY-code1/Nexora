@@ -1,3 +1,4 @@
+import subprocess
 import sys
 import tempfile
 from contextlib import redirect_stdout
@@ -169,6 +170,15 @@ def main():
         profile.recover_transactions(vault)
         assert rollback_source.read_text(encoding="utf-8") == "original"
         assert not rollback_destination.exists() and not journal.exists()
+
+        # Git 历史：只读提交列表。
+        for command in (["init", "-b", "main"], ["config", "user.email", "a@example.com"], ["config", "user.name", "A"], ["add", "-A"], ["commit", "-m", "init"]):
+            subprocess.run(["git", *command], cwd=str(vault), capture_output=True, text=True)
+        history = client.get("/api/v1/git/history", headers=headers)
+        assert history.status_code == 200, history.text
+        data = history.json()["data"]
+        assert data["branch"] == "main" and len(data["commits"]) == 1, data
+        assert data["commits"][0]["subject"] == "init", data
 
         # 导入：预览后可写入候选，重复内容被去重，解析失败返回 400。
         preview = client.post("/api/v1/imports/preview", headers=headers, json={
