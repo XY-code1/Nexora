@@ -49,9 +49,11 @@ export type GrowthTimelinePoint = { month: string; assessment: GrowthAssessment 
 export type GrowthTimeline = { disclaimer: string; months: GrowthTimelinePoint[] }
 export type GrowthAssociation = { id: string; fromDimension: GrowthDimensionKey; fromEventId: string; toDimension: GrowthDimensionKey; toEventId: string; relationType: 'correlation' | 'causation'; note: string; createdAt: string; revision: string }
 export type GrowthGoal = { id: string; horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string; createdAt: string; updatedAt: string; revision: string }
-export type VaultBackup = { id: string; created: string; schemaVersion: number; fileCount: number; sizeBytes: number; integrity: 'verified' | 'invalid'; managed: boolean }
+export type VaultBackup = { id: string; created: string; schemaVersion: number; fileCount: number; sizeBytes: number; integrity: 'verified' | 'invalid'; managed: boolean; pruned?: string[] }
 export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
-export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean }
+export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean; lastSeenRevision?: string; watched?: boolean }
+export type VaultEvent = { revision: string; detectedAt: string }
+export type VaultEvents = VaultStatus & { events: VaultEvent[] }
 export type RegisteredVault = { vaultId: string; displayName: string; available: boolean; lastOpenedAt: string }
 export type GitStatus = { configured?: boolean; message?: string; branch?: string; head?: string; upstream?: string | null; ahead?: number; behind?: number; dirty: string[]; unmerged: string[] }
 export type GitHubStatus = { configured: boolean; sessionActive: boolean; connected: boolean; repository: string; visibilityVerified: string; remoteName: string; remoteHost: string; lastVerifiedAt: string }
@@ -60,6 +62,25 @@ export type GitHubDevicePoll = { status: 'pending' | 'slow_down' | 'expired' | '
 export type GitHubRepository = { name: string; fullName: string; private: boolean; permissions: Record<string, boolean> }
 export type GitHubVerification = { fullName: string; private: boolean; defaultBranch: string; permissions: Record<string, boolean> }
 export type GitHubConnection = { provider: string; repository: string; visibilityVerified: string; remoteName: string; remoteHost: string; lastVerifiedAt: string; sessionActive: boolean }
+
+export type ProviderAuthorization = { provider: string; enabled: boolean; scopes: string[]; createdAt: string; updatedAt: string }
+export type PendingCall = { requestId: string; provider: string; scope: string; preview: Record<string, unknown>; droppedFields: string[]; preparedAt: string; status: string }
+export type ProviderOverview = { providers: ProviderAuthorization[]; pending: PendingCall[]; scopes: Record<string, string[]> }
+export type ProviderDecision = { requestId: string; provider: string; scope: string; decision: 'approved' | 'denied'; payload: Record<string, unknown>; droppedFields: string[]; decidedAt: string }
+export type ProviderAuditEntry = { eventId: string; timestamp: string; eventType: string; scope: string; result: string; reasonCode: string; correlationId: string; details: { provider: string; fieldCount: number; droppedFields: string[] } }
+export type ProviderAudit = { integrity: { status: string; events: number; line?: number; lastHash: string }; items: ProviderAuditEntry[] }
+
+export type GitCommit = { id: string; created: string; subject: string; author: string }
+export type GitHistory = { branch: string; commits: GitCommit[]; message?: string }
+
+export type ImportItemStatus = 'ready' | 'duplicate' | 'invalid'
+export type ImportPreviewItem = { index: number; type: string; subject: string; content: string; preview: string; status: ImportItemStatus; reason: string }
+export type ImportPreview = { items: ImportPreviewItem[]; summary: { total: number; ready: number; duplicate: number; invalid: number } }
+export type ImportCreated = { id: string; type: string; subject: string }
+export type ImportSkipped = { type: string; subject: string; reason: string }
+export type ImportResult = { created: ImportCreated[]; skipped: ImportSkipped[] }
+export type GitChange = { path: string; status: string; code: string }
+export type GitChanges = { changes: GitChange[]; sensitive: { path: string; reason: string }[]; unmerged: string[]; can_commit: boolean; message?: string }
 export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string; initialized: boolean }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
@@ -134,7 +155,9 @@ export class ApiClient {
   verifyBackup(id: string, signal?: AbortSignal) { return this.request<VaultBackup>(`/api/v1/backups/${encodeURIComponent(id)}/verify`, { signal }) }
   restoreBackup(id: string, confirmation: string, revision: string, signal?: AbortSignal) { return this.request<{ restoredBackupId: string; safetyBackup: VaultBackup; currentRevision: string }>(`/api/v1/backups/${encodeURIComponent(id)}/restore`, { method: 'POST', body: JSON.stringify({ confirmation, expected_vault_revision: revision }), signal }) }
   vaultStatus(signal?: AbortSignal) { return this.request<VaultStatus>('/api/v1/vault', { signal }) }
+  vaultEvents(signal?: AbortSignal) { return this.request<VaultEvents>('/api/v1/vault/events', { signal }) }
   registeredVaults(signal?: AbortSignal) { return this.request<RegisteredVault[]>('/api/v1/vaults', { signal }) }
+  connectVault(vaultId: string, signal?: AbortSignal) { return this.request<{ status: string; vaultId: string }>('/api/v1/vaults/connect', { method: 'POST', body: JSON.stringify({ vault_id: vaultId }), signal }) }
   validateVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; valid: boolean }>('/api/v1/vaults/validate', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   switchVault(path: string, signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/vault/switch', { method: 'POST', body: JSON.stringify({ path }), signal }) }
@@ -148,6 +171,17 @@ export class ApiClient {
   githubCreate(name: string, signal?: AbortSignal) { return this.request<{ fullName: string; private: boolean; created: boolean }>('/api/v1/github/create', { method: 'POST', body: JSON.stringify({ name }), signal }) }
   githubConnect(repository: string, signal?: AbortSignal) { return this.request<GitHubConnection>('/api/v1/github/connect', { method: 'POST', body: JSON.stringify({ repository }), signal }) }
   githubDisconnect(signal?: AbortSignal) { return this.request<{ connected: boolean }>('/api/v1/github/connection', { method: 'DELETE', signal }) }
+
+  providers(signal?: AbortSignal) { return this.request<ProviderOverview>('/api/v1/providers', { signal }) }
+  authorizeProvider(provider: string, scopes: string[], signal?: AbortSignal) { return this.request<ProviderAuthorization>('/api/v1/providers', { method: 'POST', body: JSON.stringify({ provider, scopes }), signal }) }
+  revokeProvider(provider: string, signal?: AbortSignal) { return this.request<{ provider: string; revoked: boolean }>(`/api/v1/providers/${encodeURIComponent(provider)}`, { method: 'DELETE', signal }) }
+  previewProviderCall(provider: string, scope: string, context: Record<string, unknown>, signal?: AbortSignal) { return this.request<PendingCall>('/api/v1/providers/preview', { method: 'POST', body: JSON.stringify({ provider, scope, context }), signal }) }
+  decideProviderCall(requestId: string, action: 'approve' | 'deny', reason: string, signal?: AbortSignal) { return this.request<ProviderDecision>('/api/v1/providers/calls', { method: 'POST', body: JSON.stringify({ request_id: requestId, action, reason }), signal }) }
+  providerAudit(signal?: AbortSignal) { return this.request<ProviderAudit>('/api/v1/providers/audit', { signal }) }
+
+  gitHistory(limit = 50, signal?: AbortSignal) { return this.request<GitHistory>(`/api/v1/git/history?limit=${limit}`, { signal }) }
+
+  gitChanges(signal?: AbortSignal) { return this.request<GitChanges>('/api/v1/git/changes', { signal }) }
   gitCommit(message: string, signal?: AbortSignal) { return this.request<{ head: string }>('/api/v1/git/commit', { method: 'POST', body: JSON.stringify({ message, confirmation: 'COMMIT' }), signal }) }
   gitPull(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/pull', { method: 'POST', body: JSON.stringify({ confirmation: 'PULL' }), signal }) }
   gitPush(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/push', { method: 'POST', body: JSON.stringify({ confirmation: 'PUSH' }), signal }) }
@@ -169,5 +203,7 @@ export class ApiClient {
   confirmMonthly(id: string, revision: string, signal?: AbortSignal) { return this.request<MonthlyReflection>(`/api/v1/monthly-reflections/${id}/confirm`, { method: 'POST', body: JSON.stringify({ expected_revision: revision }), signal }) }
   edit(id: string, content: string, expected_revision: string, signal?: AbortSignal) { return this.request<Memory>(`/api/v1/memories/${id}`, { method: 'PATCH', body: JSON.stringify({ content, expected_revision }), signal }) }
   action(id: string, action: 'confirm' | 'reject', expected_revision: string, reason = '', signal?: AbortSignal) { return this.request<{ id: string; action: string; status: string }>(`/api/v1/memories/${id}/${action}`, { method: 'POST', body: JSON.stringify({ expected_revision, reason }), signal }) }
+  importPreview(format: string, content: string, signal?: AbortSignal) { return this.request<ImportPreview>('/api/v1/imports/preview', { method: 'POST', body: JSON.stringify({ format, content }), signal }) }
+  importCommit(items: { type: string; subject: string; content: string }[], source: string, signal?: AbortSignal) { return this.request<ImportResult>('/api/v1/imports', { method: 'POST', body: JSON.stringify({ items, source }), signal }) }
   shutdown(signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/shutdown', { method: 'POST', signal }) }
 }

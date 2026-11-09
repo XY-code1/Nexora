@@ -325,14 +325,14 @@ Split frontend/backend development:
 
 ```powershell
 # Terminal 1
-python -m apps.api.main --vault ..\my-ai-profile
+python -m apps.api.main --vault ..\my-ai-profile --show-token
 
 # Terminal 2
 cd apps\web
 npm run dev
 ```
 
-The bearer token remains in page memory and is removed from the URL after bootstrap. It is not stored in `localStorage` or bundled assets.
+The API hides its management bearer token from startup logs by default. The split frontend/backend development example opts in with `--show-token` so the token can be entered in the local UI; use that flag only in a trusted local terminal. The bearer token remains in page memory and is removed from the URL after bootstrap. It is not stored in `localStorage` or bundled assets.
 
 ## Testing
 

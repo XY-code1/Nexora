@@ -1,14 +1,16 @@
 # Privacy
 
-- Private仓库不等于密码保险箱。
-- 不保存密码、Token、验证码、API Key、私钥、证件或银行卡资料。
-- `ai_access: denied`：禁止模型读取。
-- `ai_access: local-only`：只允许本地模型读取。
-- `ai_access: summary-only`：只发送人工确认后的摘要。
-- `ai_access: allowed`：可按任务发送给配置的模型。
-- 如果秘密曾被提交，应立即轮换秘密并清理Git历史。
-- 每个 MCP 客户端使用独立的一次性凭据；Vault 只保存哈希，撤销后下一次调用立即失效。
-- Security Center 管理 API 只接受本地启动器 Bearer 会话；MCP 客户端凭据不能调用管理 API。
-- 安全审计只记录事件元数据与哈希链，不记录记忆正文、Token、凭据或私人 Vault 绝对路径。
-- `denied` 与 `local-only` 对 stdio MCP 始终不可见；`summary-only` 只返回人工确认摘要。
+- 私人仓库不等于密码保险箱；不保存密码、Token、验证码、API Key、私钥、证件或银行卡资料。
+- `visibility` 管理内容是否可发布；它不决定本地审核权限，也不授予 AI 读取权限。
+- `ai_access` 是 AI 数据外发规则，不是对本地用户的访问控制。通过认证的本地审核 API 向用户展示完整记录，供用户检查和管理；这不代表内容可发送给 AI。
 
+## AI 客户端读取规则
+
+MCP 是 AI 客户端边界，必须对每条记录强制执行 `ai_access`：
+
+- `allowed`：可按任务发送截断后的正文。
+- `summary-only`：只发送人工明确写出的 `摘要/Summary` 段；搜索也只匹配该段，不能因隐藏正文命中而返回记录。
+- `local-only`：本地用户可在审核界面查看；stdio MCP 无法确认 AI 是否确实在本机运行，因此不向 MCP 返回内容。
+- `denied`、缺少 `ai_access` 或值无效：默认不向 AI 客户端返回内容。
+
+每个 MCP 客户端使用独立凭据和最小 scope。Vault 只保存凭据哈希，撤销后下一次调用立即失效。安全审计只记录事件元数据与哈希链，不记录记忆正文、Token、凭据或私人 Vault 绝对路径。

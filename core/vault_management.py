@@ -22,6 +22,15 @@ from .profile import FOLDER_STATUSES, MEMORY_ROOT, REQUIRED, ROOT, SECRET_PATTER
 CURRENT_SCHEMA_VERSION = 1
 BACKUP_FORMAT = 2
 CONFIG = "profile.config.yml"
+# Retention policy: keep at most this many managed backups per Vault, and cap
+# their combined on-disk size so a long-lived Vault cannot grow without bound.
+BACKUP_RETENTION_COUNT = 20
+BACKUP_QUOTA_BYTES = 500 * 1024 * 1024
+
+_BACKUP_OMITTED_NAMES = {".git", ".env", "Locks", "Transactions"}
+_BACKUP_OMITTED_SUFFIXES = (".key", ".pem")
+_RESTORE_PRESERVED_NAMES = {".git", ".env"}
+_RESTORE_DISCARDED_NAMES = _BACKUP_OMITTED_NAMES - _RESTORE_PRESERVED_NAMES
 _LOCKS: dict[str, FileLock] = {}
 _LOCKS_GUARD = threading.Lock()
 
@@ -111,21 +120,50 @@ def _file_hashes(root: Path) -> dict[str, str]:
 
 def _content_revision(root: Path) -> str:
     """Stable revision of files included in a managed backup."""
-    blocked = {".git", ".env", "Locks", "Transactions"}
     hashes = {
         path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(root.rglob("*"))
         if path.is_file()
-        and not any(part in blocked for part in path.relative_to(root).parts)
-        and not path.name.endswith((".key", ".pem"))
+        and not any(part in _BACKUP_OMITTED_NAMES for part in path.relative_to(root).parts)
+        and not path.name.endswith(_BACKUP_OMITTED_SUFFIXES)
     }
     payload = json.dumps(hashes, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
 def _ignore_runtime(_directory: str, names: list[str]) -> set[str]:
-    blocked = {".git", ".env", "Locks", "Transactions"}
-    return {name for name in names if name in blocked or name.endswith((".key", ".pem"))}
+    return {name for name in names if name in _BACKUP_OMITTED_NAMES or name.endswith(_BACKUP_OMITTED_SUFFIXES)}
+
+
+def _is_restore_preserved(name: str) -> bool:
+    return name in _RESTORE_PRESERVED_NAMES or name.endswith(_BACKUP_OMITTED_SUFFIXES)
+
+
+def _preserve_restore_exclusions(vault: Path, candidate: Path) -> None:
+    """Keep local files deliberately omitted from snapshots, but not runtime state."""
+    if not vault.is_dir():
+        return
+    _reject_links(vault)
+    for directory, folders, files in os.walk(vault, topdown=True, followlinks=False):
+        current = Path(directory)
+        for name in list(folders):
+            if name in _RESTORE_DISCARDED_NAMES:
+                folders.remove(name)
+                continue
+            if not _is_restore_preserved(name):
+                continue
+            source = current / name
+            destination = candidate / source.relative_to(vault)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(source, destination, copy_function=shutil.copy2)
+            folders.remove(name)
+        for name in files:
+            if not _is_restore_preserved(name):
+                continue
+            source = current / name
+            destination = candidate / source.relative_to(vault)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
 
 
 def _create_backup(vault: Path, destination_root: Path | None = None) -> Path:
@@ -228,10 +266,56 @@ def backup_overview(vault: Path) -> dict[str, object]:
         return {"currentRevision": _content_revision(root), "backups": items}
 
 
+def _managed_backup_dirs(root: Path) -> list[Path]:
+    """Backup directories bound to this Vault, newest first."""
+    base = backup_root()
+    binding = _local_binding("managed-backup", root)
+    entries: list[tuple[str, Path]] = []
+    if not base.is_dir():
+        return []
+    for source in base.iterdir():
+        if not source.is_dir():
+            continue
+        try:
+            data = json.loads((source / "backup.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if data.get("format") != BACKUP_FORMAT:
+            continue
+        if not hmac.compare_digest(str(data.get("vault_binding", "")), binding):
+            continue
+        entries.append((str(data.get("created", "")), source))
+    entries.sort(key=lambda item: item[0], reverse=True)
+    return [source for _, source in entries]
+
+
+def _directory_size(source: Path) -> int:
+    return sum(path.stat().st_size for path in source.rglob("*") if path.is_file())
+
+
+def prune_managed_backups(root: Path, *, keep: int = BACKUP_RETENTION_COUNT, quota_bytes: int = BACKUP_QUOTA_BYTES) -> list[str]:
+    """Enforce the retention count and total size quota; return removed backup ids."""
+    removed: list[str] = []
+    for source in _managed_backup_dirs(root)[keep:]:
+        shutil.rmtree(source, ignore_errors=True)
+        removed.append(source.name)
+    entries = _managed_backup_dirs(root)
+    total = sum(_directory_size(source) for source in entries)
+    index = len(entries) - 1
+    while total > quota_bytes and index >= 0:
+        source = entries[index]
+        total -= _directory_size(source)
+        shutil.rmtree(source, ignore_errors=True)
+        removed.append(source.name)
+        index -= 1
+    return removed
+
+
 def create_managed_backup(vault: Path) -> dict[str, object]:
     root = vault.resolve()
     target = create_backup(root)
-    return _backup_view(root, target)
+    pruned = prune_managed_backups(root)
+    return {**_backup_view(root, target), "pruned": pruned}
 
 
 def verify_managed_backup(vault: Path, backup_id: str) -> dict[str, object]:
@@ -277,6 +361,7 @@ def _restore_backup(vault: Path, backup: Path) -> None:
         shutil.copytree(snapshot, candidate)
         if _file_hashes(candidate) != _file_hashes(snapshot):
             raise RuntimeError("恢复候选副本校验失败。")
+        _preserve_restore_exclusions(root, candidate)
         if root.exists():
             os.replace(root, previous)
             swapped = True

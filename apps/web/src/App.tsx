@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, CalendarDots, ChartLineUp, CirclesFour, Database, GithubLogo, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
+import { Brain, CalendarDots, ChartLineUp, CirclesFour, CloudArrowUp, Database, GithubLogo, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, Warning, X } from '@phosphor-icons/react'
 import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type MonthlyTrend, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
@@ -10,6 +10,10 @@ import GrowthDashboard from './GrowthDashboard'
 import OverviewPage from './OverviewPage'
 import BackupRecoveryPage from './BackupRecoveryPage'
 import GitHubBackupPage from './GitHubBackupPage'
+
+import ProviderAuthPage from './ProviderAuthPage'
+
+import ImportPage from './ImportPage'
 import AIConnectionsPage from './AIConnectionsPage'
 import FirstRunWizard from './FirstRunWizard'
 import { LoadingState } from './components/StateBlocks'
@@ -17,12 +21,12 @@ import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'overview' | 'review' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections' | 'github'
+type View = 'overview' | 'review' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections' | 'import' | 'providers' | 'github'
 
 const VIEW_ROUTES: Record<View, string> = {
   overview: '#/overview', review: '#/memory-review', profile: '#/profile',
   timeline: '#/memory-timeline', privacy: '#/privacy-audit', reflection: '#/monthly-reflection',
-  human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections', github: '#/github-backup',
+  human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections', providers: '#/providers', import: '#/import', github: '#/github-backup',
 }
 const ROUTE_VIEWS = new Map(Object.entries(VIEW_ROUTES).map(([view, route]) => [route, view as View]))
 function viewFromHash(hash: string): View | null { return ROUTE_VIEWS.get(hash) ?? null }
@@ -98,6 +102,8 @@ function App() {
   const [firstRun, setFirstRun] = useState(false)
   const [wizardVaultName, setWizardVaultName] = useState('')
   const [navigationAnnouncement, setNavigationAnnouncement] = useState('')
+  const [externalChange, setExternalChange] = useState(false)
+  const [vaultEpoch, setVaultEpoch] = useState(0)
   const sessionEpoch = useRef(0)
   const viewRequest = useRef(0)
   const visualAbort = useRef<AbortController | null>(null)
@@ -172,6 +178,22 @@ function App() {
     mountedRef.current = true
     return () => { mountedRef.current = false }
   }, [])
+
+  // Poll the resident Vault watcher so external edits (Obsidian, another editor)
+  // surface without waiting for the next navigation.
+  useEffect(() => {
+    if (!client) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const status = await client.vaultEvents()
+        if (!cancelled) setExternalChange(status.externalChange)
+      } catch { /* keep the last known state */ }
+    }
+    void tick()
+    const timer = window.setInterval(() => void tick(), 5000)
+    return () => { cancelled = true; window.clearInterval(timer) }
+  }, [client])
 
   useEffect(() => {
     const initialHash = window.location.hash
@@ -279,6 +301,13 @@ function App() {
     } finally { if (epoch === sessionEpoch.current) setLoading(false) }
   }
 
+  async function refreshAfterExternal() {
+    setExternalChange(false)
+    await loadCandidates()
+    if (view !== 'review' && view !== 'overview' && view !== 'backup') await openView(view, false)
+    setVaultEpoch((current) => current + 1)
+  }
+
   function disconnect(message = '') {
     sessionEpoch.current += 1
     mountedRef.current = false
@@ -316,7 +345,7 @@ function App() {
     }
     setVisualLoading(null)
     if (next === 'review') { void loadCandidates(); return }
-    if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections' || next === 'github') return
+    if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections' || next === 'providers' || next === 'import' || next === 'github') return
     const controller = new AbortController()
     visualAbort.current = controller
     const epoch = sessionEpoch.current
@@ -463,6 +492,7 @@ function App() {
     {
       title: '记录',
       items: [
+        { label: '导入', view: 'import', icon: CloudArrowUp },
         { label: '月度复盘', view: 'reflection', icon: CalendarDots },
         { label: '月度趋势', view: 'monthly', icon: ChartLineUp },
         { label: 'Human 3.0', view: 'human3', icon: Brain },
@@ -477,10 +507,11 @@ function App() {
         { label: '备份与恢复', view: 'backup', icon: HardDrives },
         { label: 'AI 连接', view: 'connections', icon: PlugsConnected },
         { label: 'GitHub 备份', view: 'github', icon: GithubLogo },
+        { label: 'AI Provider', view: 'providers', icon: LockKey },
       ],
     },
   ]
-  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接', github: 'GitHub 备份' }
+  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接', providers: 'AI Provider', import: '导入', github: 'GitHub 备份' }
 
   function closeNavigation() {
     setNavigationOpen(false)
@@ -505,6 +536,7 @@ function App() {
       <div className="sr-only" aria-live="polite" aria-atomic="true">{navigationAnnouncement}</div>
       <header className="topbar"><div><p className="eyebrow">HOLOGRAPHIC LIBRARY</p><h1 ref={titleRef} tabIndex={-1}>{titles[view]}</h1></div><div className="topbar-actions"><span className="service-status"><i />本地服务</span><span className="service-status"><i />Vault 已就绪</span><button className="icon-button" aria-label="同步候选记忆" title="同步候选记忆" onClick={() => void loadCandidates()} disabled={loading}><Database size={19} /></button><button className="text-button" onClick={() => disconnect()}>断开连接</button><button className="text-button danger-link" onClick={() => void shutdown()} disabled={saving}>关闭服务</button></div></header>
       <div className="content-shell">
+        {externalChange && <div className="external-banner" role="status"><Warning size={20} /><span>检测到外部修改（例如 Obsidian 编辑）。本地数据已变化，请刷新后核对；系统不会自动覆盖你的编辑。</span><button className="text-button" onClick={() => void refreshAfterExternal()}>刷新数据</button><button className="text-button" onClick={() => setExternalChange(false)}>稍后处理</button></div>}
         {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
 
         {view === 'reflection' && <MonthlyReflectionPage overview={monthlyView} selected={reflectionView} loading={visualLoading === 'reflection'} saving={saving} onSelect={setReflectionView} onCreate={createReflection} onDimension={saveReflectionDimension} onAddEvent={addReflectionEvent} onDeleteEvent={deleteReflectionEvent} onGoals={saveReflectionGoals} onGenerateSummary={generateReflectionSummary} onSummary={saveReflectionSummary} onConfirm={confirmReflection} />}
@@ -514,10 +546,14 @@ function App() {
         {view === 'human3' && <Human3Page value={human3View} loading={visualLoading === 'human3'} />}
         {view === 'monthly' && <MonthlyTrendPage value={monthlyTrendView} loading={visualLoading === 'monthly'} />}
         {view === 'growth' && client && <GrowthDashboard client={client} />}
-        {view === 'backup' && client && <BackupRecoveryPage client={client} />}
-        {view === 'overview' && client && <OverviewPage client={client} onNavigate={(next) => void openView(next)} />}
+        {view === 'backup' && client && <BackupRecoveryPage client={client} refreshKey={vaultEpoch} />}
+        {view === 'overview' && client && <OverviewPage client={client} onNavigate={(next) => void openView(next)} refreshKey={vaultEpoch} />}
         {view === 'connections' && client && <AIConnectionsPage client={client} />}
         {view === 'github' && client && <GitHubBackupPage client={client} />}
+
+        {view === 'providers' && client && <ProviderAuthPage client={client} />}
+
+        {view === 'import' && client && <ImportPage client={client} />}
         {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} onOnboarding={() => void openView('profile')} />}
       </div>
     </section>
