@@ -16,7 +16,7 @@ Windows默认备份目录：
 %LOCALAPPDATA%\PersonalAIProfile\backups
 ```
 
-备份不会写入私人Vault或公共框架仓库；`.git`、运行锁和事务日志不会复制到快照，但MCP审计记录会保留。备份包含文件清单与SHA-256校验；恢复会先在临时目录完整验证，再切换Vault。持久化journal会在异常中断后恢复上一版本。符号链接和Windows重解析点会被拒绝。
+备份不会写入私人Vault或公共框架仓库；`.git`、`.env`、`*.key`、`*.pem`、运行锁和事务日志不会复制到快照，但MCP审计记录会保留。恢复会保留当前Vault中明确排除的`.git`、`.env`、`*.key`和`*.pem`；快照外的普通文件会被移除，`Locks`和`Transactions`运行目录不会从旧Vault带回。备份包含文件清单与SHA-256校验；恢复会先在临时目录完整验证，再切换Vault。持久化journal会在异常中断后恢复上一版本。符号链接和Windows重解析点会被拒绝。
 
 手动管理命令：
 
