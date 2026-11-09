@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { vaultHint } from './vaultHints'
+import { formatDate, translate } from './i18n'
 
 // 每个测试后卸载上一棵组件树：否则残留实例会在后续测试里继续响应未完成的
 // promise，造成状态污染与随机的 act(...) 警告（同一输入下时过时不过）。
@@ -553,5 +554,18 @@ describe('vault hints', () => {
     expect(vaultHint('Vault 结构不完整：AGENTS.md')).toContain('必要文件')
     expect(vaultHint('私人Vault与公共框架仓库不能相互包含')).toContain('独立')
     expect(vaultHint('未知错误')).toBe('未知错误')
+  })
+})
+
+describe('i18n', () => {
+  it('translates keys and falls back to the key itself', () => {
+    expect(translate('nav.overview', 'en')).toBe('Overview')
+    expect(translate('nav.overview', 'zh-CN')).toBe('概览')
+    expect(translate('missing.key', 'en')).toBe('missing.key')
+  })
+  it('formats dates per locale', () => {
+    expect(formatDate('en', '2026-11-09T10:00:00Z')).toContain('2026')
+    expect(formatDate('zh-CN', '2026-11-09T10:00:00Z')).toContain('2026')
+    expect(formatDate('en', 'not-a-date')).toBe('not-a-date')
   })
 })

@@ -3,12 +3,10 @@ import { ArrowCounterClockwise, ArrowLeft, ArrowRight, CheckCircle, ClockCounter
 import type { ApiClient, BackupOverview, GitChanges, GitHistory, GitStatus, RegisteredVault, VaultBackup, VaultStatus } from './api'
 import { LoadingState } from './components/StateBlocks'
 import { vaultHint } from './vaultHints'
+import { formatDate, getLanguage } from './i18n'
 
 function time(value: string) {
-  if (!value) return '时间未知'
-  const stamp = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/)
-  const parsed = stamp ? new Date(`${stamp[1]}-${stamp[2]}-${stamp[3]}T${stamp[4]}:${stamp[5]}:${stamp[6]}Z`) : new Date(value)
-  return Number.isNaN(parsed.getTime()) ? '时间未知' : new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(parsed)
+  return formatDate(getLanguage(), value)
 }
 
 function size(value: number) {
