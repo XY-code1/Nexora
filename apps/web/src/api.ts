@@ -54,6 +54,12 @@ export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
 export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean }
 export type RegisteredVault = { vaultId: string; displayName: string; available: boolean; lastOpenedAt: string }
 export type GitStatus = { configured?: boolean; message?: string; branch?: string; head?: string; upstream?: string | null; ahead?: number; behind?: number; dirty: string[]; unmerged: string[] }
+export type ProviderAuthorization = { provider: string; enabled: boolean; scopes: string[]; createdAt: string; updatedAt: string }
+export type PendingCall = { requestId: string; provider: string; scope: string; preview: Record<string, unknown>; droppedFields: string[]; preparedAt: string; status: string }
+export type ProviderOverview = { providers: ProviderAuthorization[]; pending: PendingCall[]; scopes: Record<string, string[]> }
+export type ProviderDecision = { requestId: string; provider: string; scope: string; decision: 'approved' | 'denied'; payload: Record<string, unknown>; droppedFields: string[]; decidedAt: string }
+export type ProviderAuditEntry = { eventId: string; timestamp: string; eventType: string; scope: string; result: string; reasonCode: string; correlationId: string; details: { provider: string; fieldCount: number; droppedFields: string[] } }
+export type ProviderAudit = { integrity: { status: string; events: number; line?: number; lastHash: string }; items: ProviderAuditEntry[] }
 export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string; initialized: boolean }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
@@ -133,6 +139,12 @@ export class ApiClient {
   createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   switchVault(path: string, signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/vault/switch', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   gitStatus(signal?: AbortSignal) { return this.request<GitStatus>('/api/v1/git/status', { signal }) }
+  providers(signal?: AbortSignal) { return this.request<ProviderOverview>('/api/v1/providers', { signal }) }
+  authorizeProvider(provider: string, scopes: string[], signal?: AbortSignal) { return this.request<ProviderAuthorization>('/api/v1/providers', { method: 'POST', body: JSON.stringify({ provider, scopes }), signal }) }
+  revokeProvider(provider: string, signal?: AbortSignal) { return this.request<{ provider: string; revoked: boolean }>(`/api/v1/providers/${encodeURIComponent(provider)}`, { method: 'DELETE', signal }) }
+  previewProviderCall(provider: string, scope: string, context: Record<string, unknown>, signal?: AbortSignal) { return this.request<PendingCall>('/api/v1/providers/preview', { method: 'POST', body: JSON.stringify({ provider, scope, context }), signal }) }
+  decideProviderCall(requestId: string, action: 'approve' | 'deny', reason: string, signal?: AbortSignal) { return this.request<ProviderDecision>('/api/v1/providers/calls', { method: 'POST', body: JSON.stringify({ request_id: requestId, action, reason }), signal }) }
+  providerAudit(signal?: AbortSignal) { return this.request<ProviderAudit>('/api/v1/providers/audit', { signal }) }
   gitCommit(message: string, signal?: AbortSignal) { return this.request<{ head: string }>('/api/v1/git/commit', { method: 'POST', body: JSON.stringify({ message, confirmation: 'COMMIT' }), signal }) }
   gitPull(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/pull', { method: 'POST', body: JSON.stringify({ confirmation: 'PULL' }), signal }) }
   gitPush(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/push', { method: 'POST', body: JSON.stringify({ confirmation: 'PUSH' }), signal }) }

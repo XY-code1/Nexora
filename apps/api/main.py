@@ -28,6 +28,7 @@ from core import product_state
 from core import security
 from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
 from core import growth
+from core import provider_auth
 from core import vault_management
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
@@ -179,6 +180,23 @@ class GitCommitInput(BaseModel):
 
 class GitConfirmationInput(BaseModel):
     confirmation: str = Field(pattern=r"^(PULL|PUSH)$")
+
+
+class ProviderAuthorizeInput(BaseModel):
+    provider: str = Field(min_length=1, max_length=64)
+    scopes: list[str] = Field(min_length=1, max_length=20)
+
+
+class ProviderPreviewInput(BaseModel):
+    provider: str = Field(min_length=1, max_length=64)
+    scope: str = Field(min_length=1, max_length=80)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProviderDecisionInput(BaseModel):
+    request_id: str = Field(min_length=1, max_length=80)
+    action: str = Field(pattern=r"^(approve|deny)$")
+    reason: str = Field(default="", max_length=200)
 
 
 def safe_git_error(message: str, root: Path) -> str:
@@ -801,6 +819,46 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             raise ApiError(503, "SHUTDOWN_UNAVAILABLE", "当前启动方式不支持远程关闭。")
         background_tasks.add_task(callback)
         return envelope({"status": "shutting-down"})
+
+    @app.get("/api/v1/providers", dependencies=[auth])
+    def list_provider_authorizations() -> dict[str, Any]:
+        return envelope({
+            "providers": provider_auth.list_providers(),
+            "pending": provider_auth.pending_calls(),
+            "scopes": {key: list(value) for key, value in provider_auth.KNOWN_SCOPES.items()},
+        })
+
+    @app.post("/api/v1/providers", status_code=201, dependencies=[auth])
+    def authorize_provider(data: ProviderAuthorizeInput) -> dict[str, Any]:
+        try:
+            return envelope(provider_auth.authorize_provider(data.provider, data.scopes))
+        except provider_auth.ProviderAuthError as exc:
+            raise ApiError(400, "PROVIDER_AUTH_FAILED", str(exc)) from None
+
+    @app.delete("/api/v1/providers/{provider}", dependencies=[auth])
+    def revoke_provider(provider: str) -> dict[str, Any]:
+        try:
+            return envelope(provider_auth.revoke_provider(provider))
+        except provider_auth.ProviderAuthError as exc:
+            raise ApiError(400, "PROVIDER_REVOKE_FAILED", str(exc)) from None
+
+    @app.post("/api/v1/providers/preview", dependencies=[auth])
+    def provider_preview(data: ProviderPreviewInput) -> dict[str, Any]:
+        try:
+            return envelope(provider_auth.prepare_call(data.provider, data.scope, data.context))
+        except provider_auth.ProviderAuthError as exc:
+            raise ApiError(409, "PROVIDER_CALL_DENIED", str(exc)) from None
+
+    @app.post("/api/v1/providers/calls", dependencies=[auth])
+    def provider_decide(data: ProviderDecisionInput) -> dict[str, Any]:
+        try:
+            return envelope(provider_auth.decide_call(data.request_id, data.action, data.reason))
+        except provider_auth.ProviderAuthError as exc:
+            raise ApiError(409, "PROVIDER_DECISION_FAILED", str(exc)) from None
+
+    @app.get("/api/v1/providers/audit", dependencies=[auth])
+    def provider_audit() -> dict[str, Any]:
+        return envelope(provider_auth.audit_log())
 
     @app.get("/api/v1/memories", dependencies=[auth])
     def list_memories(status: str = "candidate", limit: int = 50) -> dict[str, Any]:
