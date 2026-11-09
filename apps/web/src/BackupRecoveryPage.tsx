@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowCounterClockwise, ArrowLeft, ArrowRight, CheckCircle, ClockCounterClockwise, Database, GitBranch, MagnifyingGlass, ShieldCheck, Warning } from '@phosphor-icons/react'
-import type { ApiClient, BackupOverview, GitStatus, RegisteredVault, VaultBackup, VaultStatus } from './api'
+import type { ApiClient, BackupOverview, GitChanges, GitStatus, RegisteredVault, VaultBackup, VaultStatus } from './api'
 import { LoadingState } from './components/StateBlocks'
 
 function time(value: string) {
@@ -180,6 +180,7 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
   const [git, setGit] = useState<GitStatus | null>(null)
   const [vaultPath, setVaultPath] = useState('')
   const [commitMessage, setCommitMessage] = useState('chore: update personal profile')
+  const [changes, setChanges] = useState<GitChanges | null>(null)
   const [wizardOpen, setWizardOpen] = useState(false)
 
   async function load() {
@@ -227,8 +228,16 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
       if (action === 'pull') await client.gitPull()
       if (action === 'push') await client.gitPush()
       setGit(await client.gitStatus())
+      setChanges(null)
       setMessage({ kind: 'success', text: `Git ${action} 已完成。` })
     } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : `Git ${action} 失败。` }) }
+    finally { setBusy('') }
+  }
+
+  async function previewChanges() {
+    setBusy('changes'); setMessage(null)
+    try { setChanges(await client.gitChanges()) }
+    catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '无法读取变更预览。' }) }
     finally { setBusy('') }
   }
 
@@ -286,7 +295,14 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
 
     <section className="git-backup" aria-label="GitHub Private Backup">
       <header><div><p className="eyebrow">OPTIONAL PRIVATE VERSIONING</p><h3>Git / GitHub Private Backup</h3></div><GitBranch size={26} /></header>
-      {git?.configured === false ? <p>{git.message} Web 不会自动初始化仓库或发送网络请求。</p> : <><dl><div><dt>Branch</dt><dd>{git?.branch || '—'}</dd></div><div><dt>Upstream</dt><dd>{git?.upstream || '未配置'}</dd></div><div><dt>Ahead / Behind</dt><dd>{git?.ahead ?? 0} / {git?.behind ?? 0}</dd></div><div><dt>Changes</dt><dd>{git?.dirty.length ?? 0}</dd></div></dl><label>提交说明<input aria-label="Git 提交说明" value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} /></label><div className="git-actions"><button onClick={() => void gitAction('commit')} disabled={Boolean(busy) || !commitMessage.trim()}>Commit</button><button onClick={() => void gitAction('pull')} disabled={Boolean(busy)}>Pull</button><button onClick={() => void gitAction('push')} disabled={Boolean(busy)}>Push</button></div></>}
+      {git?.configured === false ? <p>{git.message} Web 不会自动初始化仓库或发送网络请求。</p> : <><dl><div><dt>Branch</dt><dd>{git?.branch || '—'}</dd></div><div><dt>Upstream</dt><dd>{git?.upstream || '未配置'}</dd></div><div><dt>Ahead / Behind</dt><dd>{git?.ahead ?? 0} / {git?.behind ?? 0}</dd></div><div><dt>Changes</dt><dd>{changes ? changes.changes.length : (git?.dirty.length ?? 0)}</dd></div></dl><label>提交说明<input aria-label="Git 提交说明" value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} /></label><div className="git-actions"><button className="secondary-action" onClick={() => void previewChanges()} disabled={Boolean(busy)}>{busy === 'changes' ? '正在读取…' : '预览变更'}</button><button onClick={() => void gitAction('commit')} disabled={Boolean(busy) || !commitMessage.trim() || (changes !== null && !changes.can_commit)}>Commit</button><button onClick={() => void gitAction('pull')} disabled={Boolean(busy)}>Pull</button><button onClick={() => void gitAction('push')} disabled={Boolean(busy)}>Push</button></div></>}
+      {changes && <div className="git-changes" aria-label="变更预览">
+        {changes.message && <div className="backup-message error" role="alert"><Warning /><span>{changes.message}</span></div>}
+        {changes.sensitive.length > 0 && <div className="restore-boundary"><Warning /><div><strong>检测到疑似敏感文件，已禁止提交</strong><p>请从 Vault 移除这些文件或加入 .gitignore 后再提交；页面不会显示文件内容。</p><ul className="git-sensitive-list">{changes.sensitive.map((item) => <li key={item.path}><code>{item.path}</code><span>{item.reason}</span></li>)}</ul></div></div>}
+        {changes.unmerged.length > 0 && <div className="restore-boundary"><Warning /><div><strong>存在未解决的合并冲突</strong><p>请先手动解决冲突再提交。</p></div></div>}
+        {changes.changes.length > 0 ? <ul className="git-change-list">{changes.changes.map((item) => <li key={`${item.code}:${item.path}`}><span className={`git-status git-status-${item.status}`}>{item.status}</span><code>{item.path}</code></li>)}</ul> : <p className="muted">没有待提交的变更。</p>}
+        <p className="git-changes-meta">{changes.changes.length} 项变更 · {changes.can_commit ? '可以提交' : '暂不可提交'}</p>
+      </div>}
       <small>仅支持用户预先配置的私人仓库。分叉、脏状态和非 fast-forward 会拒绝自动处理。</small>
     </section>
   </section>

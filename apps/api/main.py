@@ -348,6 +348,13 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         except RuntimeError as exc:
             return envelope({"configured": False, "message": safe_git_error(str(exc), root), "dirty": [], "unmerged": []})
 
+    @app.get("/api/v1/git/changes", dependencies=[auth])
+    def git_changes() -> dict[str, Any]:
+        try:
+            return envelope(git_sync.git_changes(str(root)))
+        except RuntimeError as exc:
+            return envelope({"changes": [], "sensitive": [], "unmerged": [], "can_commit": False, "message": safe_git_error(str(exc), root)})
+
     @app.post("/api/v1/git/commit", dependencies=[auth])
     def git_commit(data: GitCommitInput) -> dict[str, Any]:
         if data.confirmation != "COMMIT":
