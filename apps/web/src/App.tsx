@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, CalendarDots, ChartLineUp, CirclesFour, Database, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
+import { Brain, CalendarDots, ChartLineUp, CirclesFour, Database, GithubLogo, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, X } from '@phosphor-icons/react'
 import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type MonthlyTrend, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
@@ -9,6 +9,7 @@ import MonthlyTrendPage from './MonthlyTrendPage'
 import GrowthDashboard from './GrowthDashboard'
 import OverviewPage from './OverviewPage'
 import BackupRecoveryPage from './BackupRecoveryPage'
+import GitHubBackupPage from './GitHubBackupPage'
 import AIConnectionsPage from './AIConnectionsPage'
 import FirstRunWizard from './FirstRunWizard'
 import { LoadingState } from './components/StateBlocks'
@@ -16,12 +17,12 @@ import relationshipMap from './assets/relationship-map.webp'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
-type View = 'overview' | 'review' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections'
+type View = 'overview' | 'review' | 'profile' | 'timeline' | 'privacy' | 'reflection' | 'human3' | 'monthly' | 'growth' | 'backup' | 'connections' | 'github'
 
 const VIEW_ROUTES: Record<View, string> = {
   overview: '#/overview', review: '#/memory-review', profile: '#/profile',
   timeline: '#/memory-timeline', privacy: '#/privacy-audit', reflection: '#/monthly-reflection',
-  human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections',
+  human3: '#/human-3', monthly: '#/monthly-trend', growth: '#/growth-dashboard', backup: '#/backup-recovery', connections: '#/ai-connections', github: '#/github-backup',
 }
 const ROUTE_VIEWS = new Map(Object.entries(VIEW_ROUTES).map(([view, route]) => [route, view as View]))
 function viewFromHash(hash: string): View | null { return ROUTE_VIEWS.get(hash) ?? null }
@@ -315,7 +316,7 @@ function App() {
     }
     setVisualLoading(null)
     if (next === 'review') { void loadCandidates(); return }
-    if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections') return
+    if (next === 'growth' || next === 'backup' || next === 'overview' || next === 'connections' || next === 'github') return
     const controller = new AbortController()
     visualAbort.current = controller
     const epoch = sessionEpoch.current
@@ -475,10 +476,11 @@ function App() {
         { label: '隐私审计', view: 'privacy', icon: ShieldCheck },
         { label: '备份与恢复', view: 'backup', icon: HardDrives },
         { label: 'AI 连接', view: 'connections', icon: PlugsConnected },
+        { label: 'GitHub 备份', view: 'github', icon: GithubLogo },
       ],
     },
   ]
-  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接' }
+  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接', github: 'GitHub 备份' }
 
   function closeNavigation() {
     setNavigationOpen(false)
@@ -515,6 +517,7 @@ function App() {
         {view === 'backup' && client && <BackupRecoveryPage client={client} />}
         {view === 'overview' && client && <OverviewPage client={client} onNavigate={(next) => void openView(next)} />}
         {view === 'connections' && client && <AIConnectionsPage client={client} />}
+        {view === 'github' && client && <GitHubBackupPage client={client} />}
         {view === 'review' && <MemoryReviewPage memories={memories} stats={memoryStats} selected={selected} draft={draft} rejectionReason={rejectionReason} loading={loading} saving={saving} onSelect={(memory) => { setSelectedId(memory.id); setDraft(memory.content); setRejectionReason('') }} onDraft={setDraft} onRejectionReason={setRejectionReason} onSave={save} onAct={act} onOnboarding={() => void openView('profile')} />}
       </div>
     </section>

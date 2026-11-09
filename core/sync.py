@@ -8,7 +8,9 @@ merge conflicts.
 
 from __future__ import annotations
 
+import re
 import subprocess
+import urllib.parse
 from pathlib import Path
 
 from .vault_management import assert_vault_isolated, vault_operation_lock
@@ -63,6 +65,52 @@ def _require_clean(root: Path) -> None:
     dirty = _porcelain(root)
     if dirty:
         raise RuntimeError(f"Vault有 {len(dirty)} 处未提交改动；请先执行 sync-commit 提交后再同步。")
+
+
+def _redact(message: str) -> str:
+    return re.sub(r"(https?://)[^/@\s]+@", r"\1[redacted]@", message)
+
+
+def _describe_remote(url: str) -> dict[str, str]:
+    """Return a credential-free description of a remote URL."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme in {"http", "https"}:
+        host = parsed.netloc.split("@")[-1]
+        return {"url": f"{parsed.scheme}://{host}{parsed.path}", "host": host, "path": parsed.path}
+    if ":" in url:
+        host, _, path = url.partition(":")
+        return {"url": f"{host.split('@')[-1]}:{path}", "host": host.split("@")[-1], "path": path}
+    return {"url": url, "host": "", "path": url}
+
+
+def configure_remote(vault: str, url: str, remote_name: str = "origin") -> dict[str, object]:
+    """Point a remote at a verified URL, without embedding credentials."""
+    root = Path(vault).expanduser().resolve()
+    assert_vault_isolated(root)
+    _require_git_repo(root)
+    clean = url.strip()
+    if not clean or ("://" not in clean and ":" not in clean):
+        raise RuntimeError("远程 URL 无效。")
+    with vault_operation_lock(root):
+        if remote_name in _git(root, "remote").stdout.split():
+            result = _git(root, "remote", "set-url", remote_name, clean)
+        else:
+            result = _git(root, "remote", "add", remote_name, clean)
+        if result.returncode != 0:
+            raise RuntimeError(f"配置远程失败：{_redact((result.stdout + result.stderr).strip())}")
+        described = _describe_remote(clean)
+        return {"remote": described, "host": described["host"], "branch": _git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()}
+
+
+def remove_remote(vault: str, remote_name: str = "origin") -> dict[str, object]:
+    root = Path(vault).expanduser().resolve()
+    assert_vault_isolated(root)
+    _require_git_repo(root)
+    with vault_operation_lock(root):
+        result = _git(root, "remote", "remove", remote_name)
+        if result.returncode != 0:
+            raise RuntimeError(f"移除远程失败：{_redact((result.stdout + result.stderr).strip())}")
+        return {"removed": remote_name}
 
 
 def sync_status(vault: str) -> dict[str, object]:

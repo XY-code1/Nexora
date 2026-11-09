@@ -54,6 +54,12 @@ export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
 export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean }
 export type RegisteredVault = { vaultId: string; displayName: string; available: boolean; lastOpenedAt: string }
 export type GitStatus = { configured?: boolean; message?: string; branch?: string; head?: string; upstream?: string | null; ahead?: number; behind?: number; dirty: string[]; unmerged: string[] }
+export type GitHubStatus = { configured: boolean; sessionActive: boolean; connected: boolean; repository: string; visibilityVerified: string; remoteName: string; remoteHost: string; lastVerifiedAt: string }
+export type GitHubDeviceCode = { userCode: string; verificationUri: string; expiresIn: number; interval: number }
+export type GitHubDevicePoll = { status: 'pending' | 'slow_down' | 'expired' | 'authorized' }
+export type GitHubRepository = { name: string; fullName: string; private: boolean; permissions: Record<string, boolean> }
+export type GitHubVerification = { fullName: string; private: boolean; defaultBranch: string; permissions: Record<string, boolean> }
+export type GitHubConnection = { provider: string; repository: string; visibilityVerified: string; remoteName: string; remoteHost: string; lastVerifiedAt: string; sessionActive: boolean }
 export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string; initialized: boolean }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
@@ -133,6 +139,15 @@ export class ApiClient {
   createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   switchVault(path: string, signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/vault/switch', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   gitStatus(signal?: AbortSignal) { return this.request<GitStatus>('/api/v1/git/status', { signal }) }
+  githubStatus(signal?: AbortSignal) { return this.request<GitHubStatus>('/api/v1/github/status', { signal }) }
+  githubConfigureClientId(clientId: string, signal?: AbortSignal) { return this.request<{ configured: boolean }>('/api/v1/github/client-id', { method: 'POST', body: JSON.stringify({ client_id: clientId }), signal }) }
+  githubDeviceCode(signal?: AbortSignal) { return this.request<GitHubDeviceCode>('/api/v1/github/device-code', { method: 'POST', signal }) }
+  githubDevicePoll(signal?: AbortSignal) { return this.request<GitHubDevicePoll>('/api/v1/github/device-poll', { method: 'POST', signal }) }
+  githubRepositories(signal?: AbortSignal) { return this.request<GitHubRepository[]>('/api/v1/github/repositories', { signal }) }
+  githubVerify(repository: string, signal?: AbortSignal) { return this.request<GitHubVerification>('/api/v1/github/verify', { method: 'POST', body: JSON.stringify({ repository }), signal }) }
+  githubCreate(name: string, signal?: AbortSignal) { return this.request<{ fullName: string; private: boolean; created: boolean }>('/api/v1/github/create', { method: 'POST', body: JSON.stringify({ name }), signal }) }
+  githubConnect(repository: string, signal?: AbortSignal) { return this.request<GitHubConnection>('/api/v1/github/connect', { method: 'POST', body: JSON.stringify({ repository }), signal }) }
+  githubDisconnect(signal?: AbortSignal) { return this.request<{ connected: boolean }>('/api/v1/github/connection', { method: 'DELETE', signal }) }
   gitCommit(message: string, signal?: AbortSignal) { return this.request<{ head: string }>('/api/v1/git/commit', { method: 'POST', body: JSON.stringify({ message, confirmation: 'COMMIT' }), signal }) }
   gitPull(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/pull', { method: 'POST', body: JSON.stringify({ confirmation: 'PULL' }), signal }) }
   gitPush(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/push', { method: 'POST', body: JSON.stringify({ confirmation: 'PUSH' }), signal }) }

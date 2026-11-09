@@ -28,6 +28,7 @@ from core import product_state
 from core import security
 from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
 from core import growth
+from core import github
 from core import vault_management
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
@@ -179,6 +180,19 @@ class GitCommitInput(BaseModel):
 
 class GitConfirmationInput(BaseModel):
     confirmation: str = Field(pattern=r"^(PULL|PUSH)$")
+
+
+class GitHubClientIdInput(BaseModel):
+    client_id: str = Field(min_length=1, max_length=200)
+
+
+class GitHubRepositoryInput(BaseModel):
+    repository: str = Field(min_length=1, max_length=200)
+
+
+class GitHubCreateInput(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    private: bool = True
 
 
 def safe_git_error(message: str, root: Path) -> str:
@@ -801,6 +815,74 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             raise ApiError(503, "SHUTDOWN_UNAVAILABLE", "当前启动方式不支持远程关闭。")
         background_tasks.add_task(callback)
         return envelope({"status": "shutting-down"})
+
+    @app.get("/api/v1/github/status", dependencies=[auth])
+    def github_status() -> dict[str, Any]:
+        connection = github.connection()
+        return envelope({
+            "configured": bool(github.client_id()),
+            "sessionActive": github.session_active(),
+            "connected": bool(connection.get("connected")),
+            "repository": connection.get("repository", ""),
+            "visibilityVerified": connection.get("visibilityVerified", ""),
+            "remoteName": connection.get("remoteName", ""),
+            "remoteHost": connection.get("remoteHost", ""),
+            "lastVerifiedAt": connection.get("lastVerifiedAt", ""),
+        })
+
+    @app.post("/api/v1/github/client-id", dependencies=[auth])
+    def github_configure_client_id(data: GitHubClientIdInput) -> dict[str, Any]:
+        github.configure_client_id(data.client_id)
+        return envelope({"configured": bool(github.client_id())})
+
+    @app.post("/api/v1/github/device-code", dependencies=[auth])
+    def github_device_code() -> dict[str, Any]:
+        try:
+            return envelope(github.start_device_flow())
+        except github.GitHubError as exc:
+            raise ApiError(400, "GITHUB_DEVICE_FAILED", str(exc)) from None
+
+    @app.post("/api/v1/github/device-poll", dependencies=[auth])
+    def github_device_poll() -> dict[str, Any]:
+        try:
+            return envelope(github.poll_device_flow())
+        except github.GitHubError as exc:
+            raise ApiError(409, "GITHUB_AUTH_FAILED", str(exc)) from None
+
+    @app.get("/api/v1/github/repositories", dependencies=[auth])
+    def github_repositories() -> dict[str, Any]:
+        try:
+            return envelope(github.list_repositories())
+        except github.GitHubError as exc:
+            raise ApiError(409, "GITHUB_LIST_FAILED", str(exc)) from None
+
+    @app.post("/api/v1/github/verify", dependencies=[auth])
+    def github_verify(data: GitHubRepositoryInput) -> dict[str, Any]:
+        try:
+            return envelope(github.verify_repository(data.repository))
+        except github.GitHubError as exc:
+            raise ApiError(409, "GITHUB_VERIFY_FAILED", str(exc)) from None
+
+    @app.post("/api/v1/github/create", status_code=201, dependencies=[auth])
+    def github_create(data: GitHubCreateInput) -> dict[str, Any]:
+        try:
+            return envelope(github.create_repository(data.name, private=data.private))
+        except github.GitHubError as exc:
+            raise ApiError(409, "GITHUB_CREATE_FAILED", str(exc)) from None
+
+    @app.post("/api/v1/github/connect", dependencies=[auth])
+    def github_connect(data: GitHubRepositoryInput) -> dict[str, Any]:
+        try:
+            return envelope(github.connect(str(root), data.repository))
+        except (github.GitHubError, RuntimeError) as exc:
+            raise ApiError(409, "GITHUB_CONNECT_FAILED", str(exc)) from None
+
+    @app.delete("/api/v1/github/connection", dependencies=[auth])
+    def github_disconnect() -> dict[str, Any]:
+        try:
+            return envelope(github.disconnect(str(root)))
+        except RuntimeError as exc:
+            raise ApiError(409, "GITHUB_DISCONNECT_FAILED", str(exc)) from None
 
     @app.get("/api/v1/memories", dependencies=[auth])
     def list_memories(status: str = "candidate", limit: int = 50) -> dict[str, Any]:
