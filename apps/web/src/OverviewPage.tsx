@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, LoadingState } from './components/StateBlocks'
 type Props = {
   client: ApiClient
   onNavigate: (view: 'review' | 'profile' | 'privacy' | 'reflection' | 'growth') => void
+  refreshKey?: number
 }
 
 type Snapshot = {
@@ -44,7 +45,7 @@ function recentSummary(events: AuditEvent[]) {
  * - 不在面板底部重复状态行；补充信息并入正文或右侧面板。
  * - 正文行高放宽，字号提高，让每块内容只有一句话的读法。
  */
-export default function OverviewPage({ client, onNavigate }: Props) {
+export default function OverviewPage({ client, onNavigate, refreshKey = 0 }: Props) {
   const [value, setValue] = useState<Snapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -66,7 +67,7 @@ export default function OverviewPage({ client, onNavigate }: Props) {
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : '加载失败。') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [client])
+  }, [client, refreshKey])
 
   const next = useMemo(() => {
     if (!value) return null

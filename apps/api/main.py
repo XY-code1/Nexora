@@ -18,9 +18,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from core import profile
 from core import sync as git_sync
-from core.vault_identity import VaultMonitor, list_registered, register_vault
+from core.vault_identity import VaultMonitor, find_registered, list_registered, register_vault
 from core.repository import list_markdown
-from core.access import extract_summary
 from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
 from core import monthly_reflection
@@ -29,6 +28,8 @@ from core import security
 from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
 from core import growth
 from core import provider_auth
+
+from core import importer
 from core import vault_management
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
@@ -173,6 +174,10 @@ class VaultPathInput(BaseModel):
     path: str = Field(min_length=1, max_length=1000)
 
 
+class VaultConnectInput(BaseModel):
+    vault_id: str = Field(min_length=1, max_length=80)
+
+
 class GitCommitInput(BaseModel):
     message: str = Field(min_length=1, max_length=160)
     confirmation: str = Field(pattern=r"^COMMIT$")
@@ -197,6 +202,21 @@ class ProviderDecisionInput(BaseModel):
     request_id: str = Field(min_length=1, max_length=80)
     action: str = Field(pattern=r"^(approve|deny)$")
     reason: str = Field(default="", max_length=200)
+
+class ImportPreviewInput(BaseModel):
+    format: str = Field(pattern=r"^(markdown|json)$")
+    content: str = Field(min_length=1, max_length=200_000)
+
+
+class ImportItemInput(BaseModel):
+    type: str = Field(default="note", max_length=64)
+    subject: str = Field(default="", max_length=200)
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ImportCommitInput(BaseModel):
+    items: list[ImportItemInput] = Field(min_length=1, max_length=100)
+    source: str = Field(default="local-import", max_length=64)
 
 
 def safe_git_error(message: str, root: Path) -> str:
@@ -237,7 +257,9 @@ def memory_view(root: Path, path: Path) -> dict[str, Any]:
         "visibility": metadata.get("visibility", "private"),
         "aiAccess": metadata.get("ai_access", "denied"),
         "tags": [item.strip() for item in metadata.get("tags", "").split(",") if item.strip()][:20],
-        "content": extract_summary(body),
+        # This authenticated loopback API is the local user's review surface.
+        # ai_access controls AI egress through MCP, not the user's local view.
+        "content": body,
         "revision": profile.revision(path),
     }
 
@@ -261,7 +283,7 @@ def find(root: Path, folder: str, record_id: str) -> Path:
             raise domain_error(exc) from None
 
 
-def create_app(vault: Path, token: str | None = None, web_dist: Path | None = None) -> FastAPI:
+def create_app(vault: Path, token: str | None = None, web_dist: Path | None = None, watch: bool = False) -> FastAPI:
     root = vault.expanduser().resolve()
     with vault_operation_lock(root):
         recover_vault_swap(root)
@@ -279,6 +301,8 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     app.state.request_restart = None
     register_vault(root)
     app.state.vault_monitor = VaultMonitor(root)
+    if watch:
+        app.state.vault_monitor.start()
 
     @app.middleware("http")
     async def track_local_mutations(request: Request, call_next):
@@ -321,6 +345,10 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     def vault_status() -> dict[str, Any]:
         return envelope(app.state.vault_monitor.view())
 
+    @app.get("/api/v1/vault/events", dependencies=[auth])
+    def vault_events() -> dict[str, Any]:
+        return envelope(app.state.vault_monitor.events_view())
+
     @app.get("/api/v1/vaults", dependencies=[auth])
     def vaults() -> dict[str, Any]:
         return envelope(list_registered())
@@ -358,12 +386,38 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
         background.add_task(app.state.request_restart, candidate)
         return envelope({"status": "restarting"})
 
+    @app.post("/api/v1/vaults/connect", dependencies=[auth])
+    def connect_vault(data: VaultConnectInput, background: BackgroundTasks) -> dict[str, Any]:
+        entry = find_registered(data.vault_id)
+        if not entry or not Path(str(entry.get("path", ""))).expanduser().is_dir():
+            raise ApiError(404, "VAULT_NOT_FOUND", "未找到该已登记的个人空间，或它所在的目录已不存在。")
+        candidate = Path(str(entry["path"])).expanduser().resolve()
+        validate_vault(VaultPathInput(path=str(candidate)))
+        if not callable(app.state.request_restart):
+            raise ApiError(409, "RESTART_UNAVAILABLE", "当前启动方式不支持安全切换；请关闭服务后使用 --vault 重新启动。")
+        background.add_task(app.state.request_restart, candidate)
+        return envelope({"status": "restarting", "vaultId": data.vault_id})
+
     @app.get("/api/v1/git/status", dependencies=[auth])
     def git_status() -> dict[str, Any]:
         try:
             return envelope(git_sync.sync_status(str(root)))
         except RuntimeError as exc:
             return envelope({"configured": False, "message": safe_git_error(str(exc), root), "dirty": [], "unmerged": []})
+
+    @app.get("/api/v1/git/history", dependencies=[auth])
+    def git_history(limit: int = 50) -> dict[str, Any]:
+        try:
+            return envelope(git_sync.git_history(str(root), limit))
+        except RuntimeError as exc:
+            return envelope({"branch": "", "commits": [], "message": safe_git_error(str(exc), root)})
+
+    @app.get("/api/v1/git/changes", dependencies=[auth])
+    def git_changes() -> dict[str, Any]:
+        try:
+            return envelope(git_sync.git_changes(str(root)))
+        except RuntimeError as exc:
+            return envelope({"changes": [], "sensitive": [], "unmerged": [], "can_commit": False, "message": safe_git_error(str(exc), root)})
 
     @app.post("/api/v1/git/commit", dependencies=[auth])
     def git_commit(data: GitCommitInput) -> dict[str, Any]:
@@ -938,6 +992,19 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     def supersede(record_id: str, data: ActionInput) -> dict[str, Any]:
         return lifecycle(record_id, data, "supersede")
 
+    @app.post("/api/v1/imports/preview", dependencies=[auth])
+    def import_preview(data: ImportPreviewInput) -> dict[str, Any]:
+        try:
+            with profile.vault_lock(root):
+                return envelope(importer.preview_import(root, data.format, data.content))
+        except importer.ImportError as exc:
+            raise ApiError(400, "IMPORT_PARSE_FAILED", str(exc)) from None
+
+    @app.post("/api/v1/imports", status_code=201, dependencies=[auth])
+    def import_commit(data: ImportCommitInput) -> dict[str, Any]:
+        items = [{"type": item.type, "subject": item.subject, "content": item.content} for item in data.items]
+        return envelope(importer.commit_import(root, items, data.source))
+
     web_dist = web_dist or Path(__file__).parents[1] / "web" / "dist"
     index = web_dist / "index.html"
     if index.is_file():
@@ -957,9 +1024,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="启动本地 Personal AI Profile API")
     parser.add_argument("--vault", required=True, type=Path)
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument(
+        "--show-token",
+        action="store_true",
+        help="显式在本地启动日志中显示管理 Bearer token",
+    )
     args = parser.parse_args()
     app = create_app(args.vault)
-    print(f"Local API: http://127.0.0.1:{args.port}  Bearer token: {app.state.token}")
+    print(f"Local API: http://127.0.0.1:{args.port}")
+    if args.show_token:
+        print(f"Bearer token: {app.state.token}")
     uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 
