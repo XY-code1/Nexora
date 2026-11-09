@@ -18,7 +18,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from core import profile
 from core import sync as git_sync
-from core.vault_identity import VaultMonitor, list_registered, register_vault
+from core.vault_identity import VaultMonitor, find_registered, list_registered, register_vault
 from core.repository import list_markdown
 from core.access import extract_summary
 from core.onboarding import onboarding_state, propose_answer
@@ -170,6 +170,10 @@ class BackupRestoreInput(BaseModel):
 
 class VaultPathInput(BaseModel):
     path: str = Field(min_length=1, max_length=1000)
+
+
+class VaultConnectInput(BaseModel):
+    vault_id: str = Field(min_length=1, max_length=80)
 
 
 class GitCommitInput(BaseModel):
@@ -339,6 +343,18 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             raise ApiError(409, "RESTART_UNAVAILABLE", "当前启动方式不支持安全切换；请关闭服务后使用 --vault 重新启动。")
         background.add_task(app.state.request_restart, candidate)
         return envelope({"status": "restarting"})
+
+    @app.post("/api/v1/vaults/connect", dependencies=[auth])
+    def connect_vault(data: VaultConnectInput, background: BackgroundTasks) -> dict[str, Any]:
+        entry = find_registered(data.vault_id)
+        if not entry or not Path(str(entry.get("path", ""))).expanduser().is_dir():
+            raise ApiError(404, "VAULT_NOT_FOUND", "未找到该已登记的个人空间，或它所在的目录已不存在。")
+        candidate = Path(str(entry["path"])).expanduser().resolve()
+        validate_vault(VaultPathInput(path=str(candidate)))
+        if not callable(app.state.request_restart):
+            raise ApiError(409, "RESTART_UNAVAILABLE", "当前启动方式不支持安全切换；请关闭服务后使用 --vault 重新启动。")
+        background.add_task(app.state.request_restart, candidate)
+        return envelope({"status": "restarting", "vaultId": data.vault_id})
 
     @app.get("/api/v1/git/status", dependencies=[auth])
     def git_status() -> dict[str, Any]:

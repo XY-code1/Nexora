@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { vaultHint } from './vaultHints'
 
 // 每个测试后卸载上一棵组件树：否则残留实例会在后续测试里继续响应未完成的
 // promise，造成状态污染与随机的 act(...) 警告（同一输入下时过时不过）。
@@ -358,5 +359,37 @@ describe('review workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '暂时结束并进入工作台' }))
     expect(calls).toContain('/api/v1/initialized')
     expect(spy).toHaveBeenCalled()
+  })
+
+  it('lists registered vaults in the first-run wizard and connects by id', async () => {
+    mockApi({
+      '/api/v1/memories': [],
+      '/api/v1/memory-stats': { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 },
+      '/api/v1/overview': { profile: { access: 'allowed', protected: false, sections: [] }, memory: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready', initialized: false },
+      '/api/v1/vault': { vaultId: 'vault_current', displayName: '当前空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/vaults': [
+        { vaultId: 'vault_current', displayName: '当前空间', available: true, lastOpenedAt: '2026-11-09T00:00:00Z' },
+        { vaultId: 'vault_other', displayName: '旧空间', available: true, lastOpenedAt: '2026-11-08T00:00:00Z' },
+      ],
+      '/api/v1/vaults/connect': { status: 'restarting', vaultId: 'vault_other' },
+      '/api/v1/initialized': { initialized: true },
+      '/api/v1/onboarding': { topics: [], nextTopic: null, completed: true, notice: '' },
+    })
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByText(/已登记的个人空间/)
+    expect(screen.getAllByText('当前空间').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: /旧空间/ }))
+    await screen.findByText('正在打开「旧空间」…')
+  })
+})
+
+describe('vault hints', () => {
+  it('maps technical vault errors to actionable guidance', () => {
+    expect(vaultHint('目标目录非空：D:/foo')).toContain('空文件夹')
+    expect(vaultHint('Vault 结构不完整：AGENTS.md')).toContain('必要文件')
+    expect(vaultHint('私人Vault与公共框架仓库不能相互包含')).toContain('独立')
+    expect(vaultHint('未知错误')).toBe('未知错误')
   })
 })
