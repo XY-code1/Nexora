@@ -52,10 +52,15 @@ test('managed backup is verified and restored through the guarded guided wizard'
 
   await expect(page.getByRole('heading', { name: '恢复完成' })).toBeVisible()
   await expect(page.getByText(/恢复完成。系统已先创建安全备份/)).toBeVisible()
+  const safetyBackupId = (await page.locator('.wizard-done-panel dl > div').filter({ hasText: '安全备份' }).locator('dd').innerText()).trim()
+  expect(safetyBackupId).not.toBe('')
   await page.screenshot({ path: resolve(shots, 'backup-recovery-1440.png'), fullPage: true })
 
   await page.getByRole('button', { name: '返回备份列表' }).click()
   await expect(page.locator('.backup-list > button')).toHaveCount(2)
+  await page.getByLabel('搜索备份').fill(safetyBackupId)
+  await expect(page.locator('.backup-list > button')).toHaveCount(1)
+  await page.getByLabel('搜索备份').fill('')
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.evaluate(() => window.scrollTo(0, 0))
