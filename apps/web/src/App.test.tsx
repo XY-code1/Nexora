@@ -359,4 +359,31 @@ describe('review workspace', () => {
     expect(calls).toContain('/api/v1/initialized')
     expect(spy).toHaveBeenCalled()
   })
+
+
+  it('previews and imports candidate memories without confirming them', async () => {
+    const { calls } = mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/imports/preview': {
+        items: [
+          { index: 0, type: 'preference', subject: '回答风格', content: '回答先给结论。', preview: '回答先给结论。', status: 'ready', reason: '' },
+          { index: 1, type: 'note', subject: '项目背景', content: '本地优先。', preview: '本地优先。', status: 'duplicate', reason: '与现有记忆内容重复' },
+        ],
+        summary: { total: 2, ready: 1, duplicate: 1, invalid: 0 },
+      },
+      '/api/v1/imports': { created: [{ id: 'mem-import-1', type: 'preference', subject: '回答风格' }], skipped: [] },
+    })
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: '导入' }))
+    fireEvent.change(screen.getByLabelText('导入内容'), { target: { value: '---\ntype: preference\n---\n回答先给结论。' } })
+    fireEvent.click(screen.getByRole('button', { name: '预览' }))
+    await screen.findByText('确认要导入的条目')
+    expect(screen.getByText('与现有记忆内容重复')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /导入 1 条候选/ }))
+    await screen.findByText('已导入 1 条候选记忆')
+    expect(calls).toContain('/api/v1/imports/preview')
+    expect(calls).toContain('/api/v1/imports')
+  })
 })

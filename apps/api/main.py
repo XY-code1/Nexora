@@ -28,6 +28,7 @@ from core import product_state
 from core import security
 from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
 from core import growth
+from core import importer
 from core import vault_management
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
 
@@ -179,6 +180,22 @@ class GitCommitInput(BaseModel):
 
 class GitConfirmationInput(BaseModel):
     confirmation: str = Field(pattern=r"^(PULL|PUSH)$")
+
+
+class ImportPreviewInput(BaseModel):
+    format: str = Field(pattern=r"^(markdown|json)$")
+    content: str = Field(min_length=1, max_length=200_000)
+
+
+class ImportItemInput(BaseModel):
+    type: str = Field(default="note", max_length=64)
+    subject: str = Field(default="", max_length=200)
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ImportCommitInput(BaseModel):
+    items: list[ImportItemInput] = Field(min_length=1, max_length=100)
+    source: str = Field(default="local-import", max_length=64)
 
 
 def safe_git_error(message: str, root: Path) -> str:
@@ -879,6 +896,19 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     @app.post("/api/v1/memories/{record_id}/supersede", dependencies=[auth])
     def supersede(record_id: str, data: ActionInput) -> dict[str, Any]:
         return lifecycle(record_id, data, "supersede")
+
+    @app.post("/api/v1/imports/preview", dependencies=[auth])
+    def import_preview(data: ImportPreviewInput) -> dict[str, Any]:
+        try:
+            with profile.vault_lock(root):
+                return envelope(importer.preview_import(root, data.format, data.content))
+        except importer.ImportError as exc:
+            raise ApiError(400, "IMPORT_PARSE_FAILED", str(exc)) from None
+
+    @app.post("/api/v1/imports", status_code=201, dependencies=[auth])
+    def import_commit(data: ImportCommitInput) -> dict[str, Any]:
+        items = [{"type": item.type, "subject": item.subject, "content": item.content} for item in data.items]
+        return envelope(importer.commit_import(root, items, data.source))
 
     web_dist = web_dist or Path(__file__).parents[1] / "web" / "dist"
     index = web_dist / "index.html"
