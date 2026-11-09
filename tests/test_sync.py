@@ -131,4 +131,25 @@ with tempfile.TemporaryDirectory() as temporary:
     preview = sync_mod.git_changes(str(vault))
     assert preview["changes"] == [] and preview["can_commit"] is True, preview
 
+    # Git 历史：只读提交列表，不改动工作区。
+    history = sync_mod.git_history(str(vault))
+    assert history["branch"] == "main", history
+    assert len(history["commits"]) >= 1, history
+    for item in history["commits"]:
+        assert {"id", "created", "subject", "author"} <= set(item), item
+    expect_failure(lambda: sync_mod.git_history(str(base)), "不是Git仓库")
+
+    # 从 Git 历史恢复：先创建安全备份，工作区回退，HEAD 不变。
+    from core import vault_management
+    oldest = history["commits"][-1]["id"]
+    status = sync_mod.sync_status(str(vault))
+    expected_revision = vault_management._content_revision(vault)
+    # 未找到的提交会被拒绝（在干净状态下检查）。
+    expect_failure(lambda: sync_mod.git_restore(str(vault), "deadbeef" * 8, expected_revision), "未找到该提交")
+    result = sync_mod.git_restore(str(vault), oldest, expected_revision)
+    assert result["restoredCommit"] == oldest, result
+    assert result["safetyBackup"]["integrity"] == "verified", result
+    assert sync_mod.sync_status(str(vault))["head"] == status["head"], "HEAD 不应移动"
+    assert vault_management._content_revision(vault) != expected_revision, "工作区内容应已回退"
+
 print("cross-device sync tests passed")

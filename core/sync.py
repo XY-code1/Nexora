@@ -8,11 +8,16 @@ merge conflicts.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
+import tempfile
 import urllib.parse
+from datetime import datetime, timezone
 from pathlib import Path
 
+from . import vault_management
 from .vault_management import assert_vault_isolated, vault_operation_lock
 
 _UNMERGED_CODES = {"DD", "AU", "UD", "UA", "DU", "AA", "UU"}
@@ -240,6 +245,54 @@ def git_history(vault: str, limit: int = 50) -> dict[str, object]:
             })
         branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
         return {"branch": branch, "commits": commits}
+
+
+def _export_tree(root: Path, commit: str, destination: Path) -> None:
+    """Copy the tree at `commit` into `destination` using a scratch index."""
+    index = destination.parent / "export.index"
+    environment = {**os.environ, "GIT_INDEX_FILE": str(index)}
+    read = subprocess.run(["git", "--git-dir", str(root / ".git"), "read-tree", commit], env=environment, capture_output=True, text=True)
+    if read.returncode != 0:
+        raise RuntimeError(f"读取提交树失败：{_redact((read.stdout + read.stderr).strip())}")
+    try:
+        write = subprocess.run(["git", "--git-dir", str(root / ".git"), "checkout-index", "-a", "-f", "--prefix", f"{destination}/"], env=environment, capture_output=True, text=True)
+        if write.returncode != 0:
+            raise RuntimeError(f"导出提交内容失败：{_redact((write.stdout + write.stderr).strip())}")
+    finally:
+        index.unlink(missing_ok=True)
+
+
+def git_restore(vault: str, commit: str, expected_vault_revision: str) -> dict[str, object]:
+    """Restore the Vault working tree from a Git commit.
+
+    HEAD is not moved: the rollback shows up as uncommitted changes the user can
+    review and commit. A managed safety backup is always taken first.
+    """
+    root = Path(vault).expanduser().resolve()
+    assert_vault_isolated(root)
+    _require_git_repo(root)
+    with vault_operation_lock(root):
+        _require_clean(root)
+        if expected_vault_revision and vault_management._content_revision(root) != expected_vault_revision:
+            raise RuntimeError("Vault已被其他入口修改，请刷新备份页面后重试。")
+        resolved = _commit(root, commit)
+        if not resolved:
+            raise RuntimeError("未找到该提交。")
+        safety = vault_management.create_managed_backup(root)
+        with tempfile.TemporaryDirectory(prefix="git-restore-") as temporary:
+            target = Path(temporary) / "snapshot"
+            (target / "vault").mkdir(parents=True)
+            _export_tree(root, resolved, target / "vault")
+            files = vault_management._file_hashes(target / "vault")
+            (target / "backup.json").write_text(json.dumps({
+                "format": vault_management.BACKUP_FORMAT,
+                "schema_version": vault_management.schema_version(root),
+                "created": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ"),
+                "files": files,
+                "vault_binding": vault_management._local_binding("managed-backup", root),
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
+            vault_management.restore_backup(root, target)
+        return {"restoredCommit": resolved, "safetyBackup": safety, "currentRevision": vault_management._content_revision(root)}
 
 
 def sync_commit(vault: str, message: str = "chore: local memory update") -> str:

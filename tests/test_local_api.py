@@ -273,6 +273,18 @@ def main():
         assert data["branch"] == "main" and len(data["commits"]) == 1, data
         assert data["commits"][0]["subject"] == "init", data
 
+        # 从 Git 历史恢复：先创建安全备份，再回退工作区。
+        current = client.get("/api/v1/backups", headers=headers).json()["data"]["currentRevision"]
+        restored = client.post("/api/v1/git/restore", headers=headers, json={"commit": data["commits"][0]["id"], "expected_vault_revision": current})
+        assert restored.status_code == 200, restored.text
+        result = restored.json()["data"]
+        assert result["restoredCommit"] == data["commits"][0]["id"], result
+        assert result["safetyBackup"]["integrity"] == "verified", result
+
+        # 过期的 Vault revision 会被拒绝。
+        stale = client.post("/api/v1/git/restore", headers=headers, json={"commit": data["commits"][0]["id"], "expected_vault_revision": current})
+        assert stale.status_code == 409 and stale.json()["error"]["code"] == "REVISION_CONFLICT", stale.text
+
         # 导入：预览后可写入候选，重复内容被去重，解析失败返回 400。
         preview = client.post("/api/v1/imports/preview", headers=headers, json={
             "format": "markdown",
