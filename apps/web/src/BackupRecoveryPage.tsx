@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowCounterClockwise, CheckCircle, ClockCounterClockwise, Database, GitBranch, ShieldCheck, Warning } from '@phosphor-icons/react'
-import type { ApiClient, BackupOverview, GitStatus, RegisteredVault, VaultBackup, VaultStatus } from './api'
+import type { ApiClient, BackupOverview, GitHistory, GitStatus, RegisteredVault, VaultBackup, VaultStatus } from './api'
 import { LoadingState } from './components/StateBlocks'
 
 function time(value: string) {
@@ -25,15 +25,16 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
   const [vault, setVault] = useState<VaultStatus | null>(null)
   const [registered, setRegistered] = useState<RegisteredVault[]>([])
   const [git, setGit] = useState<GitStatus | null>(null)
+  const [history, setHistory] = useState<GitHistory | null>(null)
   const [vaultPath, setVaultPath] = useState('')
   const [commitMessage, setCommitMessage] = useState('chore: update personal profile')
 
   async function load() {
     setMessage(null)
     try {
-      const [next, status, vaults, gitStatus] = await Promise.all([client.backups(), client.vaultStatus(), client.registeredVaults(), client.gitStatus()])
+      const [next, status, vaults, gitStatus, gitHistory] = await Promise.all([client.backups(), client.vaultStatus(), client.registeredVaults(), client.gitStatus(), client.gitHistory()])
       setValue(next)
-      setVault(status); setRegistered(vaults); setGit(gitStatus)
+      setVault(status); setRegistered(vaults); setGit(gitStatus); setHistory(gitHistory)
       setSelectedId((current) => current && next.backups.some((item) => item.id === current) ? current : next.backups[0]?.id ?? '')
     } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '无法读取备份状态。' }) }
   }
@@ -41,6 +42,11 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
   useEffect(() => { void load() }, [client])
   const selected = useMemo(() => value?.backups.find((item) => item.id === selectedId) ?? null, [value, selectedId])
   const phrase = selected ? `RESTORE ${selected.id}` : ''
+  const timeline = useMemo(() => {
+    const backups = (value?.backups ?? []).map((item) => ({ kind: 'backup' as const, id: item.id, created: item.created, title: '本地备份', detail: `${item.fileCount} files · ${size(item.sizeBytes)}` }))
+    const commits = (history?.commits ?? []).map((item) => ({ kind: 'commit' as const, id: item.id, created: item.created, title: 'Git 提交', detail: item.subject || '(无提交说明)' }))
+    return [...backups, ...commits].sort((a, b) => b.created.localeCompare(a.created)).slice(0, 50)
+  }, [value, history])
 
   async function create() {
     setBusy('create'); setMessage(null)
@@ -48,7 +54,8 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
       const result = await client.createBackup()
       const next = await client.backups()
       setValue(next); setSelectedId(result.backup.id)
-      setMessage({ kind: 'success', text: '完整备份已创建并通过哈希校验。' })
+      const pruned = result.backup.pruned?.length ? `（已清理 ${result.backup.pruned.length} 个旧备份）` : ''
+      setMessage({ kind: 'success', text: `完整备份已创建并通过哈希校验。${pruned}` })
     } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '创建备份失败。' }) }
     finally { setBusy('') }
   }
@@ -121,6 +128,15 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
       <article><ShieldCheck /><span>Integrity</span><strong>{value?.backups.every((item) => item.integrity === 'verified') ? 'verified' : 'attention'}</strong></article>
       <article><ClockCounterClockwise /><span>Latest</span><strong>{value?.backups[0] ? time(value.backups[0].created) : '尚无备份'}</strong></article>
       <button className="primary-action" onClick={() => void create()} disabled={Boolean(busy)}>{busy === 'create' ? '正在创建…' : '创建完整备份'}</button>
+    </section>
+
+    <section className="backup-timeline" aria-label="版本历史">
+      <header><div><p className="eyebrow">VERSION HISTORY / LOCAL + GIT</p><h3>版本历史</h3></div><span>{timeline.length} records</span></header>
+      {history?.message && <div className="backup-message error" role="alert"><Warning /><span>{history.message}</span></div>}
+      {timeline.length ? <ul className="timeline-list">{timeline.map((item) => <li key={`${item.kind}:${item.id}`} className={`timeline-${item.kind}`}>
+        <span className="timeline-dot" aria-hidden="true" />
+        <div><p className="timeline-meta">{time(item.created)} · {item.title}</p><strong>{item.detail}</strong><small>{item.kind === 'commit' ? item.id.slice(0, 8) : item.id}</small></div>
+      </li>)}</ul> : <p className="muted">暂无版本历史记录。</p>}
     </section>
 
     <div className="backup-layout">

@@ -86,6 +86,25 @@ def main() -> None:
             assert invalid.status_code == 400 and invalid.json()["error"]["code"] == "BACKUP_INVALID"
             listed_invalid = api.get("/api/v1/backups", headers=headers).json()["data"]["backups"]
             assert next(item for item in listed_invalid if item["id"] == created["id"])["integrity"] == "invalid"
+
+            # Creating a backup reports how many old backups were pruned.
+            (vault / "10 Profile" / "Profile.md").write_text("snapshot for prune\n", encoding="utf-8")
+            created_again = api.post("/api/v1/backups", headers=headers).json()["data"]["backup"]
+            assert "pruned" in created_again and isinstance(created_again["pruned"], list)
+
+            # Retention policy: only the newest `keep` backups survive.
+            for index in range(5):
+                (vault / "10 Profile" / "Profile.md").write_text(f"snapshot {index}\n", encoding="utf-8")
+                api.post("/api/v1/backups", headers=headers)
+            removed = vm.prune_managed_backups(vault, keep=3, quota_bytes=10**12)
+            remaining = vm._managed_backup_dirs(vault)
+            assert len(remaining) == 3, remaining
+            assert len(removed) >= 2, removed
+
+            # Disk quota: the oldest backups are removed until under the cap.
+            removed = vm.prune_managed_backups(vault, keep=20, quota_bytes=1)
+            assert vm._managed_backup_dirs(vault) == []
+            assert len(removed) == 3, removed
         finally:
             vm.backup_root = original_backup_root
 

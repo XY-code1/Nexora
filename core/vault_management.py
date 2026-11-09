@@ -22,6 +22,10 @@ from .profile import FOLDER_STATUSES, MEMORY_ROOT, REQUIRED, ROOT, SECRET_PATTER
 CURRENT_SCHEMA_VERSION = 1
 BACKUP_FORMAT = 2
 CONFIG = "profile.config.yml"
+# Retention policy: keep at most this many managed backups per Vault, and cap
+# their combined on-disk size so a long-lived Vault cannot grow without bound.
+BACKUP_RETENTION_COUNT = 20
+BACKUP_QUOTA_BYTES = 500 * 1024 * 1024
 _LOCKS: dict[str, FileLock] = {}
 _LOCKS_GUARD = threading.Lock()
 
@@ -228,10 +232,56 @@ def backup_overview(vault: Path) -> dict[str, object]:
         return {"currentRevision": _content_revision(root), "backups": items}
 
 
+def _managed_backup_dirs(root: Path) -> list[Path]:
+    """Backup directories bound to this Vault, newest first."""
+    base = backup_root()
+    binding = _local_binding("managed-backup", root)
+    entries: list[tuple[str, Path]] = []
+    if not base.is_dir():
+        return []
+    for source in base.iterdir():
+        if not source.is_dir():
+            continue
+        try:
+            data = json.loads((source / "backup.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if data.get("format") != BACKUP_FORMAT:
+            continue
+        if not hmac.compare_digest(str(data.get("vault_binding", "")), binding):
+            continue
+        entries.append((str(data.get("created", "")), source))
+    entries.sort(key=lambda item: item[0], reverse=True)
+    return [source for _, source in entries]
+
+
+def _directory_size(source: Path) -> int:
+    return sum(path.stat().st_size for path in source.rglob("*") if path.is_file())
+
+
+def prune_managed_backups(root: Path, *, keep: int = BACKUP_RETENTION_COUNT, quota_bytes: int = BACKUP_QUOTA_BYTES) -> list[str]:
+    """Enforce the retention count and total size quota; return removed backup ids."""
+    removed: list[str] = []
+    for source in _managed_backup_dirs(root)[keep:]:
+        shutil.rmtree(source, ignore_errors=True)
+        removed.append(source.name)
+    entries = _managed_backup_dirs(root)
+    total = sum(_directory_size(source) for source in entries)
+    index = len(entries) - 1
+    while total > quota_bytes and index >= 0:
+        source = entries[index]
+        total -= _directory_size(source)
+        shutil.rmtree(source, ignore_errors=True)
+        removed.append(source.name)
+        index -= 1
+    return removed
+
+
 def create_managed_backup(vault: Path) -> dict[str, object]:
     root = vault.resolve()
     target = create_backup(root)
-    return _backup_view(root, target)
+    pruned = prune_managed_backups(root)
+    return {**_backup_view(root, target), "pruned": pruned}
 
 
 def verify_managed_backup(vault: Path, backup_id: str) -> dict[str, object]:

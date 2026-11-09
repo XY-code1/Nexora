@@ -359,4 +359,22 @@ describe('review workspace', () => {
     expect(calls).toContain('/api/v1/initialized')
     expect(spy).toHaveBeenCalled()
   })
+
+  it('shows a unified local backup and Git commit timeline', async () => {
+    mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/backups': { currentRevision: 'r1', backups: [{ id: 'bk-1', created: '2026-11-09T10:00:00Z', schemaVersion: 1, fileCount: 12, sizeBytes: 2048, integrity: 'verified', managed: true }] },
+      '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/vaults': [],
+      '/api/v1/git/status': { configured: true, branch: 'main', upstream: 'origin/main', ahead: 0, behind: 0, dirty: [], unmerged: [] },
+      '/api/v1/git/history': { branch: 'main', commits: [{ id: 'abc12345', created: '2026-11-09T09:00:00Z', subject: 'chore: update', author: 'A' }] },
+    })
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: '备份与恢复' }))
+    await screen.findByRole('heading', { name: '版本历史' })
+    expect(screen.getByText('chore: update')).toBeInTheDocument()
+    expect(screen.getByText(/本地备份/)).toBeInTheDocument()
+  })
 })

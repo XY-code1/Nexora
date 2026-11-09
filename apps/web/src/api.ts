@@ -49,11 +49,13 @@ export type GrowthTimelinePoint = { month: string; assessment: GrowthAssessment 
 export type GrowthTimeline = { disclaimer: string; months: GrowthTimelinePoint[] }
 export type GrowthAssociation = { id: string; fromDimension: GrowthDimensionKey; fromEventId: string; toDimension: GrowthDimensionKey; toEventId: string; relationType: 'correlation' | 'causation'; note: string; createdAt: string; revision: string }
 export type GrowthGoal = { id: string; horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string; createdAt: string; updatedAt: string; revision: string }
-export type VaultBackup = { id: string; created: string; schemaVersion: number; fileCount: number; sizeBytes: number; integrity: 'verified' | 'invalid'; managed: boolean }
+export type VaultBackup = { id: string; created: string; schemaVersion: number; fileCount: number; sizeBytes: number; integrity: 'verified' | 'invalid'; managed: boolean; pruned?: string[] }
 export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
 export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean }
 export type RegisteredVault = { vaultId: string; displayName: string; available: boolean; lastOpenedAt: string }
 export type GitStatus = { configured?: boolean; message?: string; branch?: string; head?: string; upstream?: string | null; ahead?: number; behind?: number; dirty: string[]; unmerged: string[] }
+export type GitCommit = { id: string; created: string; subject: string; author: string }
+export type GitHistory = { branch: string; commits: GitCommit[]; message?: string }
 export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string; initialized: boolean }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
@@ -133,6 +135,7 @@ export class ApiClient {
   createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   switchVault(path: string, signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/vault/switch', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   gitStatus(signal?: AbortSignal) { return this.request<GitStatus>('/api/v1/git/status', { signal }) }
+  gitHistory(limit = 50, signal?: AbortSignal) { return this.request<GitHistory>(`/api/v1/git/history?limit=${limit}`, { signal }) }
   gitCommit(message: string, signal?: AbortSignal) { return this.request<{ head: string }>('/api/v1/git/commit', { method: 'POST', body: JSON.stringify({ message, confirmation: 'COMMIT' }), signal }) }
   gitPull(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/pull', { method: 'POST', body: JSON.stringify({ confirmation: 'PULL' }), signal }) }
   gitPush(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/push', { method: 'POST', body: JSON.stringify({ confirmation: 'PUSH' }), signal }) }
