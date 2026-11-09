@@ -170,6 +170,30 @@ def main():
         assert rollback_source.read_text(encoding="utf-8") == "original"
         assert not rollback_destination.exists() and not journal.exists()
 
+        # 导入：预览后可写入候选，重复内容被去重，解析失败返回 400。
+        preview = client.post("/api/v1/imports/preview", headers=headers, json={
+            "format": "markdown",
+            "content": "---\ntype: preference\nsubject: 工作流程\n---\n先计划后执行。\n",
+        })
+        assert preview.status_code == 200, preview.text
+        assert preview.json()["data"]["summary"]["ready"] == 1, preview.text
+
+        imported = client.post("/api/v1/imports", headers=headers, json={
+            "items": [{"type": "preference", "subject": "工作流程", "content": "先计划后执行。"}],
+            "source": "test-import",
+        })
+        assert imported.status_code == 201, imported.text
+        assert len(imported.json()["data"]["created"]) == 1, imported.text
+
+        again = client.post("/api/v1/imports", headers=headers, json={
+            "items": [{"type": "preference", "subject": "工作流程", "content": "先计划后执行。"}],
+        })
+        assert again.status_code == 201
+        assert again.json()["data"]["created"] == [], again.text
+
+        bad = client.post("/api/v1/imports/preview", headers=headers, json={"format": "json", "content": "{"})
+        assert bad.status_code == 400 and bad.json()["error"]["code"] == "IMPORT_PARSE_FAILED", bad.text
+
     print("local API and consistency tests passed")
 
 
