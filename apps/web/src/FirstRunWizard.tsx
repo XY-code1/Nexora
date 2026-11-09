@@ -15,7 +15,7 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   const [usage, setUsage] = useState<'web' | 'obsidian'>('web')
   const [mode, setMode] = useState<'create' | 'connect' | null>(null)
   const [path, setPath] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
   const [interview, setInterview] = useState(false)
@@ -42,13 +42,13 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   async function run(action: 'create' | 'connect') {
     const target = path.trim()
     if (!target) { setError('请填写文件夹的完整路径。'); return }
-    setBusy(true); setError(''); setDone('')
+    setBusy('run'); setError(''); setDone('')
     try {
       const result = action === 'create' ? await client.createVault(target) : await client.validateVault(target)
       setDone(`${action === 'create' ? '已创建' : '已连接'}个人空间「${result.displayName}」。`)
     } catch (reason) {
       setError(vaultHint(reason instanceof Error ? reason.message : '操作失败，请检查路径后重试。'))
-    } finally { setBusy(false) }
+    } finally { setBusy('') }
   }
 
   async function browse() {
@@ -100,10 +100,10 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   }
 
   async function saveInterview(topic: string, content: string) {
-    setBusy(true); setError('')
+    setBusy('interview'); setError('')
     try { const result = await client.onboardingResponse(topic, content); setInterviewState(result.state); return true }
     catch (reason) { setError(reason instanceof Error ? reason.message : '候选记忆创建失败。'); return false }
-    finally { setBusy(false) }
+    finally { setBusy('') }
   }
 
   if (interview) return <main className="wizard wizard-interview" aria-label="首次对话建档">
