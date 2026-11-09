@@ -175,7 +175,7 @@ def launch(args: argparse.Namespace) -> int:
             sock.listen(128)
             port = int(sock.getsockname()[1])
             requested: list[Path] = []
-            app = create_app(vault, token=token, web_dist=web_dist)
+            app = create_app(vault, token=token, web_dist=web_dist, watch=True)
             server = uvicorn.Server(uvicorn.Config(app, host=HOST, port=port, log_level="warning"))
             app.state.request_shutdown = lambda: setattr(server, "should_exit", True)
             def restart(next_vault: Path) -> None:

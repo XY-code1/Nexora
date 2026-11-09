@@ -51,7 +51,9 @@ export type GrowthAssociation = { id: string; fromDimension: GrowthDimensionKey;
 export type GrowthGoal = { id: string; horizon: 'long-term' | 'quarterly' | 'monthly'; title: string; action: string; priority: 'low' | 'medium' | 'high'; due: string; completed: boolean; previousGoalId: string; createdAt: string; updatedAt: string; revision: string }
 export type VaultBackup = { id: string; created: string; schemaVersion: number; fileCount: number; sizeBytes: number; integrity: 'verified' | 'invalid'; managed: boolean }
 export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
-export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean }
+export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean; lastSeenRevision?: string; watched?: boolean }
+export type VaultEvent = { revision: string; detectedAt: string }
+export type VaultEvents = VaultStatus & { events: VaultEvent[] }
 export type RegisteredVault = { vaultId: string; displayName: string; available: boolean; lastOpenedAt: string }
 export type GitStatus = { configured?: boolean; message?: string; branch?: string; head?: string; upstream?: string | null; ahead?: number; behind?: number; dirty: string[]; unmerged: string[] }
 export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string; initialized: boolean }
@@ -128,6 +130,7 @@ export class ApiClient {
   verifyBackup(id: string, signal?: AbortSignal) { return this.request<VaultBackup>(`/api/v1/backups/${encodeURIComponent(id)}/verify`, { signal }) }
   restoreBackup(id: string, confirmation: string, revision: string, signal?: AbortSignal) { return this.request<{ restoredBackupId: string; safetyBackup: VaultBackup; currentRevision: string }>(`/api/v1/backups/${encodeURIComponent(id)}/restore`, { method: 'POST', body: JSON.stringify({ confirmation, expected_vault_revision: revision }), signal }) }
   vaultStatus(signal?: AbortSignal) { return this.request<VaultStatus>('/api/v1/vault', { signal }) }
+  vaultEvents(signal?: AbortSignal) { return this.request<VaultEvents>('/api/v1/vault/events', { signal }) }
   registeredVaults(signal?: AbortSignal) { return this.request<RegisteredVault[]>('/api/v1/vaults', { signal }) }
   validateVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; valid: boolean }>('/api/v1/vaults/validate', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }

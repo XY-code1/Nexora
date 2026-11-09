@@ -359,4 +359,18 @@ describe('review workspace', () => {
     expect(calls).toContain('/api/v1/initialized')
     expect(spy).toHaveBeenCalled()
   })
+
+  it('surfaces external edits with a non-blocking refresh banner', async () => {
+    mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/vault/events': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r2', externalChange: true, watched: true, events: [{ revision: 'r2', detectedAt: '2026-11-09T12:00:00Z' }] },
+      '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r2', externalChange: true },
+    })
+    render(<App />)
+    await connect()
+    await screen.findByText(/检测到外部修改/)
+    fireEvent.click(screen.getByRole('button', { name: '稍后处理' }))
+    expect(screen.queryByText(/检测到外部修改/)).not.toBeInTheDocument()
+  })
 })

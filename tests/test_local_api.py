@@ -124,6 +124,25 @@ def main():
         assert rollback_source.read_text(encoding="utf-8") == "original"
         assert not rollback_destination.exists() and not journal.exists()
 
+        # Events endpoint and resident watcher.
+        events = client.get("/api/v1/vault/events", headers=headers)
+        assert events.status_code == 200 and "events" in events.json()["data"], events.text
+
+        import time
+        from core.vault_identity import VaultMonitor
+        monitor = VaultMonitor(vault, poll_interval=0.2)
+        monitor.start()
+        try:
+            (vault / "10 Profile" / "Profile.md").write_text("edited externally\n", encoding="utf-8")
+            for _ in range(60):
+                if monitor.events:
+                    break
+                time.sleep(0.05)
+            assert monitor.view()["externalChange"] is True, monitor.view()
+            assert monitor.events, monitor.events
+        finally:
+            monitor.stop()
+
     print("local API and consistency tests passed")
 
 
