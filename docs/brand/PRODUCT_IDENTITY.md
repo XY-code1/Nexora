@@ -31,7 +31,7 @@ NEXORA connects personal memory, identity, knowledge and AI tools while keeping 
 - README leads with the official logo, category and tagline.
 - English remains the primary open-source narrative with a first-class Chinese overview.
 - Brand documentation is linked from the main documentation index.
-- Repository URLs and installation commands remain unchanged.
+- Public links use the repository current canonical URL; changing repository settings remains outside this phase.
 - Preview assets remain outside application navigation and business routes.
 
 ## Migration boundaries

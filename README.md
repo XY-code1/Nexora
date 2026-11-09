@@ -6,8 +6,8 @@
 
 **An open-source, local-first Personal Intelligence Platform for confirmed memory, reflection, knowledge and permission-controlled AI access.**
 
-[![CI](https://github.com/XY-code1/personal-ai-profile/actions/workflows/test.yml/badge.svg)](https://github.com/XY-code1/personal-ai-profile/actions/workflows/test.yml)
-[![GitHub Release](https://img.shields.io/github/v/release/XY-code1/personal-ai-profile?display_name=tag&sort=semver)](https://github.com/XY-code1/personal-ai-profile/releases)
+[![CI](https://github.com/XY-code1/Nexora/actions/workflows/test.yml/badge.svg)](https://github.com/XY-code1/Nexora/actions/workflows/test.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/XY-code1/Nexora?display_name=tag&sort=semver)](https://github.com/XY-code1/Nexora/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-27BFFF.svg)](LICENSE)
 [![Local First](https://img.shields.io/badge/architecture-local--first-20D9E8.svg)](#architecture)
 [![MCP](https://img.shields.io/badge/MCP-permission--controlled-936BFF.svg)](#mcp-gateway)
@@ -285,7 +285,7 @@ Security foundations include loopback-only serving, bearer sessions, trusted-hos
 
 ### Windows
 
-Use the installer from [GitHub Releases](https://github.com/XY-code1/personal-ai-profile/releases) when available, or run:
+Use the installer from [GitHub Releases](https://github.com/XY-code1/Nexora/releases) when available, or run:
 
 ```text
 start-review.vbs
@@ -302,8 +302,8 @@ Requirements:
 - Git
 
 ```powershell
-git clone https://github.com/XY-code1/personal-ai-profile.git
-cd personal-ai-profile
+git clone https://github.com/XY-code1/Nexora.git
+cd Nexora
 
 python -m pip install -r requirements.txt
 
@@ -424,8 +424,8 @@ Optional Public Export        经过选择、脱敏和人工确认的公开内�
 ### 中文快速开始
 
 ```powershell
-git clone https://github.com/XY-code1/personal-ai-profile.git
-cd personal-ai-profile
+git clone https://github.com/XY-code1/Nexora.git
+cd Nexora
 python -m pip install -r requirements.txt
 
 # 在框架仓库之外创建私人 Vault
