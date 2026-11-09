@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -71,6 +72,26 @@ def list_registered() -> list[dict[str, object]]:
     return [{"vaultId": item.get("vault_id", ""), "displayName": item.get("display_name", ""), "available": Path(str(item.get("path", ""))).is_dir(), "lastOpenedAt": item.get("last_opened_at", "")} for item in entries if isinstance(item, dict)]
 
 
+_WATCHER_BLOCKED = {".git", ".env", "Locks", "Transactions"}
+
+
+def _fast_signature(root: Path) -> tuple[float, int]:
+    """Cheap change signal: newest mtime and file count, ignoring runtime files."""
+    newest = 0.0
+    count = 0
+    for directory, folders, files in os.walk(root, followlinks=False):
+        folders[:] = [name for name in folders if name not in _WATCHER_BLOCKED]
+        for name in files:
+            if name.endswith((".key", ".pem")):
+                continue
+            try:
+                info = (Path(directory) / name).stat()
+            except OSError:
+                continue
+            newest = max(newest, info.st_mtime)
+            count += 1
+    return newest, count
+
 def find_registered(vault_id: str) -> dict[str, str] | None:
     """Return the raw registry entry (including its local path) for server-side use.
 
@@ -88,14 +109,60 @@ def find_registered(vault_id: str) -> dict[str, str] | None:
 
 
 class VaultMonitor:
-    def __init__(self, vault: Path):
+    """Tracks Vault identity, external edits, and a resident change watcher.
+
+    The watcher polls a cheap filesystem signature (newest mtime + file count)
+    and only hashes the whole Vault when that signature moves, so it stays
+    affordable without pulling in a filesystem-event dependency.
+    """
+
+    def __init__(self, vault: Path, poll_interval: float = 5.0):
         self.root = vault.resolve()
+        self.poll_interval = poll_interval
         self.accepted_revision = _content_revision(self.root)
+        self.last_seen_revision = self.accepted_revision
+        self.events: list[dict[str, str]] = []
+        self._signature = _fast_signature(self.root)
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(target=self._run, name="vault-watcher", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=self.poll_interval * 2)
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.poll_interval):
+            try:
+                signature = _fast_signature(self.root)
+            except OSError:
+                continue
+            if signature == self._signature:
+                continue
+            self._signature = signature
+            current = _content_revision(self.root)
+            self.last_seen_revision = current
+            if current != self.accepted_revision:
+                self.events.append({"revision": current, "detectedAt": _now()})
+                self.events = self.events[-50:]
 
     def view(self) -> dict[str, object]:
         identity = ensure_identity(self.root)
         current = _content_revision(self.root)
-        return {"vaultId": identity["vault_id"], "displayName": identity["display_name"], "schemaVersion": 1, "revision": current, "externalChange": current != self.accepted_revision}
+        self.last_seen_revision = current
+        return {"vaultId": identity["vault_id"], "displayName": identity["display_name"], "schemaVersion": 1, "revision": current, "externalChange": current != self.accepted_revision, "lastSeenRevision": self.last_seen_revision, "watched": self._thread is not None}
+
+    def events_view(self) -> dict[str, object]:
+        return {**self.view(), "events": list(self.events)}
 
     def accept(self) -> None:
         self.accepted_revision = _content_revision(self.root)
+        self.last_seen_revision = self.accepted_revision
+        self._signature = _fast_signature(self.root)

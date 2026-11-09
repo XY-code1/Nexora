@@ -265,7 +265,7 @@ def find(root: Path, folder: str, record_id: str) -> Path:
             raise domain_error(exc) from None
 
 
-def create_app(vault: Path, token: str | None = None, web_dist: Path | None = None) -> FastAPI:
+def create_app(vault: Path, token: str | None = None, web_dist: Path | None = None, watch: bool = False) -> FastAPI:
     root = vault.expanduser().resolve()
     with vault_operation_lock(root):
         recover_vault_swap(root)
@@ -283,6 +283,8 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     app.state.request_restart = None
     register_vault(root)
     app.state.vault_monitor = VaultMonitor(root)
+    if watch:
+        app.state.vault_monitor.start()
 
     @app.middleware("http")
     async def track_local_mutations(request: Request, call_next):
@@ -324,6 +326,10 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     @app.get("/api/v1/vault", dependencies=[auth])
     def vault_status() -> dict[str, Any]:
         return envelope(app.state.vault_monitor.view())
+
+    @app.get("/api/v1/vault/events", dependencies=[auth])
+    def vault_events() -> dict[str, Any]:
+        return envelope(app.state.vault_monitor.events_view())
 
     @app.get("/api/v1/vaults", dependencies=[auth])
     def vaults() -> dict[str, Any]:

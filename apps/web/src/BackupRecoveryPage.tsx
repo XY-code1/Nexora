@@ -171,7 +171,7 @@ function RecoveryWizard({ client, backups, currentRevision, initialId, onExit }:
   </div>
 }
 
-export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
+export default function BackupRecoveryPage({ client, refreshKey = 0 }: { client: ApiClient; refreshKey?: number }) {
   const [value, setValue] = useState<BackupOverview | null>(null)
   const [selectedId, setSelectedId] = useState('')
   const [busy, setBusy] = useState('')
@@ -195,7 +195,7 @@ export default function BackupRecoveryPage({ client }: { client: ApiClient }) {
     } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '无法读取备份状态。' }) }
   }
 
-  useEffect(() => { void load() }, [client])
+  useEffect(() => { void load() }, [client, refreshKey])
   const selected = useMemo(() => value?.backups.find((item) => item.id === selectedId) ?? null, [value, selectedId])
   const timeline = useMemo(() => {
     const backups = (value?.backups ?? []).map((item) => ({ kind: 'backup' as const, id: item.id, created: item.created, title: '本地备份', detail: `${item.fileCount} files · ${size(item.sizeBytes)}` }))

@@ -175,7 +175,7 @@ def launch(args: argparse.Namespace) -> int:
             sock.listen(128)
             port = int(sock.getsockname()[1])
             requested: list[Path] = []
-            app = create_app(vault, token=token, web_dist=web_dist)
+            app = create_app(vault, token=token, web_dist=web_dist, watch=True)
             # The packaged Windows GUI executable has no stdout/stderr. Skip
             # Uvicorn's default formatter, which assumes sys.stdout.isatty().
             server = uvicorn.Server(
