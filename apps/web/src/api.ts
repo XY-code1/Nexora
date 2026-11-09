@@ -54,6 +54,8 @@ export type BackupOverview = { currentRevision: string; backups: VaultBackup[] }
 export type VaultStatus = { vaultId: string; displayName: string; schemaVersion: number; revision: string; externalChange: boolean }
 export type RegisteredVault = { vaultId: string; displayName: string; available: boolean; lastOpenedAt: string }
 export type GitStatus = { configured?: boolean; message?: string; branch?: string; head?: string; upstream?: string | null; ahead?: number; behind?: number; dirty: string[]; unmerged: string[] }
+export type GitChange = { path: string; status: string; code: string }
+export type GitChanges = { changes: GitChange[]; sensitive: { path: string; reason: string }[]; unmerged: string[]; can_commit: boolean; message?: string }
 export type OverviewSnapshot = { profile: ProfileOverview; memory: MemoryStats; clients: { total: number; active: SecurityClient[] }; recentAccess: AuditEvent[]; growth: { latestMonth: GrowthTimelinePoint | null }; pending: number; vault: string; initialized: boolean }
 
 type Envelope<T> = { data: T; meta: { requestId: string; revision?: string } }
@@ -133,6 +135,7 @@ export class ApiClient {
   createVault(path: string, signal?: AbortSignal) { return this.request<{ vaultId: string; displayName: string; created: boolean }>('/api/v1/vaults/create', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   switchVault(path: string, signal?: AbortSignal) { return this.request<{ status: string }>('/api/v1/vault/switch', { method: 'POST', body: JSON.stringify({ path }), signal }) }
   gitStatus(signal?: AbortSignal) { return this.request<GitStatus>('/api/v1/git/status', { signal }) }
+  gitChanges(signal?: AbortSignal) { return this.request<GitChanges>('/api/v1/git/changes', { signal }) }
   gitCommit(message: string, signal?: AbortSignal) { return this.request<{ head: string }>('/api/v1/git/commit', { method: 'POST', body: JSON.stringify({ message, confirmation: 'COMMIT' }), signal }) }
   gitPull(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/pull', { method: 'POST', body: JSON.stringify({ confirmation: 'PULL' }), signal }) }
   gitPush(signal?: AbortSignal) { return this.request<{ status: string; head: string }>('/api/v1/git/push', { method: 'POST', body: JSON.stringify({ confirmation: 'PUSH' }), signal }) }
