@@ -275,11 +275,13 @@ Security foundations include loopback-only serving, bearer sessions, trusted-hos
 
 ### Known limitations
 
-- GitHub OAuth/Device Flow and automatic private-repository creation are not implemented.
-- The user must verify that a configured GitHub remote is private.
-- External editor changes are detected by content revision; there is no permanent filesystem watcher.
+- Git pull/push do not retry on transient network failures.
+- No scheduled or automatic local backup.
+- `sync_commit` does not create a managed backup before committing.
 - The project does not capture screens, keyboard input, microphone data, or full browsing history.
 - No cloud account or cloud-hosted personal profile service is included.
+
+For the authoritative capability status, see [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
 
 ## Quick Start
 
@@ -356,6 +358,7 @@ Tests use temporary synthetic Vaults. They must never read or copy a real privat
 
 | Topic | Document |
 | --- | --- |
+| **Project status** | [PROJECT_STATUS.md](docs/PROJECT_STATUS.md) |
 | Brand guidelines | [BRAND_GUIDELINES.md](docs/brand/BRAND_GUIDELINES.md) |
 | Logo specification | [LOGO_SPECIFICATION.md](docs/brand/LOGO_SPECIFICATION.md) |
 | Brand assets | [BRAND_ASSET_CATALOG.md](docs/brand/BRAND_ASSET_CATALOG.md) |
@@ -376,11 +379,13 @@ Tests use temporary synthetic Vaults. They must never read or copy a real privat
 ## Roadmap
 
 1. Complete the NEXORA identity migration across release and community assets.
-2. Add GitHub Device Flow and verified private-repository provisioning without storing credentials in the Vault.
+2. ~~Add GitHub Device Flow and verified private-repository provisioning without storing credentials in the Vault.~~ ✅ Done
 3. Expand explicitly authorized model-provider connectors without weakening local-first defaults.
 4. Continue accessibility, localization and Windows packaging validation.
 
 The project will not add silent memory confirmation, automatic psychological labels, unrestricted AI file access, or default cloud collection.
+
+For the authoritative capability status, see [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
 
 ---
 
