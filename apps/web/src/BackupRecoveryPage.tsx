@@ -122,7 +122,7 @@ function RecoveryWizard({ client, backups, currentRevision, initialId, onExit }:
       </li>)}
     </ol>
 
-    {message && step !== 3 && <div className={`backup-message ${message.kind}`} role="status">{message.kind === 'success' ? <CheckCircle /> : <Warning />}<span>{message.text}</span></div>}
+    {message && <div className={`backup-message ${message.kind}`} role="status">{message.kind === 'success' ? <CheckCircle /> : <Warning />}<span>{message.text}</span></div>}
 
     {step === 0 && <div className="wizard-panel">
       <p className="eyebrow">STEP 1 / SELECT BACKUP</p>
