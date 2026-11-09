@@ -257,14 +257,14 @@ def browse_directory(title: str) -> str:
     """Open the platform folder picker and return the chosen directory."""
     try:
         from tkinter import Tk, filedialog
-    except Exception as exc:  # noqa: BLE001 - headless / unsupported platform
+        root = Tk()
+        root.withdraw()
+        try:
+            selected = filedialog.askdirectory(title=title)
+        finally:
+            root.destroy()
+    except Exception as exc:  # noqa: BLE001 - headless or unsupported platform
         raise RuntimeError(f"当前环境不支持系统文件夹选择器：{exc}") from None
-    root = Tk()
-    root.withdraw()
-    try:
-        selected = filedialog.askdirectory(title=title)
-    finally:
-        root.destroy()
     if not selected:
         raise RuntimeError("未选择文件夹。")
     return str(Path(selected).expanduser().resolve())
