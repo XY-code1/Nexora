@@ -69,6 +69,9 @@ export type ProviderOverview = { providers: ProviderAuthorization[]; pending: Pe
 export type ProviderDecision = { requestId: string; provider: string; scope: string; decision: 'approved' | 'denied'; payload: Record<string, unknown>; droppedFields: string[]; decidedAt: string }
 export type ProviderAuditEntry = { eventId: string; timestamp: string; eventType: string; scope: string; result: string; reasonCode: string; correlationId: string; details: { provider: string; fieldCount: number; droppedFields: string[] } }
 export type ProviderAudit = { integrity: { status: string; events: number; line?: number; lastHash: string }; items: ProviderAuditEntry[] }
+export type ProviderAdapterInfo = { provider: string; baseUrl: string; model: string; hasApiKey: boolean; timeout: number }
+export type ProviderAdaptersOverview = { providers: Record<string, string>; defaultBaseUrls: Record<string, string>; configured: ProviderAdapterInfo[] }
+export type ProviderCallResult = { ok: boolean; text?: string; model?: string; usage?: Record<string, number>; latencyMs?: number; error?: string }
 
 export type GitCommit = { id: string; created: string; subject: string; author: string }
 export type GitHistory = { branch: string; commits: GitCommit[]; message?: string }
@@ -178,6 +181,10 @@ export class ApiClient {
   previewProviderCall(provider: string, scope: string, context: Record<string, unknown>, signal?: AbortSignal) { return this.request<PendingCall>('/api/v1/providers/preview', { method: 'POST', body: JSON.stringify({ provider, scope, context }), signal }) }
   decideProviderCall(requestId: string, action: 'approve' | 'deny', reason: string, signal?: AbortSignal) { return this.request<ProviderDecision>('/api/v1/providers/calls', { method: 'POST', body: JSON.stringify({ request_id: requestId, action, reason }), signal }) }
   providerAudit(signal?: AbortSignal) { return this.request<ProviderAudit>('/api/v1/providers/audit', { signal }) }
+  providerAdapters(signal?: AbortSignal) { return this.request<ProviderAdaptersOverview>('/api/v1/providers/adapters', { signal }) }
+  configureProvider(provider: string, baseUrl: string, model: string, apiKey: string, timeout = 30, signal?: AbortSignal) { return this.request<ProviderAdapterInfo>('/api/v1/providers/configure', { method: 'POST', body: JSON.stringify({ provider, base_url: baseUrl, model, api_key: apiKey, timeout }), signal }) }
+  removeProviderConfig(provider: string, signal?: AbortSignal) { return this.request<{ provider: string; removed: boolean }>(`/api/v1/providers/${encodeURIComponent(provider)}/config`, { method: 'DELETE', signal }) }
+  callProvider(provider: string, requestId: string, signal?: AbortSignal) { return this.request<ProviderCallResult>('/api/v1/providers/call', { method: 'POST', body: JSON.stringify({ provider, request_id: requestId }), signal }) }
 
   gitHistory(limit = 50, signal?: AbortSignal) { return this.request<GitHistory>(`/api/v1/git/history?limit=${limit}`, { signal }) }
   gitRestore(commit: string, expectedRevision: string, signal?: AbortSignal) { return this.request<{ restoredCommit: string; safetyBackup: VaultBackup; currentRevision: string }>('/api/v1/git/restore', { method: 'POST', body: JSON.stringify({ commit, expected_vault_revision: expectedRevision }), signal }) }

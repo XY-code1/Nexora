@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle, Eye, ShieldCheck, Warning } from '@phosphor-icons/react'
-import type { ApiClient, PendingCall, ProviderAuthorization, ProviderAudit, ProviderOverview } from './api'
+import type { ApiClient, PendingCall, ProviderAdapterInfo, ProviderAdaptersOverview, ProviderAuthorization, ProviderAudit, ProviderCallResult, ProviderOverview } from './api'
 
 type Props = { client: ApiClient }
 
@@ -13,13 +13,18 @@ export default function ProviderAuthPage({ client }: Props) {
   const [previewScope, setPreviewScope] = useState('')
   const [context, setContext] = useState('{\n  "summary": "这个月我更关注节奏。",\n  "dimension": "mind"\n}')
   const [pending, setPending] = useState<PendingCall[]>([])
+  const [adapters, setAdapters] = useState<ProviderAdaptersOverview | null>(null)
+  const [connector, setConnector] = useState({ provider: 'local-openai', baseUrl: '', model: '', apiKey: '', timeout: 30 })
+  const [approved, setApproved] = useState<{ requestId: string; provider: string; scope: string; payload: Record<string, unknown> }[]>([])
+  const [callResult, setCallResult] = useState<ProviderCallResult | null>(null)
+  const [calling, setCalling] = useState('')
   const [busy, setBusy] = useState('')
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
   async function load() {
     try {
-      const [next, log] = await Promise.all([client.providers(), client.providerAudit()])
-      setOverview(next); setAudit(log); setPending(next.pending)
+      const [next, log, adapterList] = await Promise.all([client.providers(), client.providerAudit(), client.providerAdapters()])
+      setOverview(next); setAudit(log); setPending(next.pending); setAdapters(adapterList)
     } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '无法读取 Provider 状态。' }) }
   }
 
@@ -65,10 +70,41 @@ export default function ProviderAuthPage({ client }: Props) {
     try {
       const result = await client.decideProviderCall(item.requestId, action, action === 'deny' ? 'user-rejected' : '')
       setPending((current) => current.filter((call) => call.requestId !== item.requestId))
+      if (result.decision === 'approved') setApproved((current) => [{ requestId: item.requestId, provider: item.provider, scope: item.scope, payload: item.preview }, ...current].slice(0, 10))
       setMessage({ kind: 'success', text: result.decision === 'approved' ? '调用已批准。模块不会真的发送任何内容。' : '调用已拒绝。' })
       await load()
     } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '决策失败。' }) }
     finally { setBusy('') }
+  }
+
+  async function configure() {
+    if (!connector.baseUrl.trim() || !connector.model.trim()) return
+    setBusy('configure'); setMessage(null); setCallResult(null)
+    try {
+      await client.configureProvider(connector.provider, connector.baseUrl.trim(), connector.model.trim(), connector.apiKey, connector.timeout)
+      setConnector((current) => ({ ...current, baseUrl: '', model: '', apiKey: '' }))
+      setMessage({ kind: 'success', text: '连接器已配置。API Key 只保留在本地服务内存中。' })
+      await load()
+    } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '配置失败。' }) }
+    finally { setBusy('') }
+  }
+
+  async function removeConnector(item: ProviderAdapterInfo) {
+    setBusy(`config:${item.provider}`); setMessage(null)
+    try { await client.removeProviderConfig(item.provider); setMessage({ kind: 'success', text: '连接器已移除，内存中的 API Key 已清除。' }); await load() }
+    catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '移除失败。' }) }
+    finally { setBusy('') }
+  }
+
+  async function callApproved(item: { requestId: string; provider: string }) {
+    setCalling(item.requestId); setMessage(null); setCallResult(null)
+    try {
+      const result = await client.callProvider(item.provider, item.requestId)
+      setCallResult(result)
+      if (!result.ok) setMessage({ kind: 'error', text: result.error ?? '调用失败。' })
+      await load()
+    } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '调用失败。' }) }
+    finally { setCalling('') }
   }
 
   const knownScopes = overview?.scopes ?? {}
@@ -117,6 +153,31 @@ export default function ProviderAuthPage({ client }: Props) {
           </div>)}
         </div>}
       </section>
+    </section>
+
+    <section className="provider-panel">
+      <header><p className="eyebrow">CONNECTORS / REAL CALLS</p><h3>连接器</h3></header>
+      <div className="provider-field-row">
+        <label className="provider-field">Provider 类型<select aria-label="Provider 类型" value={connector.provider} onChange={(event) => setConnector((current) => ({ ...current, provider: event.target.value, baseUrl: adapters?.defaultBaseUrls[event.target.value] ?? '' }))}>{Object.entries(adapters?.providers ?? {}).map(([key, label]) => <option key={key} value={key}>{key} — {label}</option>)}</select></label>
+        <label className="provider-field">Model<input aria-label="连接器 Model" value={connector.model} onChange={(event) => setConnector((current) => ({ ...current, model: event.target.value }))} placeholder="例如 llama3" /></label>
+      </div>
+      <label className="provider-field">Base URL<input aria-label="连接器 Base URL" value={connector.baseUrl} onChange={(event) => setConnector((current) => ({ ...current, baseUrl: event.target.value }))} placeholder="例如 http://127.0.0.1:11434" /></label>
+      <label className="provider-field">API Key（可选，仅内存）<input aria-label="连接器 API Key" type="password" value={connector.apiKey} onChange={(event) => setConnector((current) => ({ ...current, apiKey: event.target.value }))} placeholder="本地端点通常不需要" /></label>
+      <button className="primary-action" onClick={() => void configure()} disabled={Boolean(busy) || !connector.baseUrl.trim() || !connector.model.trim()}>配置连接器</button>
+      {adapters?.configured.length ? <ul className="provider-list">{adapters.configured.map((item) => <li key={item.provider}>
+        <div><strong>{item.provider}</strong><small>{item.baseUrl} · {item.model}{item.hasApiKey ? ' · 已配置 Key' : ' · 无 Key'}</small></div>
+        <button className="text-button" onClick={() => removeConnector(item)} disabled={Boolean(busy)}>移除</button>
+      </li>)}</ul> : <p className="muted">还没有配置连接器。没有连接器就不会发起任何外部调用。</p>}
+    </section>
+
+    <section className="provider-panel">
+      <header><p className="eyebrow">APPROVED CALLS / SEND</p><h3>已批准的调用</h3></header>
+      {!approved.length ? <p className="muted">批准一次预览后，这里会出现可发送的请求。</p> : <ul className="provider-list">{approved.map((item) => <li key={item.requestId}>
+        <div><strong>{item.provider}</strong><small>{item.scope} · {Object.keys(item.payload).join(', ') || '（空）'}</small></div>
+        <button className="primary-action" onClick={() => void callApproved(item)} disabled={Boolean(calling) || !adapters?.configured.some((config) => config.provider === item.provider)}>{calling === item.requestId ? '正在调用…' : '调用 Provider'}</button>
+      </li>)}</ul>}
+      {callResult && <div className={`backup-message ${callResult.ok ? 'success' : 'error'}`} role="status">{callResult.ok ? <CheckCircle /> : <Warning />}<span>{callResult.ok ? `${callResult.model ?? 'Provider'}：${callResult.text}` : `调用失败：${callResult.error}`}</span></div>}
+      <small>只有已配置连接器且已批准的请求才能发送；外部失败不会影响本地档案。</small>
     </section>
 
     <section className="provider-audit">
