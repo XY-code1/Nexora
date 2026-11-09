@@ -322,6 +322,34 @@ def main():
         missing = client.post("/api/v1/vaults/connect", headers=headers, json={"vault_id": "vault_missing"})
         assert missing.status_code == 404 and missing.json()["error"]["code"] == "VAULT_NOT_FOUND", missing.text
 
+        # Provider connectors: configure, approve, call, remove.
+        from core import provider_adapters as adapters_mod
+
+        class _FakeAdapterHTTP:
+            def __call__(self, url: str, payload: dict, headers: dict, timeout: float) -> dict:
+                return {"choices": [{"message": {"content": "pong"}}], "model": "test-model", "usage": {"total_tokens": 5}}
+
+        original_post = adapters_mod._post_json
+        adapters_mod._post_json = _FakeAdapterHTTP()
+        try:
+            adapter_list = client.get("/api/v1/providers/adapters", headers=headers)
+            assert adapter_list.status_code == 200 and set(adapter_list.json()["data"]["providers"]) == {"local-openai", "ollama", "openai", "anthropic", "custom"}, adapter_list.text
+
+            configured = client.post("/api/v1/providers/configure", headers=headers, json={"provider": "local-openai", "base_url": "http://127.0.0.1:8080/v1", "model": "test-model", "api_key": "sk-test"})
+            assert configured.status_code == 200 and configured.json()["data"]["hasApiKey"] is True, configured.text
+
+            client.post("/api/v1/providers", headers=headers, json={"provider": "local-openai", "scopes": ["reflection:summary"]})
+            preview = client.post("/api/v1/providers/preview", headers=headers, json={"provider": "local-openai", "scope": "reflection:summary", "context": {"summary": "x", "secret": "y"}}).json()["data"]
+            client.post("/api/v1/providers/calls", headers=headers, json={"request_id": preview["requestId"], "action": "approve"})
+            called = client.post("/api/v1/providers/call", headers=headers, json={"provider": "local-openai", "request_id": preview["requestId"]})
+            assert called.status_code == 200 and called.json()["data"]["ok"] is True, called.text
+            assert called.json()["data"]["text"] == "pong", called.text
+
+            removed = client.delete("/api/v1/providers/local-openai/config", headers=headers)
+            assert removed.status_code == 200 and removed.json()["data"]["removed"] is True, removed.text
+        finally:
+            adapters_mod._post_json = original_post
+
     print("local API and consistency tests passed")
 
 

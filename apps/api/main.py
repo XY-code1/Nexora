@@ -29,6 +29,7 @@ from core.visualization import human3_trend, monthly_trend, privacy_audit, profi
 from core import growth
 from core import github
 
+from core import provider_adapters
 from core import provider_auth
 
 from core import importer
@@ -221,6 +222,19 @@ class ProviderDecisionInput(BaseModel):
     request_id: str = Field(min_length=1, max_length=80)
     action: str = Field(pattern=r"^(approve|deny)$")
     reason: str = Field(default="", max_length=200)
+
+
+class ProviderConfigureInput(BaseModel):
+    provider: str = Field(min_length=1, max_length=64)
+    base_url: str = Field(default="", max_length=300)
+    model: str = Field(min_length=1, max_length=120)
+    api_key: str = Field(default="", max_length=500)
+    timeout: float = Field(default=30.0, ge=1.0, le=120.0)
+
+
+class ProviderCallInput(BaseModel):
+    request_id: str = Field(min_length=1, max_length=80)
+    provider: str = Field(min_length=1, max_length=64)
 
 class ImportPreviewInput(BaseModel):
     format: str = Field(pattern=r"^(markdown|json)$")
@@ -1010,6 +1024,29 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     @app.get("/api/v1/providers/audit", dependencies=[auth])
     def provider_audit() -> dict[str, Any]:
         return envelope(provider_auth.audit_log())
+
+    @app.get("/api/v1/providers/adapters", dependencies=[auth])
+    def provider_adapters_list() -> dict[str, Any]:
+        return envelope({
+            "providers": provider_adapters.known_providers(),
+            "defaultBaseUrls": {key: provider_adapters.default_base_url(key) for key in provider_adapters.known_providers()},
+            "configured": provider_adapters.configured_providers(),
+        })
+
+    @app.post("/api/v1/providers/configure", dependencies=[auth])
+    def provider_configure(data: ProviderConfigureInput) -> dict[str, Any]:
+        try:
+            return envelope(provider_adapters.configure(data.provider, base_url=data.base_url, model=data.model, api_key=data.api_key, timeout=data.timeout))
+        except provider_adapters.AdapterError as exc:
+            raise ApiError(400, "PROVIDER_CONFIG_FAILED", str(exc)) from None
+
+    @app.delete("/api/v1/providers/{provider}/config", dependencies=[auth])
+    def provider_remove_config(provider: str) -> dict[str, Any]:
+        return envelope(provider_adapters.remove_config(provider))
+
+    @app.post("/api/v1/providers/call", dependencies=[auth])
+    def provider_call(data: ProviderCallInput) -> dict[str, Any]:
+        return envelope(provider_adapters.call(data.provider, data.request_id))
 
     @app.get("/api/v1/memories", dependencies=[auth])
     def list_memories(status: str = "candidate", limit: int = 50) -> dict[str, Any]:

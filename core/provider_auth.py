@@ -17,6 +17,7 @@ import hmac
 import json
 import os
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,9 @@ KNOWN_SCOPES: dict[str, tuple[str, ...]] = {
 
 _PENDING: dict[str, dict[str, Any]] = {}
 _PENDING_LOCK = threading.Lock()
+_APPROVED_TTL_SECONDS = 600.0
+_APPROVED: dict[str, dict[str, Any]] = {}
+_APPROVED_LOCK = threading.Lock()
 
 
 class ProviderAuthError(RuntimeError):
@@ -165,6 +169,15 @@ def decide_call(request_id: str, action: str, reason: str = "") -> dict[str, Any
         "fieldCount": len(record["preview"]),
         "droppedFields": record["droppedFields"],
     })
+    if approved:
+        with _APPROVED_LOCK:
+            _APPROVED[record["requestId"]] = {
+                "provider": record["provider"],
+                "scope": record["scope"],
+                "payload": record["preview"],
+                "approvedAt": _now(),
+                "expiresAt": time.monotonic() + _APPROVED_TTL_SECONDS,
+            }
     return {
         "requestId": record["requestId"],
         "provider": record["provider"],
@@ -174,6 +187,46 @@ def decide_call(request_id: str, action: str, reason: str = "") -> dict[str, Any
         "droppedFields": record["droppedFields"],
         "decidedAt": _now(),
     }
+
+
+def approved_payload(request_id: str) -> dict[str, Any]:
+    """Return the approved payload once; an approval is single-use."""
+    with _APPROVED_LOCK:
+        record = _APPROVED.pop(request_id, None)
+        if not record:
+            raise ProviderAuthError("该调用未批准，或批准已过期。")
+        if time.monotonic() > record["expiresAt"]:
+            raise ProviderAuthError("批准已过期，请重新预览并批准。")
+        return {"provider": record["provider"], "scope": record["scope"], "payload": record["payload"]}
+
+
+SCOPE_SYSTEM_PROMPTS = {
+    "reflection:summary": "你是一个本地反思助手。请基于用户提供的信息，用简洁的中文给出回应，不要编造未提供的事实。",
+    "profile:summary": "你是一个本地档案助手。请基于用户提供的信息，用简洁的中文给出回应，不要编造未提供的事实。",
+    "memory:search": "你是一个本地记忆助手。请仅基于用户提供的信息回答，不要编造。",
+}
+
+
+def build_prompt(scope: str, payload: dict[str, Any]) -> str:
+    system = SCOPE_SYSTEM_PROMPTS.get(scope, "你是一个本地助手。请仅基于用户提供的信息回答，不要编造。")
+    body = "\n".join(f"{key}: {value}" for key, value in payload.items())
+    return f"{system}\n\n{body}"
+
+
+def audit_call(request_id: str, provider: str, scope: str, status: str, model: str = "", tokens: int = 0, reason: str = "") -> dict[str, Any]:
+    """Record a provider call attempt (success or failure) in the audit log."""
+    return _append_audit({
+        "requestId": request_id,
+        "provider": provider,
+        "scope": scope,
+        "eventType": "provider.call",
+        "result": "allowed" if status == "ok" else "denied",
+        "reasonCode": profile.clean_meta(reason, 80) or ("CALL_OK" if status == "ok" else "CALL_FAILED"),
+        "fieldCount": 0,
+        "droppedFields": [],
+        "model": model,
+        "tokens": tokens,
+    })
 
 
 def verify_audit() -> dict[str, Any]:
@@ -212,6 +265,8 @@ def _append_audit(entry: dict[str, Any]) -> dict[str, Any]:
                 "provider": profile.clean_meta(str(entry.get("provider", "")), 64),
                 "fieldCount": int(entry.get("fieldCount", 0)),
                 "droppedFields": [profile.clean_meta(str(item), 64) for item in entry.get("droppedFields", [])],
+                "model": profile.clean_meta(str(entry.get("model", "")), 64),
+                "tokens": int(entry.get("tokens", 0)),
             },
             "prevHash": integrity["lastHash"],
         }

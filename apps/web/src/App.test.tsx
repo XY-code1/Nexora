@@ -511,6 +511,40 @@ describe('review workspace', () => {
     await screen.findByText(/已恢复到提交/)
     expect(calls).toContain('/api/v1/git/restore')
   })
+
+  it('configures a connector and calls an approved provider', async () => {
+    mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/providers': { providers: [], pending: [], scopes: { 'reflection:summary': ['dimension', 'summary'] } },
+      '/api/v1/providers/adapters': (index: number) => ({
+        providers: { 'local-openai': 'OpenAI-compatible local endpoint' },
+        defaultBaseUrls: {},
+        configured: index >= 1 ? [{ provider: 'local-openai', baseUrl: 'http://127.0.0.1:8080/v1', model: 'test-model', hasApiKey: true, timeout: 30 }] : [],
+      }),
+      '/api/v1/providers/audit': { integrity: { status: 'verified', events: 0, lastHash: '' }, items: [] },
+      '/api/v1/providers/configure': { provider: 'local-openai', baseUrl: 'http://127.0.0.1:8080/v1', model: 'test-model', hasApiKey: true, timeout: 30 },
+      '/api/v1/providers/preview': { requestId: 'req-1', provider: 'local-openai', scope: 'reflection:summary', preview: { summary: 'x' }, droppedFields: ['secret'], preparedAt: '2026-11-09T12:00:00Z', status: 'pending' },
+      '/api/v1/providers/calls': { requestId: 'req-1', provider: 'local-openai', scope: 'reflection:summary', decision: 'approved', payload: { summary: 'x' }, droppedFields: [], decidedAt: '2026-11-09T12:00:00Z' },
+      '/api/v1/providers/call': { ok: true, text: 'pong', model: 'test-model', usage: { total_tokens: 5 }, latencyMs: 3 },
+    })
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: 'AI Provider' }))
+    await screen.findByText('连接器')
+    fireEvent.change(screen.getByLabelText('连接器 Base URL'), { target: { value: 'http://127.0.0.1:8080/v1' } })
+    fireEvent.change(screen.getByLabelText('连接器 Model'), { target: { value: 'test-model' } })
+    fireEvent.click(screen.getByRole('button', { name: '配置连接器' }))
+    await screen.findByText(/连接器已配置/)
+    fireEvent.change(screen.getByLabelText('预览 Provider'), { target: { value: 'local-openai' } })
+    fireEvent.change(screen.getByLabelText('预览 Scope'), { target: { value: 'reflection:summary' } })
+    fireEvent.click(screen.getByRole('button', { name: '生成最小化预览' }))
+    await screen.findByText('PENDING APPROVAL')
+    fireEvent.click(screen.getByRole('button', { name: '批准' }))
+    await screen.findByText('已批准的调用')
+    fireEvent.click(screen.getByRole('button', { name: '调用 Provider' }))
+    await screen.findByText(/pong/)
+  })
 })
 
 describe('vault hints', () => {
