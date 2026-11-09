@@ -203,6 +203,17 @@ export default function BackupRecoveryPage({ client, refreshKey = 0 }: { client:
     return [...backups, ...commits].sort((a, b) => b.created.localeCompare(a.created)).slice(0, 50)
   }, [value, history])
 
+  async function restoreCommit(item: { id: string }) {
+    if (!value || !window.confirm('恢复到此提交？系统会先创建 managed 安全备份，再把工作区内容回退到该提交（HEAD 不变，回退会显示为未提交改动）。')) return
+    setBusy(`restore:${item.id}`); setMessage(null)
+    try {
+      const result = await client.gitRestore(item.id, value.currentRevision)
+      await load()
+      setMessage({ kind: 'success', text: `已恢复到提交 ${result.restoredCommit.slice(0, 8)}；安全备份 ${result.safetyBackup.id} 已创建。请核对后提交。` })
+    } catch (error) { setMessage({ kind: 'error', text: error instanceof Error ? error.message : '恢复失败。' }) }
+    finally { setBusy('') }
+  }
+
   async function create() {
     setBusy('create'); setMessage(null)
     try {
@@ -292,6 +303,7 @@ export default function BackupRecoveryPage({ client, refreshKey = 0 }: { client:
       {timeline.length ? <ul className="timeline-list">{timeline.map((item) => <li key={`${item.kind}:${item.id}`} className={`timeline-${item.kind}`}>
         <span className="timeline-dot" aria-hidden="true" />
         <div><p className="timeline-meta">{time(item.created)} · {item.title}</p><strong>{item.detail}</strong><small>{item.kind === 'commit' ? item.id.slice(0, 8) : item.id}</small></div>
+        {item.kind === 'commit' && <button className="text-button" onClick={() => void restoreCommit(item)} disabled={Boolean(busy)}>{busy === `restore:${item.id}` ? '正在恢复…' : '恢复到此提交'}</button>}
       </li>)}</ul> : <p className="muted">暂无版本历史记录。</p>}
     </section>
 

@@ -189,6 +189,11 @@ class GitConfirmationInput(BaseModel):
     confirmation: str = Field(pattern=r"^(PULL|PUSH)$")
 
 
+class GitRestoreInput(BaseModel):
+    commit: str = Field(min_length=1, max_length=80)
+    expected_vault_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class GitHubClientIdInput(BaseModel):
     client_id: str = Field(min_length=1, max_length=200)
 
@@ -459,6 +464,16 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             return envelope(git_sync.sync_push(str(root)))
         except RuntimeError as exc:
             raise ApiError(409, "GIT_PUSH_FAILED", safe_git_error(str(exc), root)) from None
+
+    @app.post("/api/v1/git/restore", dependencies=[auth])
+    def git_restore(data: GitRestoreInput) -> dict[str, Any]:
+        try:
+            return envelope(git_sync.git_restore(str(root), data.commit, data.expected_vault_revision))
+        except RuntimeError as exc:
+            message = str(exc)
+            if "其他入口修改" in message:
+                raise ApiError(409, "REVISION_CONFLICT", message) from None
+            raise ApiError(409, "GIT_RESTORE_FAILED", safe_git_error(message, root)) from None
 
     @app.get("/api/v1/capabilities", dependencies=[auth])
     def capabilities() -> dict[str, Any]:

@@ -180,6 +180,7 @@ export class ApiClient {
   providerAudit(signal?: AbortSignal) { return this.request<ProviderAudit>('/api/v1/providers/audit', { signal }) }
 
   gitHistory(limit = 50, signal?: AbortSignal) { return this.request<GitHistory>(`/api/v1/git/history?limit=${limit}`, { signal }) }
+  gitRestore(commit: string, expectedRevision: string, signal?: AbortSignal) { return this.request<{ restoredCommit: string; safetyBackup: VaultBackup; currentRevision: string }>('/api/v1/git/restore', { method: 'POST', body: JSON.stringify({ commit, expected_vault_revision: expectedRevision }), signal }) }
 
   gitChanges(signal?: AbortSignal) { return this.request<GitChanges>('/api/v1/git/changes', { signal }) }
   gitCommit(message: string, signal?: AbortSignal) { return this.request<{ head: string }>('/api/v1/git/commit', { method: 'POST', body: JSON.stringify({ message, confirmation: 'COMMIT' }), signal }) }
