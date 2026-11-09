@@ -6,6 +6,8 @@
 
 > **实施更新（2026-11-06）**：审计后的 P1–P7 最小闭环已经落地。Vault 现有随机稳定 identity、本机 registry、Web 创建/校验/重启切换、外部修改 revision 检测、统一只读 repository 边界、Git 操作面板、MCP identity 握手和多 Vault/launcher/发布门禁测试。下文“当前状态”保留审计时基线，最终验收状态以本文末《P1–P7 实施结果》为准。
 
+> **2026-11-09 更新**：下文各「未实现 / 部分实现」条目为审计时基线。GitHub Device Flow、private 仓库创建与验证、连接向导、Git 历史浏览与恢复、备份保留策略、变更预览与敏感扫描、常驻外部修改检测均已落地。**当前状态以 [`PROJECT_STATUS.md`](PROJECT_STATUS.md) 为准。**
+
 ## P1–P7 实施结果
 
 | 阶段 | 状态 | 已交付 |
@@ -54,10 +56,10 @@ Local Markdown Vault  ←──────── Obsidian or another editor
 |---|---|---|---|
 | Web | 记忆审核、档案、复盘、成长、安全、备份、AI 连接 | **已实现** | 可不依赖 Obsidian 使用主要业务能力，但不能在 Web 内创建、选择或切换 Vault |
 | FastAPI | 本地认证、版本化 API、静态前端、服务关闭 | **已实现** | 只绑定启动时传入的单个 Vault |
-| Core | Markdown 生命周期、访问策略、revision、锁、事务、备份、Git 同步 | **已实现/部分实现** | 核心规则集中度较高；仍有适配器直接扫描文件 |
+| Core | Markdown 生命周期、访问策略、revision、锁、事务、备份、Git 同步 | **已实现** | 适配器统一经 `core.repository` 只读边界 |
 | Vault | 唯一事实源 | **已实现** | schema v1；目录结构固定；禁止与公共框架仓库互相包含 |
-| Obsidian | 可选外部编辑器 | **部分实现** | 可直接编辑同一目录，但没有 watcher、变更通知或 schema-aware 冲突 UI |
-| GitHub | 私人备份和版本历史 | **部分实现** | `core/sync.py` 有保守 Git 同步；仅 CLI，无 Web 配置、认证和私有仓库校验 |
+| Obsidian | 可选外部编辑器 | **已实现** | 可编辑同一目录；常驻 watcher 检测外部修改并提示冲突，但不自动合并 |
+| GitHub | 私人备份和版本历史 | **已实现** | Device Flow、private 仓库创建与验证、连接向导、Git 历史浏览与恢复 |
 | MCP | AI 受控读取与候选写入 | **已实现** | stdio、客户端 token、scope、审计链；必须独立配置同一绝对 Vault 路径 |
 
 ## 4. 审计结论
@@ -66,7 +68,7 @@ Local Markdown Vault  ←──────── Obsidian or another editor
 
 - **已实现**：`core.profile.init()` 从模板初始化空目录；launcher 对不存在或空目录自动初始化。
 - **部分实现**：launcher 支持 `--vault`、`PROFILE_VAULT`、默认目录和系统文件夹选择器。
-- **未实现**：Web 内的 Vault 首次引导、最近 Vault 列表、创建/选择/切换 API。
+- **已实现**：Web 内的 Vault 首次引导、最近 Vault 列表、创建/校验/切换 API。
 - **存在风险**：launcher 单实例锁是应用级而非 Vault 级；第二次用不同 `--vault` 启动时会复用已运行实例，不能完成切换，也不会提示当前实际 Vault。
 
 ### 4.2 Web 脱离 Obsidian
@@ -78,33 +80,33 @@ Local Markdown Vault  ←──────── Obsidian or another editor
 ### 4.3 Markdown 读写统一性
 
 - **已实现**：主要写操作经 Core，使用路径约束、原子写、revision 和锁。
-- **部分实现**：API 内存在只读聚合帮助函数；MCP 和 legacy `review_app.py` 仍直接扫描/读取文件，再调用 Core 解析和访问策略。
+- **已实现**：API、MCP 与 legacy `review_app.py` 均通过 `core.repository` 只读边界读取。
 - **存在风险**：统一规则依赖开发纪律，而不是单一 Storage Port；新增适配器可能绕开一致性处理。
 
 ### 4.4 外部修改、revision、锁和冲突
 
 - **已实现**：记录 SHA-256 revision；写 API 要求 expected revision；Vault restore 使用全 Vault content revision；进程间 FileLock；多文件生命周期事务有 journal 恢复。
 - **部分实现**：Obsidian 修改会在下一次读取或写入时被看见，旧 revision 写入会被拒绝。
-- **未实现**：文件 watcher、外部变更事件、Web 自动失效/刷新、三方合并、外部编辑中的临时半写文件处理。
+- **已实现**：常驻 Vault watcher、外部变更事件（`/api/v1/vault/events`）与 Web 非阻塞冲突提示均已落地。三方合并不提供（有意）。
 - **存在风险**：Obsidian 不遵守应用锁。读取恰逢外部非原子保存时，可能看到短暂不完整内容；用户在 Web 上只会在提交时得到冲突。
 
 ### 4.5 GitHub 与版本管理
 
 - **已实现**：Git 状态、全量提交、fetch、fast-forward-only pull、push；脏状态和分叉拒绝；测试使用本地 bare remote。
-- **部分实现**：能力只在 CLI；没有 GitHub 专用授权、仓库创建、远程私有性检查或 Web 历史浏览。
+- **已实现**：GitHub Device Flow、仓库创建、远程私有性校验、连接向导、Web 历史浏览与恢复均已落地。
 - **存在风险**：`sync_commit` 执行 `git add -A`，安全性依赖 Vault `.gitignore` 和用户仓库配置；代码不验证远程是否为 GitHub 私有仓库。
 
 ### 4.6 MCP 与同一 Vault
 
 - **已实现**：MCP 通过 `PROFILE_VAULT` 绑定 Vault，调用相同 schema、隔离、锁和安全授权；AI 只能提出候选，不能确认。
-- **部分实现**：Web 接入向导生成配置模板，但 Web 服务与 MCP 进程没有共享的 Vault identity 握手。
+- **已实现**：MCP 与 Web 通过 `vault_id` 握手；错配时 fail closed 并记录审计事件。
 - **存在风险**：配置错误时，Web 与 MCP 可分别绑定不同 Vault；未来 Web 切换 Vault 后，已运行 MCP 不会自动切换。
 
 ### 4.7 多 Vault 隔离与泄漏面
 
 - **已实现**：每个 API/MCP 进程固定 root；安全注册表和审计日志位于各 Vault；managed backup 使用本机密钥和 Vault 路径 HMAC 绑定；跨 Vault 恢复被拒绝；公共框架与私人 Vault 必须完全分离。
 - **部分实现**：本机 runtime 文件记录当前 Vault 绝对路径与 session token；尝试 chmod 0600，但 Windows ACL 语义未被明确验证。
-- **未实现**：稳定 `vault_id`、Vault registry、切换前后的 session 失效、MCP 重绑定协议、多 Vault E2E。
+- **已实现**：稳定 `vault_id`、Vault registry、切换前后 session 失效、多 Vault E2E。
 
 ## 5. 主要差距与优先级
 

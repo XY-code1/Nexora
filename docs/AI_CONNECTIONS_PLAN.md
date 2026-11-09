@@ -1,6 +1,8 @@
 # AI Connections — 实施计划
 
 > 状态：C1–C6 全部完成。C4 已通过真实 stdio Host 链路验证，C5 已通过原子性、并发和故障注入测试，C6 已完成 UI 与真实生命周期 E2E。
+>
+> **当前状态以 [`PROJECT_STATUS.md`](PROJECT_STATUS.md) 为准。**
 
 ## C1 架构审计结论
 
@@ -9,6 +11,9 @@
 已实现的 MCP Tool：get_profile、get_current_context、search_memory、list_projects、propose_memory、list_pending、get_human3_summary（对应 7 个 scope：profile:read、context:read、memory:search、memory:propose、memory:pending、project:read、assessment:read）。
 
 尚未实现：客户端逻辑删除、Token 重新签发、细粒度 scope（monthly/growth/privacy 均无）、7 态客户端状态、Resource/Prompt、Claude Desktop 真实端到端验证、接入向导 UI。
+
+> **2026-11-09 更新**：客户端逻辑删除、Token 重新签发、7 态客户端状态、接入向导 UI、真实 Host 链路验证均已在 C2–C6 完成。
+> 仍未实现的是**有意保留的非目标**：细粒度 scope（Growth 数据保持 local-only，不新增 growth/monthly/privacy scope）与 MCP Resource/Prompt。
 
 ## 正式确定的隐私策略（2026-11-04）
 
