@@ -18,6 +18,8 @@ import AIConnectionsPage from './AIConnectionsPage'
 import FirstRunWizard from './FirstRunWizard'
 import { LoadingState } from './components/StateBlocks'
 import relationshipMap from './assets/relationship-map.webp'
+import { LANGUAGES, localizedError, useLanguage, useT } from './i18n'
+import type { Language } from './i18n'
 import './App.css'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
@@ -43,6 +45,7 @@ function displayTime(value: string) {
 }
 
 function TokenGate({ error, connecting, onConnect }: TokenGateProps) {
+  const t = useT()
   const [token, setToken] = useState('')
   const [fieldError, setFieldError] = useState('')
   const field = useRef<HTMLInputElement>(null)
@@ -62,15 +65,15 @@ function TokenGate({ error, connecting, onConnect }: TokenGateProps) {
   return <main className="gate" aria-labelledby="gate-title">
     <section className="gate-panel">
       <p className="eyebrow">PERSONAL AI PROFILE / LOCAL</p>
-      <h1 id="gate-title">连接你的本地档案</h1>
-      <p>启动令牌只保留在当前页面内存中，关闭或刷新页面后需要重新连接。</p>
+      <h1 id="gate-title">{t('gate.title')}</h1>
+      <p>{t('gate.hint')}</p>
       <form onSubmit={(event) => void submit(event)} noValidate>
-        <label htmlFor="token">本地启动令牌</label>
+        <label htmlFor="token">{t('gate.token')}</label>
         <input ref={field} id="token" type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} aria-describedby={fieldError || error ? 'token-error' : undefined} disabled={connecting} />
         {(fieldError || error) && <p id="token-error" className="field-error" role="alert">{fieldError || error}</p>}
-        <button type="submit" disabled={connecting}>{connecting ? '正在连接…' : '连接审核空间'}</button>
+        <button type="submit" disabled={connecting}>{connecting ? t('common.loading') : t('gate.connect')}</button>
       </form>
-      <p className="quiet">令牌由本地启动器自动传递，开发模式下由 <code>python -m apps.api.main</code> 显示。</p>
+      <p className="quiet">{t('gate.hint')}</p>
     </section>
   </main>
 }
@@ -104,6 +107,13 @@ function App() {
   const [navigationAnnouncement, setNavigationAnnouncement] = useState('')
   const [externalChange, setExternalChange] = useState(false)
   const [vaultEpoch, setVaultEpoch] = useState(0)
+  const [language, changeLanguage] = useLanguage()
+  const t = useT()
+  const [highContrast, setHighContrast] = useState(false)
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('high-contrast', highContrast)
+  }, [highContrast])
   const sessionEpoch = useRef(0)
   const viewRequest = useRef(0)
   const visualAbort = useRef<AbortController | null>(null)
@@ -168,7 +178,7 @@ function App() {
     } catch (error) {
       if (controller.signal.aborted || epoch !== sessionEpoch.current) return
       setToken('')
-      setGateError(error instanceof ApiError && error.status === 401 ? '启动令牌无效，请检查后重新输入。' : messageFor(error))
+      setGateError(localizedError(language, error instanceof ApiError && error.status === 401 ? '启动令牌无效，请检查后重新输入。' : messageFor(error)))
     } finally {
       if (epoch === sessionEpoch.current) setConnecting(false)
     }
@@ -482,36 +492,36 @@ function App() {
 
   const navigationGroups: { title: string; items: { label: string; view?: View; icon: typeof House }[] }[] = [
     {
-      title: '核心',
+      title: t('nav.group.core'),
       items: [
-        { label: '概览', view: 'overview', icon: House },
-        { label: '记忆审核', view: 'review', icon: Stack },
-        { label: '个人档案', view: 'profile', icon: UserCircle },
+        { label: t('nav.overview'), view: 'overview', icon: House },
+        { label: t('nav.review'), view: 'review', icon: Stack },
+        { label: t('nav.profile'), view: 'profile', icon: UserCircle },
       ],
     },
     {
-      title: '记录',
+      title: t('nav.group.records'),
       items: [
-        { label: '导入', view: 'import', icon: CloudArrowUp },
-        { label: '月度复盘', view: 'reflection', icon: CalendarDots },
-        { label: '月度趋势', view: 'monthly', icon: ChartLineUp },
-        { label: 'Human 3.0', view: 'human3', icon: Brain },
-        { label: '成长仪表盘', view: 'growth', icon: Sparkle },
-        { label: '记忆时间线', view: 'timeline', icon: CalendarDots },
+        { label: t('nav.import'), view: 'import', icon: CloudArrowUp },
+        { label: t('nav.reflection'), view: 'reflection', icon: CalendarDots },
+        { label: t('nav.monthly'), view: 'monthly', icon: ChartLineUp },
+        { label: t('nav.human3'), view: 'human3', icon: Brain },
+        { label: t('nav.growth'), view: 'growth', icon: Sparkle },
+        { label: t('nav.timeline'), view: 'timeline', icon: CalendarDots },
       ],
     },
     {
-      title: '系统',
+      title: t('nav.group.system'),
       items: [
-        { label: '隐私审计', view: 'privacy', icon: ShieldCheck },
-        { label: '备份与恢复', view: 'backup', icon: HardDrives },
-        { label: 'AI 连接', view: 'connections', icon: PlugsConnected },
-        { label: 'GitHub 备份', view: 'github', icon: GithubLogo },
-        { label: 'AI Provider', view: 'providers', icon: LockKey },
+        { label: t('nav.privacy'), view: 'privacy', icon: ShieldCheck },
+        { label: t('nav.backup'), view: 'backup', icon: HardDrives },
+        { label: t('nav.connections'), view: 'connections', icon: PlugsConnected },
+        { label: t('nav.github'), view: 'github', icon: GithubLogo },
+        { label: t('nav.providers'), view: 'providers', icon: LockKey },
       ],
     },
   ]
-  const titles: Record<View, string> = { overview: '总览', review: '记忆审核', profile: '个人档案', timeline: '记忆时间线', privacy: '隐私审计', reflection: '月度复盘', human3: 'Human 3.0', monthly: '月度趋势', growth: 'Human 3.0 成长', backup: '备份与恢复', connections: 'AI 连接', providers: 'AI Provider', import: '导入', github: 'GitHub 备份' }
+  const titles: Record<View, string> = { overview: t('title.overview'), review: t('nav.review'), profile: t('nav.profile'), timeline: t('nav.timeline'), privacy: t('nav.privacy'), reflection: t('nav.reflection'), human3: t('nav.human3'), monthly: t('nav.monthly'), growth: t('nav.growth'), backup: t('nav.backup'), connections: t('nav.connections'), providers: t('nav.providers'), import: t('nav.import'), github: t('nav.github') }
 
   function closeNavigation() {
     setNavigationOpen(false)
@@ -519,6 +529,7 @@ function App() {
   }
 
   return <main className="app-shell">
+    <a className="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus() }}>{t('a11y.skipToContent')}</a>
     <button ref={menuButtonRef} className="mobile-menu" aria-label="打开导航" aria-controls="primary-navigation" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}><List size={22} /></button>
     {navigationOpen && <button className="navigation-scrim" aria-label="关闭导航" onClick={closeNavigation} />}
     <aside ref={sidebarRef} id="primary-navigation" aria-label="主导航" className={`sidebar ${navigationOpen ? 'open' : ''}`}>
@@ -532,11 +543,11 @@ function App() {
       <div className="sidebar-status"><p><Database size={17} /><span>本地服务</span><strong>已连接</strong></p><p><LockKey size={17} /><span>Vault</span><strong>受保护</strong></p></div>
     </aside>
 
-    <section ref={stageRef} className={`app-stage ${view === 'overview' ? 'with-status' : ''}`} tabIndex={-1}>
+    <section ref={stageRef} id="main-content" className={`app-stage ${view === 'overview' ? 'with-status' : ''}`} tabIndex={-1} aria-label={t('a11y.main')}>
       <div className="sr-only" aria-live="polite" aria-atomic="true">{navigationAnnouncement}</div>
-      <header className="topbar"><div><p className="eyebrow">HOLOGRAPHIC LIBRARY</p><h1 ref={titleRef} tabIndex={-1}>{titles[view]}</h1></div><div className="topbar-actions"><span className="service-status"><i />本地服务</span><span className="service-status"><i />Vault 已就绪</span><button className="icon-button" aria-label="同步候选记忆" title="同步候选记忆" onClick={() => void loadCandidates()} disabled={loading}><Database size={19} /></button><button className="text-button" onClick={() => disconnect()}>断开连接</button><button className="text-button danger-link" onClick={() => void shutdown()} disabled={saving}>关闭服务</button></div></header>
+      <header className="topbar"><div><p className="eyebrow">HOLOGRAPHIC LIBRARY</p><h1 ref={titleRef} tabIndex={-1}>{titles[view]}</h1></div><div className="topbar-actions"><span className="service-status"><i />{t('topbar.localService')}</span><span className="service-status"><i />{t('topbar.vaultReady')}</span><button className="text-button" onClick={() => setHighContrast((current) => !current)} aria-pressed={highContrast}>{highContrast ? '标准对比度' : '高对比度'}</button><label className="language-switch"><span className="sr-only">{t('topbar.language')}</span><select aria-label={t('topbar.language')} value={language} onChange={(event) => changeLanguage(event.target.value as Language)}>{LANGUAGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><button className="icon-button" aria-label={t('topbar.refreshCandidates')} title={t('topbar.refreshCandidates')} onClick={() => void loadCandidates()} disabled={loading}><Database size={19} /></button><button className="text-button" onClick={() => disconnect()}>{t('topbar.disconnect')}</button><button className="text-button danger-link" onClick={() => void shutdown()} disabled={saving}>{t('topbar.shutdown')}</button></div></header>
       <div className="content-shell">
-        {externalChange && <div className="external-banner" role="status"><Warning size={20} /><span>检测到外部修改（例如 Obsidian 编辑）。本地数据已变化，请刷新后核对；系统不会自动覆盖你的编辑。</span><button className="text-button" onClick={() => void refreshAfterExternal()}>刷新数据</button><button className="text-button" onClick={() => setExternalChange(false)}>稍后处理</button></div>}
+        {externalChange && <div className="external-banner" role="status"><Warning size={20} /><span>{t('external.banner')}</span><button className="text-button" onClick={() => void refreshAfterExternal()}>{t('external.refresh')}</button><button className="text-button" onClick={() => setExternalChange(false)}>{t('external.dismiss')}</button></div>}
         {notice && <div className={`notice ${notice.kind}`} role="status"><span>{notice.text}</span>{notice.kind === 'error' && <button onClick={() => void loadCandidates()}>刷新数据</button>}</div>}
 
         {view === 'reflection' && <MonthlyReflectionPage overview={monthlyView} selected={reflectionView} loading={visualLoading === 'reflection'} saving={saving} onSelect={setReflectionView} onCreate={createReflection} onDimension={saveReflectionDimension} onAddEvent={addReflectionEvent} onDeleteEvent={deleteReflectionEvent} onGoals={saveReflectionGoals} onGenerateSummary={generateReflectionSummary} onSummary={saveReflectionSummary} onConfirm={confirmReflection} />}
