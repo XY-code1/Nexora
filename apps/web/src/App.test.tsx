@@ -386,4 +386,24 @@ describe('review workspace', () => {
     expect(calls).toContain('/api/v1/imports/preview')
     expect(calls).toContain('/api/v1/imports')
   })
+
+  it('previews pending Git changes and blocks commit on sensitive files', async () => {
+    mockApi({
+      '/api/v1/memories': [memory],
+      '/api/v1/memory-stats': stats,
+      '/api/v1/backups': { currentRevision: 'r1', backups: [] },
+      '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/vaults': [],
+      '/api/v1/git/status': { configured: true, branch: 'main', upstream: 'origin/main', ahead: 0, behind: 0, dirty: ['30 Memory/Inbox/new-note.md'], unmerged: [] },
+      '/api/v1/git/changes': { changes: [{ path: '30 Memory/Inbox/new-note.md', status: 'untracked', code: '??' }], sensitive: [{ path: 'id_rsa', reason: 'sensitive file name' }], unmerged: [], can_commit: false },
+    })
+    render(<App />)
+    await connect()
+    fireEvent.click(screen.getByRole('button', { name: '备份与恢复' }))
+    await screen.findByRole('button', { name: '预览变更' })
+    fireEvent.click(screen.getByRole('button', { name: '预览变更' }))
+    await waitFor(() => expect(screen.getByText('检测到疑似敏感文件，已禁止提交')).toBeInTheDocument())
+    expect(screen.getByText('id_rsa')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Commit' })).toBeDisabled()
+  })
 })

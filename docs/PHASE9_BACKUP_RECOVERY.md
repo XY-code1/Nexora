@@ -25,7 +25,8 @@
 - 用户必须输入完整的 `RESTORE {backupId}`。
 - 请求必须携带页面读取的 `expected_vault_revision`；Vault 有并发变化时返回 `409 REVISION_CONFLICT`。
 - 恢复前自动创建当前 Vault 的安全备份。
-- 候选副本先完成全量哈希校验，再通过目录交换替换 Vault。
+- 候选副本先完成全量哈希校验，再通过目录交换替换 Vault。恢复时保留当前 Vault 中快照明确排除的 `.git`、`.env`、`*.key` 和 `*.pem`；快照外的普通文件会被移除。
+- 本机 `Locks` 与 `Transactions` 目录不从旧 Vault 带回，避免恢复过期的运行锁或事务日志。
 - 交换过程有 journal；失败会回滚上一版本，启动时也会恢复中断交换。
 - 只允许恢复当前 Vault 在本机创建并绑定的 Format 2 managed backup。
 

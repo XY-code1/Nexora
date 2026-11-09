@@ -165,13 +165,15 @@ def search_memory(query: str, limit: int = 8) -> list[dict[str, str]]:
         text = read_limited(vault, file)
         if not is_readable_for_search(text):
             continue
-        score = sum(text.lower().count(term) for term in terms) if terms else 1
+        level = get_access_level(text)
+        if level == "summary-only":
+            content = extract_summary(text, max_chars=600)
+        else:
+            content = text[:1500]
+        # Search only what this client is allowed to receive; hidden body text
+        # must not influence summary-only results or their ranking.
+        score = sum(content.lower().count(term) for term in terms) if terms else 1
         if score:
-            level = get_access_level(text)
-            if level == "summary-only":
-                content = extract_summary(text, max_chars=600)
-            else:
-                content = text[:1500]
             results.append((score, file, content))
     results.sort(key=lambda item: (-item[0], item[1].name))
     limit = max(1, min(limit, 20))

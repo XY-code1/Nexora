@@ -20,7 +20,6 @@ from core import profile
 from core import sync as git_sync
 from core.vault_identity import VaultMonitor, list_registered, register_vault
 from core.repository import list_markdown
-from core.access import extract_summary
 from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
 from core import monthly_reflection
@@ -236,7 +235,9 @@ def memory_view(root: Path, path: Path) -> dict[str, Any]:
         "visibility": metadata.get("visibility", "private"),
         "aiAccess": metadata.get("ai_access", "denied"),
         "tags": [item.strip() for item in metadata.get("tags", "").split(",") if item.strip()][:20],
-        "content": extract_summary(body),
+        # This authenticated loopback API is the local user's review surface.
+        # ai_access controls AI egress through MCP, not the user's local view.
+        "content": body,
         "revision": profile.revision(path),
     }
 
@@ -363,6 +364,13 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
             return envelope(git_sync.sync_status(str(root)))
         except RuntimeError as exc:
             return envelope({"configured": False, "message": safe_git_error(str(exc), root), "dirty": [], "unmerged": []})
+
+    @app.get("/api/v1/git/changes", dependencies=[auth])
+    def git_changes() -> dict[str, Any]:
+        try:
+            return envelope(git_sync.git_changes(str(root)))
+        except RuntimeError as exc:
+            return envelope({"changes": [], "sensitive": [], "unmerged": [], "can_commit": False, "message": safe_git_error(str(exc), root)})
 
     @app.post("/api/v1/git/commit", dependencies=[auth])
     def git_commit(data: GitCommitInput) -> dict[str, Any]:
@@ -929,9 +937,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="启动本地 Personal AI Profile API")
     parser.add_argument("--vault", required=True, type=Path)
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument(
+        "--show-token",
+        action="store_true",
+        help="显式在本地启动日志中显示管理 Bearer token",
+    )
     args = parser.parse_args()
     app = create_app(args.vault)
-    print(f"Local API: http://127.0.0.1:{args.port}  Bearer token: {app.state.token}")
+    print(f"Local API: http://127.0.0.1:{args.port}")
+    if args.show_token:
+        print(f"Bearer token: {app.state.token}")
     uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 
