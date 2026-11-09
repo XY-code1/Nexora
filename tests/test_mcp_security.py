@@ -20,7 +20,9 @@ def main():
         vault = Path(tmp) / "vault"
         profile_cli.init(str(vault))
         os.environ["PROFILE_VAULT"] = str(vault)
-        client, credential = security.create_client(vault, "Security Test", ["profile:read", "memory:pending", "memory:propose"])
+        client, credential = security.create_client(
+            vault, "Security Test", ["profile:read", "memory:pending", "memory:propose", "memory:search", "project:read"],
+        )
         os.environ["PROFILE_AGENT_ID"] = client["id"]
         os.environ["PROFILE_CLIENT_TOKEN"] = credential
         assert "Profile" in m.get_profile()
@@ -44,6 +46,40 @@ def main():
             raise AssertionError("scope check failed open")
         except PermissionError:
             pass
+
+        # MCP reads follow ai_access; summary-only searches only its exposed summary.
+        access_cases = {
+            "allowed": "allowed",
+            "summary-only": "summary-only",
+            "local-only": "local-only",
+            "denied": "denied",
+            "missing": None,
+            "invalid": "not-a-policy",
+        }
+        confirmed = vault / "30 Memory" / "Confirmed"
+        active_projects = vault / "20 Projects" / "Active"
+        for case, access in access_cases.items():
+            access_line = f"ai_access: {access}\n" if access is not None else ""
+            text = (
+                f"---\nid: mem-{case}\nstatus: confirmed\n{access_line}---\n\n"
+                f"## 摘要\n\nvisiblematch summary-{case}\n\n"
+                f"## Details\n\nvisiblematch privatebodymarker{case.replace('-', '')}\n"
+            )
+            (confirmed / f"{case}.md").write_text(text, encoding="utf-8")
+            (active_projects / f"{case}.md").write_text(text, encoding="utf-8")
+
+        search_results = m.search_memory("visiblematch")
+        assert {item["file"] for item in search_results} == {"allowed.md", "summary-only.md"}
+        allowed_content = next(item["content"] for item in search_results if item["file"] == "allowed.md")
+        summary_content = next(item["content"] for item in search_results if item["file"] == "summary-only.md")
+        assert "privatebodymarkerallowed" in allowed_content
+        assert "privatebodymarkersummaryonly" not in summary_content
+        assert not any(item["file"] == "summary-only.md" for item in m.search_memory("privatebodymarkersummaryonly"))
+
+        project_results = m.list_projects()
+        assert {Path(item["file"]).name for item in project_results} == {"allowed.md", "summary-only.md"}
+        project_summary = next(item["content"] for item in project_results if Path(item["file"]).name == "summary-only.md")
+        assert "privatebodymarkersummaryonly" not in project_summary
 
         security.update_scopes(vault, client["id"], ["profile:read", "memory:pending", "memory:propose", "assessment:read"])
         history = vault / "40 Reviews" / "Human3" / "History"

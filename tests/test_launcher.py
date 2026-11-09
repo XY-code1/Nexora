@@ -13,13 +13,20 @@ sys.path.insert(0, str(ROOT))
 from core import profile
 
 
+def read_runtime(path: Path) -> dict[str, object] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
 def wait_for_runtime(path: Path) -> dict[str, object]:
-    for _ in range(100):
-        if path.is_file():
-            try:
-                return json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                pass
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        runtime = read_runtime(path)
+        if runtime is not None:
+            return runtime
         time.sleep(0.1)
     raise AssertionError("launcher did not become ready")
 
@@ -55,14 +62,24 @@ def main():
             with urllib.request.urlopen(switch, timeout=2) as response:
                 assert response.status == 200
             old_token = token
-            for _ in range(100):
-                next_runtime = wait_for_runtime(runtime_file)
-                if next_runtime.get("vault") == str(second_vault.resolve()) and next_runtime.get("token") != token:
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                next_runtime = read_runtime(runtime_file)
+                if (
+                    next_runtime
+                    and next_runtime.get("vault") == str(second_vault.resolve())
+                    and next_runtime.get("token") != token
+                ):
                     runtime = next_runtime
                     break
                 time.sleep(0.1)
             else:
-                raise AssertionError("launcher did not switch Vault")
+                observed_runtime = read_runtime(runtime_file)
+                observed_vault = observed_runtime.get("vault") if observed_runtime else None
+                raise AssertionError(
+                    f"launcher did not switch Vault within 30 seconds; "
+                    f"observed Vault: {observed_vault!r}; process exit: {process.poll()}"
+                )
             port = int(runtime["port"])
             token = str(runtime["token"])
             stale = urllib.request.Request(

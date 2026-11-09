@@ -1,17 +1,42 @@
 import sys
 import tempfile
+from contextlib import redirect_stdout
 from concurrent.futures import ThreadPoolExecutor
+from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from apps.api import create_app
+import apps.api.main as api_main
 from core import profile
 
 
+def test_startup_token_is_hidden_unless_requested():
+    app = SimpleNamespace(state=SimpleNamespace(token="test-admin-token"))
+    hidden_output = StringIO()
+    with patch.object(api_main, "create_app", return_value=app), patch.object(api_main.uvicorn, "run"), patch.object(
+        sys, "argv", ["api-main", "--vault", "unused"]
+    ), redirect_stdout(hidden_output):
+        api_main.main()
+    assert "Local API: http://127.0.0.1:8765" in hidden_output.getvalue()
+    assert "Bearer token" not in hidden_output.getvalue()
+    assert "test-admin-token" not in hidden_output.getvalue()
+
+    visible_output = StringIO()
+    with patch.object(api_main, "create_app", return_value=app), patch.object(api_main.uvicorn, "run"), patch.object(
+        sys, "argv", ["api-main", "--vault", "unused", "--show-token"]
+    ), redirect_stdout(visible_output):
+        api_main.main()
+    assert "Bearer token: test-admin-token" in visible_output.getvalue()
+
+
 def main():
+    test_startup_token_is_hidden_unless_requested()
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "vault"
         profile.init(str(vault))
@@ -22,6 +47,27 @@ def main():
         app = create_app(vault, token="test-token", web_dist=web_dist)
         client = TestClient(app, base_url="http://localhost")
         headers = {"Authorization": "Bearer test-token"}
+
+        # ai_access governs AI egress, not what the authenticated local user can review.
+        for case, access in {
+            "allowed": "allowed",
+            "summary-only": "summary-only",
+            "local-only": "local-only",
+            "denied": "denied",
+            "missing": None,
+            "invalid": "not-a-policy",
+        }.items():
+            record_id = f"mem-policy-{case}"
+            access_line = f"ai_access: {access}\n" if access is not None else ""
+            record = vault / "30 Memory" / "Rejected" / f"{case}.md"
+            record.write_text(
+                f"---\nid: {record_id}\nstatus: rejected\n{access_line}---\n\n"
+                "## 摘要\n\n显式摘要。\n\n## 私密正文\n\n完整正文仅用于本地审核。\n",
+                encoding="utf-8",
+            )
+            view = client.get(f"/api/v1/memories/{record_id}", headers=headers).json()["data"]
+            assert "完整正文仅用于本地审核。" in view["content"]
+            assert view["aiAccess"] == (access or "denied")
 
         assert client.get("/api/v1/health").status_code == 200
         assert "review app" in client.get("/").text
