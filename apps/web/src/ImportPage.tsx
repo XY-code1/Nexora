@@ -19,10 +19,10 @@ type: note
 subject: 项目背景
 ---
 
-Personal AI Profile 是本地优先、由用户控制的个人上下文框架。`,
+NEXORA（知序）是本地优先、由用户控制的个人智能平台。`,
   json: `[
   { "type": "preference", "subject": "回答风格", "content": "回答先给结论，再展开依据。" },
-  { "type": "note", "subject": "项目背景", "content": "Personal AI Profile 是本地优先、由用户控制的个人上下文框架。" }
+  { "type": "note", "subject": "项目背景", "content": "NEXORA（知序）是本地优先、由用户控制的个人智能平台。" }
 ]`,
 }
 

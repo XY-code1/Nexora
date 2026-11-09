@@ -77,15 +77,15 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
 
   return <main className="wizard" aria-label="首次启动向导">
     <header className="wizard-intro">
-      <p className="wizard-badge"><Sparkle size={14} weight="fill" />首次启动 · Onboarding</p>
-      <h1>欢迎来到你的个人智能中枢</h1>
+      <p className="wizard-badge"><Sparkle size={14} weight="fill" />NEXORA 知序 · Onboarding</p>
+      <h1>欢迎来到 NEXORA 个人智能中枢</h1>
       <p>建立一个属于自己的长期个人上下文空间。你的数据默认保存在本地。</p>
       <p className="wizard-note">Vault 是一个本地文件夹：数据只留在本机，路径与内容都不会上传到任何服务。</p>
     </header>
 
     <figure className="wizard-hero-image">
       <img src={onboardingOrb} alt="蓝紫色个人智能网络球体" />
-      <figcaption><strong>Your Life, Organized.</strong><span>Local-first personal intelligence workspace</span></figcaption>
+      <figcaption><strong>Your Intelligence. Your Data. Your Control.</strong><span>Local-first personal intelligence platform</span></figcaption>
     </figure>
 
     <section className="wizard-section" aria-labelledby="wizard-space-title">

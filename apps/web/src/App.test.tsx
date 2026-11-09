@@ -347,7 +347,7 @@ describe('review workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
 
     // 首次启动直接进入一页式引导，不展示完整功能菜单。
-    await screen.findByRole('heading', { name: '欢迎来到你的个人智能中枢' })
+    await screen.findByRole('heading', { name: '欢迎来到 NEXORA 个人智能中枢' })
     expect(screen.queryByRole('button', { name: '成长仪表盘' })).not.toBeInTheDocument()
     expect(screen.getByText('创建你的个人空间')).toBeInTheDocument()
     expect(screen.getByText('Obsidian 是可选编辑器，不是使用产品的前置条件。')).toBeInTheDocument()

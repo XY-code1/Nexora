@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc" style="color:#EAF3FF">
+  <title id="title">NEXORA monochrome symbol</title>
+  <desc id="desc">A single-color intelligence core surrounded by orbital connections.</desc>
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="64" cy="64" rx="51" ry="24" stroke-width="5" transform="rotate(-18 64 64)"/>
+    <path d="M29 25c20 2 49 25 65 51 10 16 12 28 5 31-10 4-34-13-55-39C25 45 18 24 29 25Z" stroke-width="4" opacity=".72"/>
+    <path d="m64 25 29 17v43l-29 18-29-18V42Z" fill="currentColor" fill-opacity=".08" stroke-width="4"/>
+    <path d="m64 25 29 17-29 18-29-18Zm0 35v43M35 42l29 18 29-18" stroke-width="2"/>
+    <path d="m64 45 13 8v19l-13 8-13-8V53Z" fill="currentColor" fill-opacity=".24" stroke-width="2"/>
+  </g>
+  <circle cx="15" cy="69" r="5" fill="currentColor"/><circle cx="109" cy="42" r="5" fill="currentColor"/>
+</svg>

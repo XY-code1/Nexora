@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Brain, CalendarDots, ChartLineUp, CirclesFour, CloudArrowUp, Database, GithubLogo, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, Warning, X } from '@phosphor-icons/react'
+import { Brain, CalendarDots, ChartLineUp, CloudArrowUp, Database, GithubLogo, HardDrives, House, List, LockKey, Network, PlugsConnected, ShieldCheck, Sparkle, Stack, UserCircle, Warning, X } from '@phosphor-icons/react'
 import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, type MonthlyOverview, type MonthlyReflection, type MonthlyTrend, type ProfileOverview, type ReflectionDimension, type ReflectionEvent, type ReflectionGoal, type SecurityCenter, type TimelineItem } from './api'
 import MemoryReviewPage from './MemoryReviewPage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
@@ -522,7 +522,7 @@ function App() {
     <button ref={menuButtonRef} className="mobile-menu" aria-label="打开导航" aria-controls="primary-navigation" aria-expanded={navigationOpen} onClick={() => setNavigationOpen(true)}><List size={22} /></button>
     {navigationOpen && <button className="navigation-scrim" aria-label="关闭导航" onClick={closeNavigation} />}
     <aside ref={sidebarRef} id="primary-navigation" aria-label="主导航" className={`sidebar ${navigationOpen ? 'open' : ''}`}>
-      <div className="brand"><span className="brand-mark"><CirclesFour weight="duotone" /></span><div><strong>Personal AI Profile</strong><small>INTELLIGENCE LIBRARY</small></div><button className="drawer-close" aria-label="关闭导航" onClick={closeNavigation}><X /></button></div>
+      <div className="brand"><span className="brand-mark"><img src="/brand/nexora-symbol.svg" alt="" aria-hidden="true" /></span><div><strong>NEXORA <em>知序</em></strong><small>PERSONAL INTELLIGENCE</small></div><button className="drawer-close" aria-label="关闭导航" onClick={closeNavigation}><X /></button></div>
       <nav aria-label="档案功能">
         {navigationGroups.map((group) => <div className="nav-group" key={group.title}>
           <p className="nav-group-title">{group.title}</p>
