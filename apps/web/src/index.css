@@ -1,6 +1,13 @@
 :root {
   font-family: Inter, "Segoe UI Variable", "Microsoft YaHei", system-ui, sans-serif;
   color: #eaf2ff; background: #080d18; font-synthesis: none;
+  /* NEXORA brand primitives. Existing semantic tokens remain unchanged in B1. */
+  --brand-deep-space: #07111f; --brand-midnight-navy: #0c1728; --brand-panel-blue: #13243a;
+  --brand-electric-cyan: #12d9f5; --brand-neon-violet: #906bff; --brand-signal-green: #30d6a0;
+  --brand-ice-white: #eaf3ff; --brand-slate: #8499b4;
+  --font-display: "Space Grotesk", Inter, "Noto Sans SC", system-ui, sans-serif;
+  --font-body: Inter, "Noto Sans SC", "Segoe UI Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, monospace;
   --bg-primary: #080d18; --bg-secondary: #111b2c; --bg-panel: #19263a;
   --color-primary: #27bfff; --color-cyan: #20d9e8; --color-violet: #936bff;
   --color-success: #36d69a; --color-danger: #ff7892;

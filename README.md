@@ -1,10 +1,10 @@
 <div align="center">
 
-# Personal AI Profile
+# NEXORA（知序）
 
-### Your Personal Intelligence Layer
+### Your Intelligence. Your Data. Your Control.
 
-**A local-first, model-agnostic workspace for personal context, confirmed memory, reflection, and permission-controlled AI access.**
+**An open-source, local-first Personal Intelligence Platform for confirmed memory, reflection, knowledge and permission-controlled AI access.**
 
 [![CI](https://github.com/XY-code1/personal-ai-profile/actions/workflows/test.yml/badge.svg)](https://github.com/XY-code1/personal-ai-profile/actions/workflows/test.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/XY-code1/personal-ai-profile?display_name=tag&sort=semver)](https://github.com/XY-code1/personal-ai-profile/releases)
@@ -14,7 +14,7 @@
 
 [English](#overview) · [中文](#中文概览) · [Quick Start](#quick-start) · [Security](#privacy-and-security) · [Documentation](#documentation)
 
-<img src="apps/web/src/assets/onboarding-intelligence-orb.webp" alt="Personal AI Profile intelligence orb" width="860" />
+<img src="apps/web/public/brand/nexora-logo.svg" alt="NEXORA — Personal Intelligence Platform" width="720" />
 
 </div>
 
@@ -22,7 +22,7 @@
 
 ## Overview
 
-Personal AI Profile creates a user-owned context layer that can be shared across Codex, Claude, Cursor, and other MCP-compatible AI clients.
+NEXORA（知序）, formerly developed under the project name Personal AI Profile, creates a user-owned intelligence layer that can be shared across Codex, Claude, Cursor, and other MCP-compatible AI clients.
 
 Your private data remains in a local Markdown Vault. AI clients may read only what you explicitly authorize. They can propose candidate memories, but they cannot silently convert a conversation into permanent memory.
 
@@ -48,7 +48,7 @@ Personal context is fragmented across AI products:
 - copying entire conversations creates unnecessary privacy exposure;
 - maintaining a large profile form by hand feels like work.
 
-Personal AI Profile separates the **experience of conversation** from the **authority of memory**.
+NEXORA separates the **experience of conversation** from the **authority of memory**.
 
 ## Product
 
@@ -356,6 +356,10 @@ Tests use temporary synthetic Vaults. They must never read or copy a real privat
 
 | Topic | Document |
 | --- | --- |
+| Brand guidelines | [BRAND_GUIDELINES.md](docs/brand/BRAND_GUIDELINES.md) |
+| Logo specification | [LOGO_SPECIFICATION.md](docs/brand/LOGO_SPECIFICATION.md) |
+| Brand assets | [BRAND_ASSET_CATALOG.md](docs/brand/BRAND_ASSET_CATALOG.md) |
+| Product identity | [PRODUCT_IDENTITY.md](docs/brand/PRODUCT_IDENTITY.md) |
 | Product architecture | [PRODUCT_ARCHITECTURE.md](docs/PRODUCT_ARCHITECTURE.md) |
 | Vault lifecycle | [VAULT_LIFECYCLE_PLAN.md](docs/VAULT_LIFECYCLE_PLAN.md) |
 | Local API | [LOCAL_API.md](docs/LOCAL_API.md) |
@@ -371,11 +375,10 @@ Tests use temporary synthetic Vaults. They must never read or copy a real privat
 
 ## Roadmap
 
-1. Refine first-run setup and Vault selection.
-2. Add safer GitHub private-repository setup and privacy verification.
-3. Improve backup history browsing and guided recovery.
-4. Add explicit model-provider authorization.
-5. Provide user-controlled import tools.
+1. Complete the NEXORA identity migration across release and community assets.
+2. Add GitHub Device Flow and verified private-repository provisioning without storing credentials in the Vault.
+3. Expand explicitly authorized model-provider connectors without weakening local-first defaults.
+4. Continue accessibility, localization and Windows packaging validation.
 
 The project will not add silent memory confirmation, automatic psychological labels, unrestricted AI file access, or default cloud collection.
 
@@ -383,7 +386,7 @@ The project will not add silent memory confirmation, automatic psychological lab
 
 ## 中文概览
 
-Personal AI Profile 是一个**本地优先、模型无关、由用户控制**的个人 AI 上下文系统。
+NEXORA（知序）是一个**开源、本地优先、模型无关、由用户控制**的个人智能平台。项目原开发名称为 Personal AI Profile，现有仓库地址和兼容标识暂时保持不变。
 
 它不会让 AI 自动保存所有聊天，而是建立一条清晰的记忆边界：
 

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="NEXORA">
+  <defs><linearGradient id="g" x1="13" y1="10" x2="52" y2="54" gradientUnits="userSpaceOnUse"><stop stop-color="#12D9F5"/><stop offset="1" stop-color="#906BFF"/></linearGradient></defs>
+  <path d="M32 7 51 18v28L32 57 13 46V18Z" fill="#07111F" stroke="url(#g)" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m32 7 19 11-19 12-19-12Zm0 23v27" fill="none" stroke="#EAF3FF" stroke-opacity=".8" stroke-width="3" stroke-linejoin="round"/>
+  <path d="m32 20 8 5v12l-8 5-8-5V25Z" fill="url(#g)"/>
+</svg>
