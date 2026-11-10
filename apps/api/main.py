@@ -344,7 +344,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     assert_vault_isolated(root)
     require_current_schema(root)
 
-    app = FastAPI(title="Personal AI Profile Local API", version="0.1.0")
+    app = FastAPI(title="NEXORA Local API", version="0.1.0")
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
     app.state.vault = root
     app.state.token = token or secrets.token_urlsafe(32)
@@ -1191,7 +1191,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="启动本地 Personal AI Profile API")
+    parser = argparse.ArgumentParser(description="启动本地 NEXORA API")
     parser.add_argument("--vault", required=True, type=Path)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument(

@@ -493,7 +493,7 @@ def stage_public_export(vault: Path, relative_files: list[str], staging: Path) -
             try:
                 existing_marker = json.loads((output / marker_name).read_text(encoding="utf-8"))
             except (OSError, ValueError) as exc:
-                raise RuntimeError("公开导出目标已存在且不属于Personal AI Profile。") from exc
+                raise RuntimeError("公开导出目标已存在且不属于 NEXORA。") from exc
             if existing_marker != marker:
                 raise RuntimeError("公开导出ownership marker与当前Vault或目标不匹配。")
         prepared: list[tuple[Path, str]] = []

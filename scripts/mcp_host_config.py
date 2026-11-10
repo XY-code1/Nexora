@@ -83,7 +83,7 @@ def write_new_config(output: Path, config: dict[str, Any]) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="生成 Personal AI Profile 的本地 MCP Host 配置。")
+    parser = argparse.ArgumentParser(description="生成 NEXORA 的本地 MCP Host 配置。")
     parser.add_argument("--host", choices=sorted(HOST_WRAPPERS), default="claude-desktop")
     parser.add_argument("--vault", type=Path, required=True)
     parser.add_argument("--client-id", required=True)

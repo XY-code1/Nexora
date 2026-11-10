@@ -44,7 +44,7 @@ def choose_vault(value: Path | None) -> Path:
         from tkinter import Tk, filedialog
         root = Tk()
         root.withdraw()
-        selected = filedialog.askdirectory(title="选择 Personal AI Profile 私人 Vault")
+        selected = filedialog.askdirectory(title="选择 NEXORA 私人 Vault")
         root.destroy()
     except Exception:
         selected = ""
@@ -214,14 +214,14 @@ def show_error(message: str, state_dir: Path) -> None:
         from tkinter import Tk, messagebox
         root = Tk()
         root.withdraw()
-        messagebox.showerror("Personal AI Profile", message)
+        messagebox.showerror("NEXORA", message)
         root.destroy()
     except Exception:
         print(message, file=sys.stderr)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="启动Personal AI Profile本地审核界面")
+    parser = argparse.ArgumentParser(description="启动 NEXORA 本地工作台")
     parser.add_argument("--vault", type=Path)
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--runtime-dir", type=Path, help=argparse.SUPPRESS)

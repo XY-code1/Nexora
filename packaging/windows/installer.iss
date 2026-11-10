@@ -1,10 +1,10 @@
-; Inno Setup script for Personal AI Profile
+; Inno Setup script for NEXORA
 ; Install / upgrade / uninstall a per-user local app.
 
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0-dev"
 #endif
-#define MyAppName "Personal AI Profile"
+#define MyAppName "NEXORA（知序）"
 #define MyAppPublisher "XY-code1"
 #define MyAppExeName "personal-ai-profile.exe"
 
