@@ -270,7 +270,12 @@ function App() {
   useEffect(() => {
     if (!navigationOpen) return
     const frame = window.requestAnimationFrame(() => {
-      sidebarRef.current?.querySelector<HTMLButtonElement>('nav button[aria-current="page"]')?.focus()
+      const sidebar = sidebarRef.current
+      if (!sidebar) return
+      // 只在焦点仍停在菜单按钮或抽屉外时才接管；如果用户已经把焦点移进抽屉，就不要抢。
+      const active = document.activeElement
+      if (active && active !== menuButtonRef.current && sidebar.contains(active)) return
+      sidebar.querySelector<HTMLButtonElement>('nav button[aria-current="page"]')?.focus()
     })
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
