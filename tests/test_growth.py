@@ -1,12 +1,10 @@
-import tempfile
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from core import profile
-from core import growth
-from core import monthly_reflection
+from core import growth, monthly_reflection, profile
 
 
 def main() -> None:

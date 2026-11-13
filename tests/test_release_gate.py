@@ -8,7 +8,6 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from scripts.check_release import scan
 
-
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
     clean = root / "clean.txt"

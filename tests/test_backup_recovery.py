@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from apps.api import create_app
-from core import profile, vault_management as vm
+from core import profile
+from core import vault_management as vm
 
 
 def test_interrupted_swap_recovery() -> None:

@@ -32,28 +32,27 @@ async def exercise(vault: Path) -> None:
         encoding_error_handler="replace",
     )
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as errlog:
-      async with stdio_client(parameters, errlog=errlog) as (reader, writer):
-        async with ClientSession(reader, writer) as session:
-            await session.initialize()
-            tools = await session.list_tools()
-            names = {tool.name for tool in tools.tools}
-            assert {"get_profile", "propose_memory", "list_pending", "search_memory"} <= names
+      async with stdio_client(parameters, errlog=errlog) as (reader, writer), ClientSession(reader, writer) as session:
+          await session.initialize()
+          tools = await session.list_tools()
+          names = {tool.name for tool in tools.tools}
+          assert {"get_profile", "propose_memory", "list_pending", "search_memory"} <= names
 
-            proposed = await session.call_tool("propose_memory", {
-                "content": "MCP protocol round-trip synthetic preference",
-                "memory_type": "preference",
-                "subject": "protocol-test",
-            })
-            assert not proposed.is_error, proposed
-            pending = await session.call_tool("list_pending", {})
-            assert not pending.is_error, pending
-            assert "totalPending" in str(pending.content)
-            assert "MCP protocol round-trip synthetic preference" not in str(pending.content)
+          proposed = await session.call_tool("propose_memory", {
+              "content": "MCP protocol round-trip synthetic preference",
+              "memory_type": "preference",
+              "subject": "protocol-test",
+          })
+          assert not proposed.is_error, proposed
+          pending = await session.call_tool("list_pending", {})
+          assert not pending.is_error, pending
+          assert "totalPending" in str(pending.content)
+          assert "MCP protocol round-trip synthetic preference" not in str(pending.content)
 
-            rejected = await session.call_tool("propose_memory", {
-                "content": "api_key: abcdefghijklmnop",
-            })
-            assert rejected.is_error, rejected
+          rejected = await session.call_tool("propose_memory", {
+              "content": "api_key: abcdefghijklmnop",
+          })
+          assert rejected.is_error, rejected
 
 
 async def denied_scope(vault: Path) -> None:
@@ -66,11 +65,10 @@ async def denied_scope(vault: Path) -> None:
     })
     parameters = StdioServerParameters(command=sys.executable, args=[str(ROOT / "mcp_server.py")], cwd=ROOT, env=env)
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as errlog:
-      async with stdio_client(parameters, errlog=errlog) as (reader, writer):
-        async with ClientSession(reader, writer) as session:
-            await session.initialize()
-            result = await session.call_tool("list_pending", {})
-            assert result.is_error, result
+      async with stdio_client(parameters, errlog=errlog) as (reader, writer), ClientSession(reader, writer) as session:
+          await session.initialize()
+          result = await session.call_tool("list_pending", {})
+          assert result.is_error, result
 
 
 def main() -> None:

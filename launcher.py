@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import secrets
@@ -129,10 +130,8 @@ def write_runtime(path: Path, *, port: int, token: str, vault: Path) -> None:
         "vault": str(vault), "started": time.time(),
     }, ensure_ascii=False), encoding="utf-8")
     os.replace(temporary, path)
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(path, 0o600)
-    except OSError:
-        pass
 
 
 def wait_and_open(port: int, token: str, no_browser: bool) -> None:
@@ -161,7 +160,7 @@ def launch(args: argparse.Namespace) -> int:
                     webbrowser.open(browser_url(int(current["port"]), str(current["token"])))
                 return 0
             time.sleep(0.1)
-        raise RuntimeError("已有启动进程占用单实例锁，但本地服务尚未就绪。")
+        raise RuntimeError("已有启动进程占用单实例锁，但本地服务尚未就绪。") from None
 
     try:
         web_dist = ensure_web_build()
@@ -188,10 +187,14 @@ def launch(args: argparse.Namespace) -> int:
                     access_log=False,
                 )
             )
-            app.state.request_shutdown = lambda: setattr(server, "should_exit", True)
-            def restart(next_vault: Path) -> None:
-                requested.append(next_vault.resolve())
-                server.should_exit = True
+            def request_shutdown(_server: uvicorn.Server = server) -> None:
+                _server.should_exit = True
+
+            def restart(next_vault: Path, _server: uvicorn.Server = server, _requested: list[Path] = requested) -> None:
+                _requested.append(next_vault.resolve())
+                _server.should_exit = True
+
+            app.state.request_shutdown = request_shutdown
             app.state.request_restart = restart
             write_runtime(runtime_file, port=port, token=token, vault=vault)
             threading.Thread(target=wait_and_open, args=(port, token, args.no_browser), daemon=True).start()

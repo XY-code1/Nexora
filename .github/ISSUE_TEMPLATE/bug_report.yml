@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a reproducible problem with NEXORA
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Do not include personal data, Vault contents, credentials, or tokens.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which release or commit are you running?
+      placeholder: "v1.0.4"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what actually happened?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Steps to reproduce. A synthetic Vault is enough; do not share a real Vault.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste relevant error text only. Never paste credentials, tokens, or Vault contents.
+    validations:
+      required: false

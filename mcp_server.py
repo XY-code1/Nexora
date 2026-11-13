@@ -21,11 +21,12 @@ import stat
 from contextlib import redirect_stdout
 from functools import wraps
 from pathlib import Path
+
 from mcp.server.mcpserver import MCPServer
 
 from core import profile as profile_cli
-from core.access import apply_access, extract_summary, get_access_level, is_readable_for_search
 from core import security
+from core.access import apply_access, extract_summary, get_access_level, is_readable_for_search
 from core.repository import list_markdown, read_text
 from core.vault_identity import ensure_identity
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
@@ -158,7 +159,6 @@ def get_current_context() -> str:
 def search_memory(query: str, limit: int = 8) -> list[dict[str, str]]:
     require_scope("memory:search", "memory.search", "memory")
     vault = get_vault()
-    root = vault / "30 Memory" / "Confirmed"
     terms = [term.lower() for term in re.findall(r"\w+", query) if term.strip()]
     results: list[tuple[int, Path, str]] = []
     for file in list_markdown(vault, "30 Memory/Confirmed", limit=MAX_LIST_ITEMS):
@@ -166,10 +166,7 @@ def search_memory(query: str, limit: int = 8) -> list[dict[str, str]]:
         if not is_readable_for_search(text):
             continue
         level = get_access_level(text)
-        if level == "summary-only":
-            content = extract_summary(text, max_chars=600)
-        else:
-            content = text[:1500]
+        content = extract_summary(text, max_chars=600) if level == "summary-only" else text[:1500]
         # Search only what this client is allowed to receive; hidden body text
         # must not influence summary-only results or their ranking.
         score = sum(content.lower().count(term) for term in terms) if terms else 1
@@ -199,10 +196,7 @@ def list_projects() -> list[dict[str, str]]:
         if not is_readable_for_search(text):
             continue
         level = get_access_level(text)
-        if level == "summary-only":
-            content = extract_summary(text, max_chars=600)
-        else:
-            content = text[:2000]
+        content = extract_summary(text, max_chars=600) if level == "summary-only" else text[:2000]
         total += len(content)
         if total > MAX_RESPONSE_CHARS:
             break
@@ -255,7 +249,6 @@ def propose_memory(content: str, memory_type: str = "note", subject: str = "") -
 def list_pending() -> dict[str, object]:
     require_scope("memory:pending", "memory.pending_list", "memory")
     vault = get_vault()
-    root = vault / "30 Memory" / "Inbox"
     by_type: dict[str, int] = {}
     total = 0
     for file in list_markdown(vault, "30 Memory/Inbox", limit=1000):
@@ -276,7 +269,6 @@ def list_pending() -> dict[str, object]:
 def get_human3_summary() -> str:
     require_scope("assessment:read", "assessment.read", "assessment")
     vault = get_vault()
-    history = vault / "40 Reviews" / "Human3" / "History"
     confirmed = []
     for file in list_markdown(vault, "40 Reviews/Human3/History", limit=MAX_LIST_ITEMS, reverse=True):
         text = read_limited(vault, file)

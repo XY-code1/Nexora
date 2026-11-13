@@ -1,6 +1,6 @@
+import sys
 import tempfile
 from pathlib import Path
-import sys
 
 from fastapi.testclient import TestClient
 

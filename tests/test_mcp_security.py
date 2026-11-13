@@ -5,8 +5,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-import mcp_server as m
 import profile as profile_cli
+
+import mcp_server as m
 from core import security
 
 

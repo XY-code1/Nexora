@@ -14,6 +14,7 @@ credentials or network access.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import urllib.parse
 import urllib.request
@@ -233,10 +234,8 @@ def disconnect(vault: str) -> dict[str, Any]:
     sync.remove_remote(vault)
     _session.clear()
     _device.clear()
-    try:
+    with contextlib.suppress(OSError):
         connection_path().unlink(missing_ok=True)
-    except OSError:
-        pass
     return {"connected": False}
 
 

@@ -1,7 +1,7 @@
 """Phase 8 HTTP, persistence, concurrency, and privacy acceptance checks."""
 
-import tempfile
 import sys
+import tempfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient

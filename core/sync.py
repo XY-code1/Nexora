@@ -177,10 +177,7 @@ def configure_remote(vault: str, url: str, remote_name: str = "origin") -> dict[
     if not clean or ("://" not in clean and ":" not in clean):
         raise RuntimeError("远程 URL 无效。")
     with vault_operation_lock(root):
-        if remote_name in _git(root, "remote").stdout.split():
-            result = _git(root, "remote", "set-url", remote_name, clean)
-        else:
-            result = _git(root, "remote", "add", remote_name, clean)
+        result = _git(root, "remote", "set-url", remote_name, clean) if remote_name in _git(root, "remote").stdout.split() else _git(root, "remote", "add", remote_name, clean)
         if result.returncode != 0:
             raise RuntimeError(f"配置远程失败：{_redact((result.stdout + result.stderr).strip())}")
         described = _describe_remote(clean)

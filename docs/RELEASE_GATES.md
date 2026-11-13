@@ -18,6 +18,14 @@ npm ci
 
 更新Python锁文件需要显式执行`pip-compile`，不能在CI中隐式升级。
 
+## 版本号
+
+发布前需要同步以下标识，避免文档、安装包和 API 元数据互相矛盾：
+
+- `apps/api/main.py` 中 `FastAPI(version=...)`；
+- `apps/web/package.json` 的 `version`；
+- Git tag（`v<version>`），Windows 安装包版本由 tag 推导。
+
 ## 真实MCP协议测试
 
 `tests/test_mcp_protocol.py`会启动真实的stdio MCP子进程，验证：

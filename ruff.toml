@@ -1,0 +1,21 @@
+# Ruff configuration for NEXORA.
+# https://docs.astral.sh/ruff/configuration/
+#
+# The rule set is deliberately conservative: correctness errors (E4/E7/E9/F),
+# import ordering (I), likely bugs (B) and simplification hints (SIM).
+# E501 (line length) is not enforced because the codebase uses long data and
+# error-message lines that read better unwrapped.
+target-version = "py312"
+line-length = 200
+
+[lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "SIM"]
+
+[lint.per-file-ignores]
+# Tests and helper scripts adjust sys.path before importing the package.
+"tests/*" = ["E402"]
+"scripts/*" = ["E402"]
+# profile.py is the compatibility CLI: it deliberately re-exports the whole
+# core.profile surface via `import *`, so F405 (name may come from a star
+# import) is expected there.
+"profile.py" = ["F405"]
