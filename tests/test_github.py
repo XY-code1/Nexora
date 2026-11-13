@@ -91,5 +91,49 @@ def main() -> None:
     print("github onboarding, verification and privacy guard tests passed")
 
 
+def test_default_request_retry() -> None:
+    """_default_request retries transient transport failures but not 4xx answers."""
+    import json
+    import urllib.error
+    from unittest.mock import patch
+
+    attempts = {"count": 0}
+
+    class FakeResponse:
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, *args: object) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps({"ok": True}).encode("utf-8")
+
+    def flaky(request: object, body: object, timeout: object = None):
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            raise urllib.error.URLError("connection reset")
+        return FakeResponse()
+
+    with patch("urllib.request.urlopen", flaky):
+        assert github._default_request("GET", "https://api.github.com/user") == {"ok": True}
+    assert attempts["count"] == 3, attempts
+
+    attempts["count"] = 0
+
+    def unauthorized(request: object, body: object, timeout: object = None):
+        attempts["count"] += 1
+        raise urllib.error.HTTPError("https://api.github.com/user", 401, "Unauthorized", {}, None)
+
+    with patch("urllib.request.urlopen", unauthorized):
+        try:
+            github._default_request("GET", "https://api.github.com/user")
+            raise AssertionError("HTTP 401 was not raised")
+        except urllib.error.HTTPError:
+            pass
+    assert attempts["count"] == 1, attempts
+
+
 if __name__ == "__main__":
     main()
+    test_default_request_retry()
