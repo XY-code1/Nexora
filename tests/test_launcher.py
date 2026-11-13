@@ -101,7 +101,9 @@ def main():
             )
             with urllib.request.urlopen(request, timeout=2) as response:
                 assert response.status == 200
-            assert process.wait(timeout=10) == 0
+            # uvicorn 的关停要走完优雅关闭，Windows runner 上可能明显变慢；
+            # 这里给足预算（与上面 Vault 切换的 30 秒一致），避免把慢误判成挂死。
+            assert process.wait(timeout=30) == 0
             for _ in range(20):
                 if not runtime_file.exists():
                     break
