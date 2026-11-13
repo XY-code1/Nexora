@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import contextlib
 import json
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -71,8 +73,21 @@ def _default_request(method: str, url: str, *, data: dict[str, Any] | None = Non
             request.add_header("Content-Type", "application/json")
     for key, value in (headers or {}).items():
         request.add_header(key, value)
-    with urllib.request.urlopen(request, body, timeout=15) as response:
-        return json.loads(response.read().decode("utf-8"))
+    last_error: OSError | None = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, body, timeout=15) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            # A 4xx is a real answer from GitHub; only 5xx is worth retrying.
+            if exc.code < 500:
+                raise
+            last_error = exc
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            last_error = exc
+        if attempt < 2:
+            time.sleep(0.5 * (2 ** attempt))
+    raise last_error if last_error is not None else RuntimeError("GitHub 请求失败")
 
 
 def _call(method: str, url: str, *, data: dict[str, Any] | None = None, token: str | None = None) -> dict[str, Any]:

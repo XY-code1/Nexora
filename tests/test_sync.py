@@ -152,4 +152,44 @@ with tempfile.TemporaryDirectory() as temporary:
     assert sync_mod.sync_status(str(vault))["head"] == status["head"], "HEAD 不应移动"
     assert vault_management._content_revision(vault) != expected_revision, "工作区内容应已回退"
 
+    # sync_commit 在提交前创建 managed 安全备份；无改动时不创建。
+    backups_before = len(vault_management._managed_backup_dirs(vault))
+    (vault / "10 Profile" / "Profile.md").write_text("after-restore\n", encoding="utf-8")
+    sync_mod.sync_commit(str(vault), "backup check")
+    assert len(vault_management._managed_backup_dirs(vault)) == backups_before + 1
+    expect_failure(lambda: sync_mod.sync_commit(str(vault), "empty"), "没有可提交")
+    assert len(vault_management._managed_backup_dirs(vault)) == backups_before + 1
+
+
+def test_git_remote_retry() -> None:
+    """_git_remote retries transient transport failures, not real Git errors."""
+    from unittest.mock import patch
+
+    attempts = {"count": 0}
+
+    def flaky(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            return subprocess.CompletedProcess(["git"], 1, "", "fatal: unable to access 'https://example.com': Could not resolve host: example.com")
+        return subprocess.CompletedProcess(["git"], 0, "ok", "")
+
+    with tempfile.TemporaryDirectory() as tmp, patch.object(sync_mod, "_git", flaky):
+        result = sync_mod._git_remote(Path(tmp), "fetch", "--quiet")
+    assert result.returncode == 0, result
+    assert attempts["count"] == 3, attempts
+
+    attempts["count"] = 0
+
+    def real_failure(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        attempts["count"] += 1
+        return subprocess.CompletedProcess(["git"], 1, "", "fatal: not a git repository")
+
+    with tempfile.TemporaryDirectory() as tmp, patch.object(sync_mod, "_git", real_failure):
+        result = sync_mod._git_remote(Path(tmp), "fetch", "--quiet")
+    assert result.returncode == 1, result
+    assert attempts["count"] == 1, attempts
+
+
+test_git_remote_retry()
+
 print("cross-device sync tests passed")

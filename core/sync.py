@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +42,39 @@ _STATUS_LABELS = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed",
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+
+
+# Output fragments that indicate a transient transport failure rather than a
+# real Git result. Only network-facing commands (fetch/push) are retried: a
+# non-zero exit from a local operation is a result, not a hiccup.
+_TRANSIENT_GIT_OUTPUT = (
+    "could not resolve host",
+    "connection refused",
+    "connection reset",
+    "could not read from remote repository",
+    "network is unreachable",
+    "remote end hung up",
+    "rpc failed",
+    "ssl connection",
+    "temporary failure in name resolution",
+    "timed out",
+    "timeout",
+    "unable to access",
+)
+
+
+def _git_remote(root: Path, *args: str, attempts: int = 3) -> subprocess.CompletedProcess[str]:
+    """Run a network-facing git command, retrying transient transport failures."""
+    result = _git(root, *args)
+    for attempt in range(1, attempts):
+        if result.returncode == 0:
+            return result
+        output = (result.stdout + result.stderr).lower()
+        if not any(pattern in output for pattern in _TRANSIENT_GIT_OUTPUT):
+            return result
+        time.sleep(0.5 * (2 ** (attempt - 1)))
+        result = _git(root, *args)
+    return result
 
 
 def _require_git_repo(root: Path) -> None:
@@ -293,21 +327,26 @@ def git_restore(vault: str, commit: str, expected_vault_revision: str) -> dict[s
 
 
 def sync_commit(vault: str, message: str = "chore: local memory update") -> str:
-    """Stage and commit every Vault change (respecting the Vault .gitignore)."""
+    """Stage and commit every Vault change (respecting the Vault .gitignore).
+
+    A managed safety backup is taken first so the pre-commit state stays
+    recoverable from the backup history.
+    """
     root = Path(vault).expanduser().resolve()
     assert_vault_isolated(root)
     _require_git_repo(root)
     with vault_operation_lock(root):
-        hits = _sensitive_hits(root, _parse_porcelain(root))
+        changes = _parse_porcelain(root)
+        hits = _sensitive_hits(root, changes)
         if hits:
             raise RuntimeError("检测到疑似敏感文件，已拒绝提交：" + "、".join(item["path"] for item in hits))
+        if not changes:
+            raise RuntimeError("没有可提交的改动。")
+        vault_management.create_managed_backup(root)
         _git(root, "add", "-A")
         result = _git(root, "commit", "-m", message)
         if result.returncode != 0:
-            output = (result.stdout + result.stderr).strip()
-            if "nothing to commit" in output or "nothing added to commit" in output:
-                raise RuntimeError("没有可提交的改动。")
-            raise RuntimeError(f"提交失败：{output}")
+            raise RuntimeError(f"提交失败：{(result.stdout + result.stderr).strip()}")
         return _commit(root, "HEAD")
 
 
@@ -320,7 +359,7 @@ def sync_pull(vault: str) -> dict[str, object]:
         _require_clean(root)
         if not _upstream_name(root):
             raise RuntimeError("未配置远程跟踪分支；请先 git push -u origin 分支 或手动配置。")
-        _git(root, "fetch", "--quiet")
+        _git_remote(root, "fetch", "--quiet")
         head = _commit(root, "HEAD")
         remote_head = _commit(root, "@{upstream}")
         if head == remote_head:
@@ -343,10 +382,10 @@ def sync_push(vault: str) -> dict[str, object]:
         _require_clean(root)
         if not _upstream_name(root):
             raise RuntimeError("未配置远程跟踪分支；请先 git push -u origin 分支 或手动配置。")
-        _git(root, "fetch", "--quiet")
+        _git_remote(root, "fetch", "--quiet")
         if _count(root, "HEAD..@{upstream}"):
             raise RuntimeError("远端有新提交；请先执行 sync-pull 拉取后再推送。")
-        result = _git(root, "push")
+        result = _git_remote(root, "push")
         if result.returncode != 0:
             raise RuntimeError(f"推送失败：{(result.stdout + result.stderr).strip()}")
         return {"status": "pushed", "head": _commit(root, "HEAD")}

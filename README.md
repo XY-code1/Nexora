@@ -275,9 +275,7 @@ Security foundations include loopback-only serving, bearer sessions, trusted-hos
 
 ### Known limitations
 
-- Git pull/push do not retry on transient network failures.
 - No scheduled or automatic local backup.
-- `sync_commit` does not create a managed backup before committing.
 - The project does not capture screens, keyboard input, microphone data, or full browsing history.
 - No cloud account or cloud-hosted personal profile service is included.
 

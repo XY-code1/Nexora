@@ -35,6 +35,8 @@ All five README Roadmap items are delivered.
 | Git history browsing | **Done** | `GET /api/v1/git/history` |
 | Git history restore | **Done** | `POST /api/v1/git/restore`; managed safety backup first, HEAD unchanged |
 | Git change preview + sensitive-file scan | **Done** | `GET /api/v1/git/changes`; commits fail closed on a hit |
+| Commit safety backup | **Done** | `sync_commit` takes a managed backup before committing |
+| Git transport retry | **Done** | fetch/push retry transient transport failures with backoff |
 | GitHub Device Flow | **Done** | Token lives only in API process memory |
 | GitHub private-repository verification | **Done** | Public repositories are refused before the remote is written |
 | GitHub private-repository creation | **Done** | `POST /api/v1/github/create` |
@@ -55,9 +57,7 @@ All five README Roadmap items are delivered.
 
 ## 4. Known remaining gaps
 
-- `sync_commit` does not create a managed backup before committing.
 - No scheduled / automatic local backup.
-- No network-failure retry for Git pull/push.
 - Windows ACL semantics for the runtime file are unverified (`chmod 0600` is attempted).
 
 ## 5. How to update this file
