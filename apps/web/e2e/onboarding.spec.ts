@@ -15,7 +15,7 @@ test('daily workspace removes the duplicate onboarding destination', async ({ pa
   await page.getByLabel('本地启动令牌').fill('e2e-token')
   await page.getByRole('button', { name: '连接审核空间' }).click()
   await expect(page.getByRole('button', { name: '对话式引导' })).toHaveCount(0)
-  await page.getByRole('button', { name: '个人档案' }).click()
+  await page.getByRole('button', { name: '个人档案', exact: true }).click()
   await expect(page.getByRole('heading', { name: '个人档案', level: 1 })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: resolve(shots, 'workspace-without-onboarding-1440.png'), fullPage: true })

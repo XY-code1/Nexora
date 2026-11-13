@@ -50,7 +50,10 @@ test('200% zoom keeps the layout usable without horizontal overflow', async ({ p
   // Primary actions stay reachable at 200%.
   await page.getByRole('button', { name: '打开导航' }).click()
   await expect(page.getByRole('button', { name: '备份与恢复' })).toBeVisible()
+  // 抽屉打开时会把焦点移到当前导航项；等它落定再操作，避免焦点被抢导致 Enter 落空。
+  await expect(page.locator('nav button[aria-current="page"]')).toBeFocused()
   await page.getByRole('button', { name: '备份与恢复' }).focus()
+  await expect(page.getByRole('button', { name: '备份与恢复' })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('heading', { name: '备份与恢复', level: 1 })).toBeVisible()
   await expect(page.getByRole('button', { name: '创建完整备份' })).toBeVisible()

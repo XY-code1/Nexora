@@ -21,12 +21,12 @@ test('hash navigation restores scroll, focus, history and refresh state', async 
   await stage.evaluate((element) => { element.scrollTop = 600 })
   await expect.poll(() => stage.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
 
-  await page.getByRole('button', { name: '记忆审核' }).click()
+  await page.getByRole('navigation', { name: '档案功能' }).getByRole('button', { name: '记忆审核' }).click()
   await expect(page).toHaveURL(/#\/memory-review$/)
   await expect(page.getByRole('heading', { name: '记忆审核', level: 1 })).toBeFocused()
   await expect.poll(() => stage.evaluate((element) => element.scrollTop)).toBe(0)
 
-  await page.getByRole('button', { name: '个人档案', exact: true }).click()
+  await page.getByRole('navigation', { name: '档案功能' }).getByRole('button', { name: '个人档案', exact: true }).click()
   await expect(page).toHaveURL(/#\/profile$/)
   await expect(page.getByRole('heading', { name: '个人档案', level: 1 })).toBeFocused()
 
@@ -66,7 +66,7 @@ test('mobile drawer traps focus, closes with Escape and navigates', async ({ pag
   await expect(menu).toBeFocused()
 
   await menu.click()
-  await page.getByRole('button', { name: '个人档案', exact: true }).click()
+  await page.getByRole('navigation', { name: '档案功能' }).getByRole('button', { name: '个人档案', exact: true }).click()
   await expect(menu).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByRole('heading', { name: '个人档案', level: 1 })).toBeFocused()
   await expect(page.locator('.app-stage')).toHaveJSProperty('scrollTop', 0)
