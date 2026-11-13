@@ -26,13 +26,12 @@ async def verify_generated_config(config: dict[str, object]) -> None:
         command=entry["command"], args=entry["args"], env=env,  # type: ignore[arg-type,index]
         encoding="utf-8", encoding_error_handler="replace",
     )
-    async with stdio_client(parameters) as (reader, writer):
-        async with ClientSession(reader, writer) as session:
-            await session.initialize()
-            names = {tool.name for tool in (await session.list_tools()).tools}
-            assert {"get_profile", "search_memory", "propose_memory", "list_pending"} <= names
-            result = await session.call_tool("get_profile", {})
-            assert not result.is_error
+    async with stdio_client(parameters) as (reader, writer), ClientSession(reader, writer) as session:
+        await session.initialize()
+        names = {tool.name for tool in (await session.list_tools()).tools}
+        assert {"get_profile", "search_memory", "propose_memory", "list_pending"} <= names
+        result = await session.call_tool("get_profile", {})
+        assert not result.is_error
 
 
 def main() -> None:

@@ -202,7 +202,7 @@ Each client is created in **AI Connections / Security Center** and receives an i
 ```json
 {
   "mcpServers": {
-    "personal-profile": {
+    "personal-ai-profile": {
       "command": "python",
       "args": ["ABSOLUTE_PATH_TO_FRAMEWORK/mcp_server.py"],
       "env": {

@@ -3,8 +3,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-import mcp_server
 import profile
+
+import mcp_server
 from core import profile as core_profile
 from core.access import apply_access, get_access_level
 

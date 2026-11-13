@@ -1,8 +1,8 @@
 import subprocess
 import sys
 import tempfile
-from contextlib import redirect_stdout
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,8 +12,8 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from apps.api import create_app
 import apps.api.main as api_main
+from apps.api import create_app
 from core import profile
 
 
@@ -250,6 +250,7 @@ def main():
         assert events.status_code == 200 and "events" in events.json()["data"], events.text
 
         import time
+
         from core.vault_identity import VaultMonitor
         monitor = VaultMonitor(vault, poll_interval=0.2)
         monitor.start()

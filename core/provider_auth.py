@@ -12,6 +12,7 @@ unchanged until a provider integration opts in.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import json
@@ -80,10 +81,8 @@ def _save_providers(items: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(str(path) + ".lock", timeout=10):
         path.write_text(json.dumps({"providers": items}, ensure_ascii=False, indent=2), encoding="utf-8")
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(path, 0o600)
-    except OSError:
-        pass
 
 
 def authorize_provider(provider: str, scopes: list[str]) -> dict[str, Any]:

@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
 import hmac
+import json
 import os
 import re
+import secrets
 import shutil
 import stat
-import tempfile
 import threading
-import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -60,10 +59,7 @@ def schema_version(vault: Path) -> int:
 
 
 def backup_root() -> Path:
-    if os.name == "nt":
-        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-    else:
-        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) if os.name == "nt" else Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return base / "PersonalAIProfile" / "backups"
 
 
@@ -391,10 +387,7 @@ def _recover_swap(target: Path, workspace: Path, journal: Path) -> None:
     previous = workspace / "previous"
     if not target.exists() and previous.exists():
         os.replace(previous, target)
-    if target.exists():
-        journal.unlink(missing_ok=True)
-        shutil.rmtree(workspace, ignore_errors=True)
-    elif not previous.exists():
+    if target.exists() or not previous.exists():
         journal.unlink(missing_ok=True)
         shutil.rmtree(workspace, ignore_errors=True)
 
@@ -416,10 +409,7 @@ def _migrate_0_to_1(vault: Path) -> None:
     if not config.is_file():
         raise RuntimeError(f"缺少 {CONFIG}，无法迁移。")
     text = config.read_text(encoding="utf-8")
-    if re.search(r"(?m)^schema_version:", text):
-        text = re.sub(r"(?m)^schema_version:\s*.*$", "schema_version: 1", text)
-    else:
-        text = "schema_version: 1\n" + text
+    text = re.sub(r"(?m)^schema_version:\s*.*$", "schema_version: 1", text) if re.search(r"(?m)^schema_version:", text) else "schema_version: 1\n" + text
     atomic_write(config, text)
 
 
@@ -493,7 +483,7 @@ def stage_public_export(vault: Path, relative_files: list[str], staging: Path) -
             try:
                 existing_marker = json.loads((output / marker_name).read_text(encoding="utf-8"))
             except (OSError, ValueError) as exc:
-                raise RuntimeError("公开导出目标已存在且不属于Personal AI Profile。") from exc
+                raise RuntimeError("公开导出目标已存在且不属于 NEXORA。") from exc
             if existing_marker != marker:
                 raise RuntimeError("公开导出ownership marker与当前Vault或目标不匹配。")
         prepared: list[tuple[Path, str]] = []
@@ -550,7 +540,7 @@ def redact_text(text: str) -> str:
     """Mask secret-like substrings so a preview can be shared safely."""
     redacted = text
     for label, pattern in SECRET_PATTERNS.items():
-        redacted = pattern.sub(lambda _match: f"[已脱敏:{label}]", redacted)
+        redacted = pattern.sub(lambda _match, _label=label: f"[已脱敏:{_label}]", redacted)
     return redacted
 
 

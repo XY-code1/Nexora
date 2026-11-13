@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import re
 import uuid
 from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
+from filelock import FileLock
+
 from . import profile
 from .access import extract_summary
-from filelock import FileLock
 
 DISCLAIMER = "Human 3.0 仅用于自我反思，不是医学或心理诊断。成长数据只来自已授权记录或用户主动填写。"
 LEVEL_HINT = "Level 1.0/2.0/3.0 仅为用户自选标签，不是临床验证的心理测量工具，也不由系统自动定级。"

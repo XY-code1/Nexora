@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "personal-profile": {
+    "personal-ai-profile": {
       "command": "python",
       "args": ["ABSOLUTE_PATH_TO_FRAMEWORK/mcp_server.py"],
       "env": {

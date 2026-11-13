@@ -12,8 +12,7 @@ ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT))
 
 from apps.api import create_app
-from core import profile
-from core import vault_management
+from core import profile, vault_management
 
 with tempfile.TemporaryDirectory(prefix="personal-ai-profile-e2e-") as tmp:
     vault = Path(tmp) / "vault"

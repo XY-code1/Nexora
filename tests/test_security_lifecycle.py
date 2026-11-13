@@ -1,5 +1,5 @@
-import tempfile
 import sys
+import tempfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -7,8 +7,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from apps.api import create_app
-from core import profile
-from core import security
+from core import profile, security
 
 
 def expect_failure(function, text: str) -> None:

@@ -8,10 +8,11 @@ def main():
     root = Path(__file__).parents[1]
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "vault"
-        run = lambda *args: subprocess.run(
-            [sys.executable, str(root / "profile.py"), *args],
-            check=True, capture_output=True, text=True
-        )
+        def run(*args):
+            return subprocess.run(
+                    [sys.executable, str(root / "profile.py"), *args],
+                    check=True, capture_output=True, text=True
+                )
         run("init", str(vault))
         run("remember", str(vault), "喜欢先给结论")
         candidate = next((vault / "30 Memory" / "Inbox").glob("*.md"))

@@ -10,9 +10,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from apps.api import create_app
-from core import profile
-from core import vault_identity
-
+from core import profile, vault_identity
 
 with tempfile.TemporaryDirectory() as temporary:
     base = Path(temporary)

@@ -1,5 +1,8 @@
 # Personal AI Profile — Agent 交接说明
 
+> **⚠️ 历史文档（2026-11-02 快照）。** 本文描述的是 Phase 9 基线：文中的「尚未完成」清单现已全部交付，仓库也已改名为 NEXORA（知序）。
+> **当前状态请以 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) 为准，不要依据本文判断进度。**
+
 > 交接基线：`main`（Phase 9完成）
 > 仓库：<https://github.com/XY-code1/personal-ai-profile>
 > 更新日期：2026-11-02

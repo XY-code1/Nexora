@@ -16,26 +16,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from core import profile
+from core import github, growth, importer, monthly_reflection, product_state, profile, provider_adapters, provider_auth, security, vault_identity, vault_management
 from core import sync as git_sync
-from core.vault_identity import VaultMonitor, find_registered, list_registered, register_vault
-from core import vault_identity
-from core.repository import list_markdown
-from core.onboarding import onboarding_state, propose_answer
 from core.human3 import confirm_session, current_session, save_conclusion, save_dimension, session_view, start_session
-from core import monthly_reflection
-from core import product_state
-from core import security
-from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
-from core import growth
-from core import github
-
-from core import provider_adapters
-from core import provider_auth
-
-from core import importer
-from core import vault_management
+from core.onboarding import onboarding_state, propose_answer
+from core.repository import list_markdown
+from core.vault_identity import VaultMonitor, find_registered, list_registered, register_vault
 from core.vault_management import assert_vault_isolated, recover_vault_swap, require_current_schema, vault_operation_lock
+from core.visualization import human3_trend, monthly_trend, privacy_audit, profile_overview, timeline
 
 
 class ApiError(Exception):
@@ -344,7 +332,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
     assert_vault_isolated(root)
     require_current_schema(root)
 
-    app = FastAPI(title="Personal AI Profile Local API", version="0.1.0")
+    app = FastAPI(title="NEXORA Local API", version="1.0.4")
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
     app.state.vault = root
     app.state.token = token or secrets.token_urlsafe(32)
@@ -1191,7 +1179,7 @@ def create_app(vault: Path, token: str | None = None, web_dist: Path | None = No
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="启动本地 Personal AI Profile API")
+    parser = argparse.ArgumentParser(description="启动本地 NEXORA API")
     parser.add_argument("--vault", required=True, type=Path)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument(

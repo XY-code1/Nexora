@@ -2,10 +2,10 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
-title Personal AI Profile 启动诊断
+title NEXORA 启动诊断
 
 echo ============================================================
-echo   Personal AI Profile - 启动诊断
+echo   NEXORA - 启动诊断
 echo   目录: %CD%
 echo ============================================================
 echo.

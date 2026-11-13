@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-
-import sys
 
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT))

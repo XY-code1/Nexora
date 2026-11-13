@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security issue
+    url: https://github.com/XY-code1/Nexora/security/advisories/new
+    about: Report a vulnerability privately. Do not open a public issue.
+  - name: Documentation
+    url: https://github.com/XY-code1/Nexora/tree/main/docs
+    about: Read the architecture, privacy, and lifecycle documentation before asking a question.

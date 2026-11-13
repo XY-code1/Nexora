@@ -369,15 +369,23 @@ def query_events(root: Path, *, client_id: str = "", event_type: str = "", resou
     if path.is_file():
         for line in profile.safe_vault_file(root, path).read_text(encoding="utf-8").splitlines():
             record = json.loads(line)
-            if client_id and record["clientId"] != client_id: continue
-            if event_type and record["eventType"] != event_type: continue
-            if resource_type and record["resourceType"] != resource_type: continue
-            if result and record["result"] != result: continue
-            if since and record["timestamp"] < since: continue
-            if until and record["timestamp"] > until: continue
+            if client_id and record["clientId"] != client_id:
+                continue
+            if event_type and record["eventType"] != event_type:
+                continue
+            if resource_type and record["resourceType"] != resource_type:
+                continue
+            if result and record["result"] != result:
+                continue
+            if since and record["timestamp"] < since:
+                continue
+            if until and record["timestamp"] > until:
+                continue
             records.append({key: value for key, value in record.items() if key not in {"hash", "prevHash"}})
     records.reverse()
-    page = max(1, page); page_size = max(1, min(page_size, 100)); start = (page - 1) * page_size
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+    start = (page - 1) * page_size
     return {"items": records[start:start + page_size], "page": page, "pageSize": page_size, "total": len(records), "integrity": integrity}
 
 

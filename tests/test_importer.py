@@ -6,8 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from core import importer
-from core import profile
+from core import importer, profile
 
 
 def expect_failure(function, text: str) -> None:

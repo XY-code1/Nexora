@@ -11,6 +11,7 @@ Design constraints:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 import urllib.request
@@ -155,8 +156,6 @@ def call(provider: str, request_id: str) -> dict[str, Any]:
         provider_auth.audit_call(request_id, provider, approved["scope"], "ok", result.get("model", ""), int(result.get("usage", {}).get("total_tokens", 0)))
         return {"ok": True, "text": result["text"], "model": result["model"], "usage": result["usage"], "latencyMs": int((time.monotonic() - started) * 1000)}
     except Exception as exc:  # noqa: BLE001 - a failing provider must never break the app
-        try:
+        with contextlib.suppress(Exception):
             provider_auth.audit_call(request_id, provider, "", "error", "", 0, reason=str(exc))
-        except Exception:
-            pass
         return {"ok": False, "error": str(exc)[:300], "latencyMs": int((time.monotonic() - started) * 1000)}

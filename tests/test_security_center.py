@@ -88,7 +88,9 @@ def main():
 
         # Tampering is visible and subsequent protected authorization fails closed.
         lines = audit_text.splitlines()
-        record = json.loads(lines[0]); record["reasonCode"] = "TAMPERED"; lines[0] = json.dumps(record, ensure_ascii=False)
+        record = json.loads(lines[0])
+        record["reasonCode"] = "TAMPERED"
+        lines[0] = json.dumps(record, ensure_ascii=False)
         (root / security.AUDIT_FILE).write_text("\n".join(lines) + "\n", encoding="utf-8")
         assert security.verify_audit(root)["status"] == "invalid"
         try:

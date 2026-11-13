@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -13,6 +14,7 @@ from typing import Any
 
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT))
+
 from core.vault_identity import ensure_identity
 
 SERVER = ROOT / "mcp_server.py"
@@ -75,15 +77,13 @@ def write_new_config(output: Path, config: dict[str, Any]) -> Path:
             handle.write("\n")
     except FileExistsError as exc:
         raise ValueError("输出文件已存在；为避免覆盖 Host 配置，请更换路径。") from exc
-    try:
+    with contextlib.suppress(OSError):
         output.chmod(0o600)
-    except OSError:
-        pass
     return output
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="生成 Personal AI Profile 的本地 MCP Host 配置。")
+    parser = argparse.ArgumentParser(description="生成 NEXORA 的本地 MCP Host 配置。")
     parser.add_argument("--host", choices=sorted(HOST_WRAPPERS), default="claude-desktop")
     parser.add_argument("--vault", type=Path, required=True)
     parser.add_argument("--client-id", required=True)
