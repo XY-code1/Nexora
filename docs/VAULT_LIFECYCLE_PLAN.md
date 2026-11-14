@@ -1,6 +1,7 @@
 # Vault Lifecycle Plan
 
-> 2026-11-06 实施状态：P1–P7 最小闭环完成。切换采用安全重启而非热切换；外部变更采用 content revision 按需检测而非常驻 watcher。以下矩阵保留最初规划基线，实施结果见 `PRODUCT_ARCHITECTURE.md`。
+> 2026-11-06 实施状态：P1–P7 最小闭环完成。
+> **2026-11-14 更新**：下方矩阵保留最初规划基线。Vault 切换已采用安全重启（`POST /api/v1/vault/switch`），外部变更已增加常驻 watcher（`VaultMonitor` + `/api/v1/vault/events`），备份保留策略与磁盘配额已落地。**当前状态请以 [`PROJECT_STATUS.md`](PROJECT_STATUS.md) 为准。**
 
 ## 1. 当前能力矩阵
 
