@@ -31,6 +31,7 @@ jobs:
       - run: python tests/test_human3.py
       - run: python tests/test_vault_management.py
       - run: python tests/test_vault_product.py
+      - run: python tests/test_windows_acl.py
       - run: python tests/test_sync.py
       - run: python tests/test_release_gate.py
       - run: python tests/test_monthly_reflection.py
@@ -90,6 +91,7 @@ jobs:
       - run: python tests/test_onboarding.py
       - run: python tests/test_human3.py
       - run: python tests/test_vault_product.py
+      - run: python tests/test_windows_acl.py
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
@@ -120,7 +122,23 @@ jobs:
       - run: choco install innosetup -y --no-progress
       - name: Build Windows installer
         shell: pwsh
-        run: ./scripts/build_windows.ps1 -Version 0.0.0-ci
+        run: ./scripts/build_windows.ps1 -Version 1.0.4.1
       - name: Install, start, and uninstall the packaged app
         shell: pwsh
-        run: ./tests/windows_installer_smoke.ps1 -Version 0.0.0-ci
+        run: ./tests/windows_installer_smoke.ps1 -Version 1.0.4.1
+      - name: Validate upgrade, data retention, uninstall, and reinstall
+        shell: pwsh
+        run: |
+          $baseline = Join-Path $env:RUNNER_TEMP "nexora-v1.0.4"
+          New-Item -ItemType Directory -Force -Path $baseline | Out-Null
+          gh release download v1.0.4 --repo XY-code1/Nexora --pattern "personal-ai-profile-setup-1.0.4.exe" --dir $baseline
+          $installer = Join-Path $baseline "personal-ai-profile-setup-1.0.4.exe"
+          $expected = "ce17464d9a8b660d265f866bcf36609b2134bdd8df89ee8cd5558ff55f20993a"
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
+            throw "Downloaded v1.0.4 installer hash mismatch."
+          }
+          ./tests/windows_installer_upgrade.ps1 `
+            -BaselineInstaller $installer `
+            -CandidateInstaller "artifacts/personal-ai-profile-setup-1.0.4.1.exe"
+        env:
+          GH_TOKEN: ${{ github.token }}

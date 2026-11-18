@@ -12,7 +12,6 @@ unchanged until a provider integration opts in.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import hmac
 import json
@@ -28,6 +27,7 @@ from filelock import FileLock
 
 from . import profile
 from .vault_identity import app_data_root
+from .windows_security import protect_private_path
 
 REGISTRY_FILE = "providers.json"
 AUDIT_FILE = "provider-audit.jsonl"
@@ -81,8 +81,7 @@ def _save_providers(items: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(str(path) + ".lock", timeout=10):
         path.write_text(json.dumps({"providers": items}, ensure_ascii=False, indent=2), encoding="utf-8")
-    with contextlib.suppress(OSError):
-        os.chmod(path, 0o600)
+    protect_private_path(path)
 
 
 def authorize_provider(provider: str, scopes: list[str]) -> dict[str, Any]:
@@ -274,6 +273,7 @@ def _append_audit(entry: dict[str, Any]) -> dict[str, Any]:
             handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
             handle.flush()
             os.fsync(handle.fileno())
+        protect_private_path(path)
     return record
 
 

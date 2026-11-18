@@ -1,7 +1,7 @@
 # Project Status
 
 Last verified: 2026-11-17（Asia/Shanghai）
-Code baseline: `main@8862bd5` · Public release: `v1.0.4` · Working tree was clean before Release Hardening planning.
+Code baseline: `main@85ea0fe` · Public release: `v1.0.4` · Active candidate: `fix/windows-private-acl`.
 
 ## Current phase
 
@@ -13,7 +13,7 @@ It is not yet classified as a fully validated stable release. Remaining release 
 
 - **Implemented:** Vault create/validate/register/restart-switch, resident external-edit monitoring, memory lifecycle, profile, conversational onboarding, monthly reflection, Human 3.0, Growth, Security Center, AI Connections, provider authorization, import, managed backups, Git history/restore, GitHub Device Flow/private verification, Windows launcher and installer build/smoke automation.
 - **Partial or deliberately limited:** Obsidian is an optional file editor rather than a required plugin; MCP currently exposes Tools but not Resources/Prompts; provider support is limited to the implemented adapters; scheduled backup is not implemented.
-- **Release-hardening work:** Windows ACL/multi-user validation, clean-VM installer acceptance, local Playwright environment validation, real MCP client matrix, and final release documentation.
+- **Release-hardening work:** Windows private-ACL remediation is implemented with local synthetic evidence and pending packaged CI/dual-user acceptance; clean-VM installer acceptance, local Playwright environment validation, real MCP client matrix, and final release documentation remain open.
 
 ## Current automated evidence
 
@@ -24,7 +24,8 @@ It is not yet classified as a fully validated stable release. Remaining release 
 - MCP protocol/security, security lifecycle, provider target binding, backup, GitHub and launcher tests passed.
 - GitHub CI after PR closure: smoke, Windows clean, Playwright E2E and Windows installer smoke all passed on the merged changes.
 - Local Playwright: the earlier Chromium download attempt timed out before tests started. CI success does not close the local download-root-cause task.
-- Clean Windows VM manual installer acceptance and NTFS ACL/multi-user validation: not yet performed.
+- Candidate Win32 protected-DACL unit test: local synthetic Windows run passed; packaged CI and real multi-user validation are pending.
+- Clean Windows VM manual installer acceptance: not yet performed; candidate CI now covers restart, upgrade, data retention, uninstall and reinstall.
 
 ## GitHub status
 

@@ -1,6 +1,6 @@
 # Release Readiness Checklist
 
-状态：**Not ready — planning baseline**
+状态：**Not ready — R1/R2 remediation candidate pending CI and manual acceptance**
 判定规则：只有当前候选提交、真实环境和可追溯证据才能勾选；历史报告不能自动继承为通过。
 
 ## 发布前必须完成（P0）
@@ -34,7 +34,7 @@
 
 ## 当前已知门禁缺口
 
-1. Windows ACL 和双用户隔离没有真实证据。
+1. Windows ACL 候选修复已有本地合成证据，但打包态 CI、普通用户和真实双用户隔离尚未完成。
 2. 干净 VM 的升级、卸载、异常安装恢复没有证据。
 3. 本机 Playwright 下载超时原因未定位；CI 通过不能替代本机调查。
 4. 真实 Claude Desktop、Codex、Cursor、VS Code MCP 验证未执行。

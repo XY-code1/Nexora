@@ -1,3 +1,4 @@
+import argparse
 import json
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT))
 
+import launcher
 from core import profile
 
 
@@ -40,6 +42,11 @@ def main():
         runtime_dir = base / "runtime"
         profile.init(str(vault))
         profile.init(str(second_vault))
+        try:
+            launcher.launch(argparse.Namespace(vault=vault, runtime_dir=vault, port=0, no_browser=True))
+            raise AssertionError("launcher accepted a runtime directory inside the private Vault")
+        except RuntimeError as exc:
+            assert "Runtime 目录不能位于私人 Vault 内" in str(exc)
         command = [
             sys.executable, str(ROOT / "launcher.py"), "--vault", str(vault),
             "--runtime-dir", str(runtime_dir), "--no-browser",

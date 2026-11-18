@@ -27,6 +27,7 @@ from filelock import FileLock
 
 from . import profile
 from .vault_identity import app_data_root
+from .windows_security import protect_private_path
 
 GITHUB_DEVICE_URL = "https://github.com/login/device/code"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
@@ -212,11 +213,7 @@ def _save_connection(record: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(str(path) + ".lock", timeout=10):
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-    try:
-        import os
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+    protect_private_path(path)
 
 
 def connect(vault: str, full_name: str, remote_name: str = "origin") -> dict[str, Any]:

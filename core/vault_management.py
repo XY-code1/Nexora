@@ -17,6 +17,7 @@ from pathlib import Path
 from filelock import FileLock
 
 from .profile import FOLDER_STATUSES, MEMORY_ROOT, REQUIRED, ROOT, SECRET_PATTERNS, VALID_STATUSES, atomic_write, parse_record
+from .windows_security import ensure_private_directory, ensure_private_tree, protect_private_path
 
 CURRENT_SCHEMA_VERSION = 1
 BACKUP_FORMAT = 2
@@ -60,7 +61,8 @@ def schema_version(vault: Path) -> int:
 
 def backup_root() -> Path:
     base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) if os.name == "nt" else Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    return base / "PersonalAIProfile" / "backups"
+    app_data = ensure_private_tree(base / "PersonalAIProfile")
+    return ensure_private_directory(app_data / "backups")
 
 
 def vault_operation_lock(vault: Path) -> FileLock:
@@ -69,8 +71,7 @@ def vault_operation_lock(vault: Path) -> FileLock:
 
 def _path_lock(path: Path, namespace: str) -> FileLock:
     digest = hashlib.sha256(f"{namespace}:{path.resolve()}".encode("utf-8")).hexdigest()[:24]
-    folder = backup_root().parent / "locks"
-    folder.mkdir(parents=True, exist_ok=True)
+    folder = ensure_private_directory(backup_root().parent / "locks")
     filename = str(folder / f"{digest}.lock")
     with _LOCKS_GUARD:
         return _LOCKS.setdefault(filename, FileLock(filename, timeout=30))
@@ -87,6 +88,7 @@ def _local_binding(namespace: str, *values: Path) -> str:
         if descriptor is not None:
             with os.fdopen(descriptor, "wb") as handle:
                 handle.write(secrets.token_bytes(32))
+    protect_private_path(key_file)
     payload = "\0".join([namespace, *(str(value.resolve()) for value in values)]).encode("utf-8")
     return hmac.new(key_file.read_bytes(), payload, hashlib.sha256).hexdigest()
 

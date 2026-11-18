@@ -13,6 +13,7 @@ from filelock import FileLock
 
 from .profile import atomic_write
 from .vault_management import _content_revision, assert_vault_isolated, require_current_schema
+from .windows_security import ensure_private_tree, protect_private_path
 
 IDENTITY_FILE = Path("90 System") / "vault.json"
 
@@ -23,7 +24,7 @@ def _now() -> str:
 
 def app_data_root() -> Path:
     base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) if os.name == "nt" else Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    return base / "PersonalAIProfile"
+    return ensure_private_tree(base / "PersonalAIProfile")
 
 
 def ensure_identity(vault: Path) -> dict[str, str]:
@@ -57,6 +58,7 @@ def register_vault(vault: Path) -> dict[str, str]:
         entries = [item for item in entries if isinstance(item, dict) and item.get("vault_id") != identity["vault_id"]]
         entries.insert(0, entry)
         atomic_write(registry, json.dumps(entries[:20], ensure_ascii=False, indent=2))
+        protect_private_path(registry)
     return entry
 
 
@@ -90,6 +92,7 @@ def forget_vault(vault_id: str) -> dict[str, object]:
     with FileLock(str(registry) + ".lock", timeout=10):
         registry.parent.mkdir(parents=True, exist_ok=True)
         registry.write_text(json.dumps(kept, ensure_ascii=False, indent=2), encoding="utf-8")
+        protect_private_path(registry)
     return {"vaultId": vault_id, "forgotten": True}
 
 

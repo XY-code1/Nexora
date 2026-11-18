@@ -24,6 +24,40 @@ $Runtime = $null
 $InstallSucceeded = $false
 $TestSucceeded = $false
 
+function Assert-PrivateAcl([string]$Path) {
+    $Acl = Get-Acl -LiteralPath $Path
+    if (-not $Acl.AreAccessRulesProtected) {
+        throw "Sensitive path still inherits its parent ACL: $Path"
+    }
+    $Allowed = @(
+        [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value,
+        "S-1-5-18",
+        "S-1-5-32-544"
+    )
+    foreach ($Rule in $Acl.Access | Where-Object AccessControlType -eq Allow) {
+        $Sid = $Rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+        if ($Sid -notin $Allowed) { throw "Unexpected ACL principal $Sid on $Path" }
+    }
+}
+
+function Wait-ForRuntime([System.Diagnostics.Process]$Process, [string]$Path) {
+    $Deadline = [DateTime]::UtcNow.AddSeconds(45)
+    while ([DateTime]::UtcNow -lt $Deadline) {
+        if ($Process.HasExited) { throw "Packaged application exited early with code $($Process.ExitCode)." }
+        if (Test-Path $LauncherError) { throw "Packaged application failed to start: $(Get-Content -Raw $LauncherError)" }
+        if (Test-Path $Path) {
+            try {
+                $Value = Get-Content -Raw $Path | ConvertFrom-Json
+                if ($Value.port -and $Value.token) {
+                    $Health = Invoke-RestMethod -Uri "http://127.0.0.1:$($Value.port)/api/v1/health" -TimeoutSec 3
+                    if ($Health.data.status -eq "ok") { return $Value }
+                }
+            } catch { Start-Sleep -Seconds 1 }
+        } else { Start-Sleep -Seconds 1 }
+    }
+    throw "Packaged application did not report a healthy API within 45 seconds."
+}
+
 New-Item -ItemType Directory -Force -Path $WorkRoot, $VaultDir, $RuntimeDir | Out-Null
 
 try {
@@ -49,35 +83,12 @@ try {
     )
     $AppProcess = Start-Process -FilePath $AppExe -ArgumentList $AppArgs -PassThru -WindowStyle Hidden
 
-    $Healthy = $false
-    $Deadline = [DateTime]::UtcNow.AddSeconds(45)
-    while ([DateTime]::UtcNow -lt $Deadline) {
-        if ($AppProcess.HasExited) {
-            throw "Packaged application exited early with code $($AppProcess.ExitCode)."
-        }
-        if (Test-Path $LauncherError) {
-            throw "Packaged application failed to start: $(Get-Content -Raw $LauncherError)"
-        }
-        if (Test-Path $RuntimeFile) {
-            try {
-                $Runtime = Get-Content -Raw $RuntimeFile | ConvertFrom-Json
-                if ($Runtime.port -and $Runtime.token) {
-                    $Health = Invoke-RestMethod -Uri "http://127.0.0.1:$($Runtime.port)/api/v1/health" -TimeoutSec 3
-                    if ($Health.data.status -eq "ok") {
-                        $Healthy = $true
-                        break
-                    }
-                }
-            } catch {
-                Start-Sleep -Seconds 1
-            }
-        } else {
-            Start-Sleep -Seconds 1
-        }
-    }
-    if (-not $Healthy) {
-        throw "Packaged application did not report a healthy API within 45 seconds."
-    }
+    $Runtime = Wait-ForRuntime $AppProcess $RuntimeFile
+    $OldToken = $Runtime.token
+    $VaultIdentity = (Get-Content -Raw (Join-Path $VaultDir "90 System\vault.json") | ConvertFrom-Json).vault_id
+    Assert-PrivateAcl $RuntimeDir
+    Assert-PrivateAcl $RuntimeFile
+    Assert-PrivateAcl (Join-Path $env:LOCALAPPDATA "PersonalAIProfile")
 
     $Headers = @{ Authorization = "Bearer $($Runtime.token)" }
     $Clients = Invoke-RestMethod -Uri "http://127.0.0.1:$($Runtime.port)/api/v1/security/clients" -Headers $Headers -TimeoutSec 5
@@ -88,8 +99,24 @@ try {
     if (-not $AppProcess.WaitForExit(15000)) {
         throw "Packaged application did not stop after the authenticated shutdown request."
     }
+
+    $AppProcess = Start-Process -FilePath $AppExe -ArgumentList $AppArgs -PassThru -WindowStyle Hidden
+    $Runtime = Wait-ForRuntime $AppProcess $RuntimeFile
+    if ($Runtime.token -eq $OldToken) { throw "Restart reused the previous runtime token." }
+    if ((Get-Content -Raw (Join-Path $VaultDir "90 System\vault.json") | ConvertFrom-Json).vault_id -ne $VaultIdentity) {
+        throw "Restart changed the synthetic Vault identity."
+    }
+    try {
+        Invoke-RestMethod -Uri "http://127.0.0.1:$($Runtime.port)/api/v1/vault" -Headers @{ Authorization = "Bearer $OldToken" } -TimeoutSec 5 | Out-Null
+        throw "The previous runtime token remained valid after restart."
+    } catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 401) { throw }
+    }
+    $Headers = @{ Authorization = "Bearer $($Runtime.token)" }
+    Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$($Runtime.port)/api/v1/shutdown" -Headers $Headers -TimeoutSec 5 | Out-Null
+    if (-not $AppProcess.WaitForExit(15000)) { throw "Restarted application did not stop in time." }
     $TestSucceeded = $true
-    Write-Host "Windows installer smoke test passed: install, start, health check, authenticated shutdown."
+    Write-Host "Windows installer smoke passed: install, private ACL, restart, token rotation, and shutdown."
 } catch {
     Write-Host "Windows installer smoke test failed. Temporary diagnostics: $WorkRoot"
     if (Test-Path $LauncherError) {
@@ -123,6 +150,9 @@ try {
     }
     if ($InstallSucceeded -and (Test-Path $InstallDir)) {
         throw "Uninstaller left the installation directory behind: $InstallDir"
+    }
+    if ($InstallSucceeded -and -not (Test-Path (Join-Path $VaultDir "90 System\vault.json"))) {
+        throw "Uninstaller removed the external synthetic Vault."
     }
     if ($TestSucceeded) {
         Remove-Item -Path $WorkRoot -Recurse -Force -ErrorAction SilentlyContinue

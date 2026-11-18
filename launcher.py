@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
 import secrets
@@ -24,6 +23,7 @@ import uvicorn
 from filelock import FileLock, Timeout
 
 from apps.api import create_app
+from core.windows_security import ensure_private_directory, protect_private_path
 
 ROOT = Path(__file__).parent
 HOST = "127.0.0.1"
@@ -130,8 +130,7 @@ def write_runtime(path: Path, *, port: int, token: str, vault: Path) -> None:
         "vault": str(vault), "started": time.time(),
     }, ensure_ascii=False), encoding="utf-8")
     os.replace(temporary, path)
-    with contextlib.suppress(OSError):
-        os.chmod(path, 0o600)
+    protect_private_path(path)
 
 
 def wait_and_open(port: int, token: str, no_browser: bool) -> None:
@@ -145,7 +144,14 @@ def wait_and_open(port: int, token: str, no_browser: bool) -> None:
 
 def launch(args: argparse.Namespace) -> int:
     state_dir = runtime_directory(args.runtime_dir)
-    state_dir.mkdir(parents=True, exist_ok=True)
+    vault = choose_vault(args.vault)
+    try:
+        state_dir.relative_to(vault)
+    except ValueError:
+        pass
+    else:
+        raise RuntimeError("Runtime 目录不能位于私人 Vault 内；请选择独立目录。")
+    ensure_private_directory(state_dir)
     runtime_file = state_dir / "runtime.json"
     lock_file = state_dir / "launcher.lock"
     lock = FileLock(lock_file)
@@ -164,7 +170,6 @@ def launch(args: argparse.Namespace) -> int:
 
     try:
         web_dist = ensure_web_build()
-        vault = choose_vault(args.vault)
         while True:
             ensure_vault(vault)
             token = secrets.token_urlsafe(32)
@@ -211,8 +216,15 @@ def launch(args: argparse.Namespace) -> int:
 
 
 def show_error(message: str, state_dir: Path) -> None:
-    state_dir.mkdir(parents=True, exist_ok=True)
-    (state_dir / "launcher-error.log").write_text(message, encoding="utf-8")
+    try:
+        ensure_private_directory(state_dir)
+        log = state_dir / "launcher-error.log"
+        log.write_text(message, encoding="utf-8")
+        protect_private_path(log)
+    except (OSError, RuntimeError):
+        # Never leave a diagnostic in an unprotected file. Presentation below
+        # must still report the original startup error.
+        pass
     try:
         from tkinter import Tk, messagebox
         root = Tk()

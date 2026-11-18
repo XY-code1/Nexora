@@ -39,7 +39,7 @@ MCP stdio gateway mcp_server.py ── scoped token + PROFILE_VAULT_ID handshake
 - **MCP Gateway — 已实现但刻意最小化**：7 个 tools、7 个 scopes、Vault identity 绑定；没有 Resources/Prompts。
 - **Security Center — 已实现**：客户端生命周期、hash-only token、scope、撤销/删除、哈希链审计、完整性失败关闭。
 - **AI Connections — 已实现**：客户端注册/授权/重签/撤销/删除及 Host 配置向导；当前仓库没有真实 Claude Desktop 安装环境验收证据。
-- **Windows Launcher — 已实现**：单实例、动态端口、一次性 fragment token、健康等待、关闭清理；安装器由 PyInstaller + Inno Setup 构建。
+- **Windows Launcher — 已实现**：单实例、动态端口、一次性 fragment token、健康等待、关闭清理；敏感 runtime/app-data 文件使用仅限当前用户、SYSTEM 和 Administrators 的 protected DACL；安装器由 PyInstaller + Inno Setup 构建。
 - **Backup & Recovery — 已实现（手动）**：managed backup、校验、保留/配额、恢复安全备份、Git 历史恢复；定时自动备份未实现。
 - **Obsidian Integration — 部分实现**：模板含 `.obsidian`，外部编辑通过 VaultMonitor 检测；没有专用 Obsidian 插件，也不应成为强依赖。
 - **AI Provider Architecture — 已实现可选连接器**：授权记录、精确 outbound preview、逐次 decision、审计和 OpenAI-compatible/Anthropic adapter；不是通用插件生态。
