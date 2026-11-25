@@ -5,6 +5,7 @@ import { ApiClient, ApiError, type Human3Trend, type Memory, type MemoryStats, t
 import MemoryReviewPage from './MemoryReviewPage'
 import MemoryTimelinePage from './MemoryTimelinePage'
 import MonthlyReflectionPage from './MonthlyReflectionPage'
+import { clearReflectionDraft } from './reflectionDraft'
 import SecurityCenterPage from './SecurityCenterPage'
 import MonthlyTrendPage from './MonthlyTrendPage'
 import GrowthDashboard from './GrowthDashboard'
@@ -123,6 +124,8 @@ function App() {
   const [human3View, setHuman3View] = useState<Human3Trend | null>(null)
   const [monthlyView, setMonthlyView] = useState<MonthlyOverview | null>(null)
   const [reflectionView, setReflectionView] = useState<MonthlyReflection | null>(null)
+  const [reflectionDirty, setReflectionDirty] = useState(false)
+  const [reflectionConflict, setReflectionConflict] = useState(false)
   const [monthlyTrendView, setMonthlyTrendView] = useState<MonthlyTrend | null>(null)
   const [visualLoading, setVisualLoading] = useState<View | null>(null)
   const [navigationOpen, setNavigationOpen] = useState(false)
@@ -144,8 +147,14 @@ function App() {
   }, [highContrast])
   const sessionEpoch = useRef(0)
   const viewRequest = useRef(0)
+  const reflectionMutationEpoch = useRef(0)
+  const reflectionDirtyRef = useRef(false)
+  const viewRef = useRef<View>('review')
   const visualAbort = useRef<AbortController | null>(null)
   const sessionAbort = useRef<AbortController | null>(null)
+
+  useEffect(() => { reflectionDirtyRef.current = reflectionDirty }, [reflectionDirty])
+  useEffect(() => { viewRef.current = view }, [view])
   const stageRef = useRef<HTMLElement>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
@@ -266,6 +275,14 @@ function App() {
         else setView('overview')
         return
       }
+      if (viewRef.current === 'reflection' && next !== 'reflection' && reflectionDirtyRef.current) {
+        if (!window.confirm(t('monthly.leaveConfirm'))) {
+          window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES.reflection}`)
+          return
+        }
+        reflectionDirtyRef.current = false
+        setReflectionDirty(false)
+      }
       if (client) void openView(next, false)
       else setView(next)
     }
@@ -275,7 +292,7 @@ function App() {
       window.removeEventListener('hashchange', onRouteChange)
       window.removeEventListener('popstate', onRouteChange)
     }
-  }, [client])
+  }, [client, t])
 
   useEffect(() => {
     if (!token) return
@@ -366,6 +383,7 @@ function App() {
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES.review}`)
     setView('review')
     setProfileView(null); setSecurityView(null); setHuman3View(null); setMonthlyView(null); setReflectionView(null); setClientCredential('')
+    setReflectionDirty(false); setReflectionConflict(false)
     setVisualLoading(null)
     setFirstRun(false)
     setGateError(message)
@@ -373,6 +391,13 @@ function App() {
 
   async function openView(next: View, updateRoute = true, compete = true) {
     if (!client) return
+    // 月度复盘有未保存内容时，应用内导航前提醒；草稿仍留在本机以便恢复。
+    if (compete && view === 'reflection' && next === 'reflection' && reflectionDirty) return
+    if (compete && view === 'reflection' && next !== 'reflection' && reflectionDirty) {
+      if (!window.confirm(t('monthly.leaveConfirm'))) return
+      reflectionDirtyRef.current = false
+      setReflectionDirty(false)
+    }
     // 初始化补数：若用户在此期间已经导航到别处，直接放弃，避免把视图覆盖回去。
     if (updateRoute && window.location.hash !== VIEW_ROUTES[next]) {
       window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${VIEW_ROUTES[next]}`)
@@ -429,10 +454,13 @@ function App() {
       const result = await action(client, signal)
       if (epoch !== sessionEpoch.current || signal?.aborted) return false
       setReflectionView(result)
+      reflectionMutationEpoch.current += 1
       setMonthlyView((current) => current ? { ...current, reflections: [result, ...current.reflections.filter((item) => item.id !== result.id)].sort((a, b) => b.month.localeCompare(a.month)) } : current)
       return true
     } catch (error) {
       if (epoch !== sessionEpoch.current || signal?.aborted) return false
+      // revision 冲突：后端已拒绝覆盖，这里标记出来让页面提供丢弃/恢复选择。
+      if (error instanceof ApiError && error.status === 409) setReflectionConflict(true)
       handleMutationError(error)
       return false
     } finally { if (epoch === sessionEpoch.current) setSaving(false) }
@@ -446,6 +474,31 @@ function App() {
   function generateReflectionSummary() { return reflectionView ? monthlyAction((api, signal) => api.generateMonthlySummary(reflectionView.id, reflectionView.revision, signal)) : Promise.resolve(false) }
   function saveReflectionSummary(summary: string) { return reflectionView ? monthlyAction((api, signal) => api.saveMonthlySummary(reflectionView.id, summary, reflectionView.revision, signal)) : Promise.resolve(false) }
   async function confirmReflection() { if (!reflectionView || !window.confirm(t('app.confirmReflection'))) return false; const ok = await monthlyAction((api, signal) => api.confirmMonthly(reflectionView.id, reflectionView.revision, signal)); if (ok) setNotice({ kind: 'success', text: t('app.reflectionConfirmed') }); return Boolean(ok) }
+
+  // 冲突后回到服务器版本：丢弃本机草稿并重新拉取，绝不静默覆盖较新内容。
+  async function reloadReflectionServer() {
+    if (!client) return
+    const id = reflectionView?.id
+    const mutationEpoch = reflectionMutationEpoch.current
+    const session = sessionEpoch.current
+    try {
+      const result = await client.monthlyOverview(sessionAbort.current?.signal)
+      if (session !== sessionEpoch.current || mutationEpoch !== reflectionMutationEpoch.current) return
+      setMonthlyView(result)
+      const next = result.reflections.find((item) => item.id === id)
+        ?? result.reflections.find((item) => item.month === result.currentMonth)
+        ?? result.reflections[0]
+        ?? null
+      setReflectionView(next)
+      if (id) clearReflectionDraft(id)
+      reflectionDirtyRef.current = false
+      setReflectionConflict(false)
+      setReflectionDirty(false)
+      setNotice({ kind: 'success', text: t('monthly.reloaded') })
+    } catch (error) {
+      handleMutationError(error)
+    }
+  }
 
   async function refreshSecurity() { if (!client) return false; try { const result = await client.securityCenter(sessionAbort.current?.signal); setSecurityView(result); return true } catch (error) { handleMutationError(error); return false } }
   async function authorizeSecurityClient(name: string, scopes: string[]) { if (!client) return null; setSaving(true); try { const result = await client.authorizeSecurityClient(name, scopes, sessionAbort.current?.signal); setClientCredential(result.credential); setNotice({ kind: 'success', text: t('app.clientAuthorized') }); await refreshSecurity(); return result.client.id } catch (error) { handleMutationError(error); return null } finally { setSaving(false) } }
@@ -594,7 +647,7 @@ function App() {
             { label: t('nav.monthlyReflection'), view: 'reflection', active: view === 'reflection' },
             { label: t('nav.monthly'), view: 'monthly', active: view === 'monthly' },
           ]} onSelect={(next) => void openView(next)} />
-          {view === 'reflection' && <MonthlyReflectionPage overview={monthlyView} selected={reflectionView} loading={visualLoading === 'reflection'} saving={saving} onSelect={setReflectionView} onCreate={createReflection} onDimension={saveReflectionDimension} onAddEvent={addReflectionEvent} onDeleteEvent={deleteReflectionEvent} onGoals={saveReflectionGoals} onGenerateSummary={generateReflectionSummary} onSummary={saveReflectionSummary} onConfirm={confirmReflection} />}
+          {view === 'reflection' && <MonthlyReflectionPage overview={monthlyView} selected={reflectionView} loading={visualLoading === 'reflection'} saving={saving} onSelect={setReflectionView} onCreate={createReflection} onDimension={saveReflectionDimension} onAddEvent={addReflectionEvent} onDeleteEvent={deleteReflectionEvent} onGoals={saveReflectionGoals} onGenerateSummary={generateReflectionSummary} onSummary={saveReflectionSummary} onConfirm={confirmReflection} onDirtyChange={setReflectionDirty} conflict={reflectionConflict} onConflictDismiss={() => setReflectionConflict(false)} onReloadServer={() => void reloadReflectionServer()} />}
           {view === 'monthly' && <MonthlyTrendPage value={monthlyTrendView} loading={visualLoading === 'monthly'} />}
         </>}
         {(view === 'growth' || view === 'human3') && <>
