@@ -13,6 +13,7 @@ afterEach(() => {
 })
 beforeEach(() => {
   window.history.replaceState(null, '', '/#/memory-review')
+  localStorage.removeItem('nexora.onboarding.step')
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
@@ -377,19 +378,44 @@ describe('review workspace', () => {
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
 
-    // 首次启动直接进入一页式引导，不展示完整功能菜单。
+    // 首次启动进入分步引导，不展示完整功能菜单。
     await screen.findByRole('heading', { name: '欢迎来到 NEXORA 个人智能中枢' })
     expect(screen.queryByRole('button', { name: '成长仪表盘' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '欢迎' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
     expect(screen.getByText('创建你的个人空间')).toBeInTheDocument()
+    // 第三步说明本地优先的数据归属与使用方式。
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
     expect(screen.getByText('Obsidian 是可选编辑器，不是使用产品的前置条件。')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: /同时使用 Obsidian/ }))
-
+    // 第四步创建第一条候选记忆。
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
     fireEvent.click(screen.getByRole('button', { name: /开始对话建档/ }))
     await screen.findByText('我应该怎么称呼你？')
     expect(screen.queryByRole('button', { name: '成长仪表盘' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '暂时结束并进入工作台' }))
+    await screen.findByText('一切就绪')
+    fireEvent.click(screen.getAllByRole('button', { name: '进入总览' })[0])
     expect(calls).toContain('/api/v1/initialized')
     expect(spy).toHaveBeenCalled()
+  })
+
+  it('resumes the first-run wizard from the last interrupted step', async () => {
+    localStorage.setItem('nexora.onboarding.step', '4')
+    mockApi({
+      '/api/v1/memories': [],
+      '/api/v1/memory-stats': { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 },
+      '/api/v1/overview': { profile: { access: 'allowed', protected: false, sections: [] }, memory: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready', initialized: false },
+      '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/initialized': { initialized: true },
+      '/api/v1/onboarding': { topics: [], nextTopic: null, completed: true, notice: '' },
+    })
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByText('开始建立个人档案')
+    expect(screen.getByText('已恢复到你上次中断的步骤。')).toBeInTheDocument()
+    expect(screen.getByText('第一条记忆')).toBeInTheDocument()
   })
 
   it('shows the GitHub onboarding page and its token-safety boundary', async () => {
@@ -522,6 +548,8 @@ describe('review workspace', () => {
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByRole('heading', { name: '欢迎来到 NEXORA 个人智能中枢' })
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
     await screen.findByText(/最近使用的个人空间/)
     expect(screen.getAllByText('当前空间').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /旧空间/ }))
@@ -568,7 +596,8 @@ describe('review workspace', () => {
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-    await screen.findByText('欢迎来到 NEXORA 个人智能中枢')
+    await screen.findByRole('heading', { name: '欢迎来到 NEXORA 个人智能中枢' })
+    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
     fireEvent.click(screen.getByRole('button', { name: /创建新的 Vault/ }))
     await waitFor(() => expect(screen.getByLabelText('新 Vault 的文件夹路径')).toHaveValue('C:\\Users\\test\\Nexora\\vault/my-ai-profile'))
 

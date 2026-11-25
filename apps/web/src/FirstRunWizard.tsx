@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Check, FolderOpen, FolderPlus, Globe, Note, Sparkle, Trash } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowRight, Check, FolderOpen, FolderPlus, GithubLogo, Globe, Note, Sparkle, Trash } from '@phosphor-icons/react'
 import type { ApiClient, OnboardingState, RegisteredVault } from './api'
 import ConversationalOnboardingPage from './ConversationalOnboardingPage'
 import { vaultHint } from './vaultHints'
@@ -10,11 +10,41 @@ function joinPath(base: string, name: string) {
   return `${base.replace(/[\\/]+$/, '')}/${name.replace(/^[\\/]+/, '')}`
 }
 
+const TOTAL_STEPS = 5
+const STEP_KEY = 'nexora.onboarding.step'
+const USAGE_KEY = 'nexora.onboarding.usage'
+const GITHUB_KEY = 'nexora.onboarding.github-backup'
+const STEP_ITEMS = ['wizard.stepWelcome', 'wizard.stepSpace', 'wizard.stepData', 'wizard.stepMemory', 'wizard.stepDone']
+
+function readStep(): number {
+  try {
+    const value = Number(localStorage.getItem(STEP_KEY))
+    return value >= 1 && value <= TOTAL_STEPS ? value : 1
+  } catch {
+    return 1
+  }
+}
+
+function readUsage(): 'web' | 'obsidian' {
+  try { return localStorage.getItem(USAGE_KEY) === 'obsidian' ? 'obsidian' : 'web' } catch { return 'web' }
+}
+
+function readGithubPreference(): boolean {
+  try { return localStorage.getItem(GITHUB_KEY) === 'true' } catch { return false }
+}
+
 type Props = { client: ApiClient; vaultName: string; onFinish: (destination: 'overview' | 'review') => void }
 
+/**
+ * 分步首次启动引导（issue #63）：
+ * 1) 创建/连接个人空间；2) 用简洁语言说明本地优先的数据归属；
+ * 3) 创建第一条候选记忆；4) 完成页给出明确的下一步入口。
+ * 进度写入本机，中断后可从上次步骤继续；完成时才标记已初始化，已有用户不会被重复引导。
+ */
 export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   const t = useT()
-  const [usage, setUsage] = useState<'web' | 'obsidian'>('web')
+  const [usage, setUsageState] = useState<'web' | 'obsidian'>(readUsage)
+  const [githubBackup, setGithubBackupState] = useState(readGithubPreference)
   const [mode, setMode] = useState<'create' | 'connect' | null>(null)
   const [path, setPath] = useState('')
   const [busy, setBusy] = useState('')
@@ -28,6 +58,8 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   const [connecting, setConnecting] = useState('')
   const [defaultPath, setDefaultPath] = useState('')
   const [folderName, setFolderName] = useState('')
+  const [step, setStepState] = useState(readStep)
+  const [restored] = useState(() => readStep() > 1)
 
   useEffect(() => {
     document.documentElement.scrollTop = 0
@@ -40,6 +72,26 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
       setPath((current) => current || joinPath(result.path, 'my-ai-profile'))
     }).catch(() => undefined)
   }, [client])
+
+  function setStep(next: number) {
+    setStepState(next)
+    try { localStorage.setItem(STEP_KEY, String(next)) } catch { /* storage unavailable */ }
+  }
+
+  function setUsage(next: 'web' | 'obsidian') {
+    setUsageState(next)
+    try { localStorage.setItem(USAGE_KEY, next) } catch { /* storage unavailable */ }
+  }
+
+  function setGithubBackup(next: boolean) {
+    setGithubBackupState(next)
+    try { localStorage.setItem(GITHUB_KEY, String(next)) } catch { /* storage unavailable */ }
+  }
+
+  function startOver() {
+    try { localStorage.removeItem(STEP_KEY); localStorage.removeItem(USAGE_KEY); localStorage.removeItem(GITHUB_KEY) } catch { /* ignore */ }
+    setUsageState('web'); setGithubBackupState(false); setMode(null); setPath(''); setFolderName(''); setError(''); setDone(''); setStepState(1)
+  }
 
   async function run(action: 'create' | 'connect') {
     const target = path.trim()
@@ -90,6 +142,9 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   }
 
   async function finish(destination: 'overview' | 'review') {
+    try { localStorage.removeItem(STEP_KEY) } catch { /* ignore */ }
+    try { localStorage.removeItem(USAGE_KEY) } catch { /* ignore */ }
+    try { localStorage.removeItem(GITHUB_KEY) } catch { /* ignore */ }
     try { await client.markInitialized() } catch { /* The wizard reappears next time; that does not block usage. */ }
     onFinish(destination)
   }
@@ -109,10 +164,12 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
   }
 
   if (interview) return <main className="wizard wizard-interview" aria-label={t('wizard.interviewLabel')}>
-    <header className="wizard-interview-header"><div><p className="wizard-badge"><Sparkle size={14} weight="fill" />{t('wizard.interviewLabel')} · Local only</p><h1>{t('wizard.interviewTitle')}</h1><p>{t('wizard.interviewHint')}</p></div><button className="text-button" onClick={() => void finish('overview')}>{t('wizard.finishAndEnter')}</button></header>
+    <header className="wizard-interview-header"><div><p className="wizard-badge"><Sparkle size={14} weight="fill" />{t('wizard.interviewLabel')} · Local only</p><h1>{t('wizard.interviewTitle')}</h1><p>{t('wizard.interviewHint')}</p></div><button className="text-button" onClick={() => { setInterview(false); setStep(5) }}>{t('wizard.finishAndEnter')}</button></header>
     {error && <p className="wizard-error" role="alert">{error}</p>}
     <ConversationalOnboardingPage value={interviewState} loading={interviewLoading} saving={Boolean(busy)} onSave={saveInterview} onReview={() => void finish('review')} />
   </main>
+
+  const stepLabels = STEP_ITEMS.map((key) => t(key))
 
   return <main className="wizard" aria-label={t('wizard.label')}>
     <header className="wizard-intro">
@@ -127,8 +184,25 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
       <figcaption><strong>Your Intelligence. Your Data. Your Control.</strong><span>Local-first personal intelligence platform</span></figcaption>
     </figure>
 
-    <section className="wizard-section" aria-labelledby="wizard-space-title">
-      <header><span>01</span><div><h2 id="wizard-space-title">{t('wizard.spaceTitle')}</h2><p>{t('wizard.currentSpace', { name: vaultName })}</p></div></header>
+    <ol className="wizard-flow" aria-label={t('wizard.label')}>
+      {stepLabels.map((label, index) => {
+        const number = index + 1
+        const state = number < step ? 'done' : number === step ? 'active' : ''
+        return <li key={label} className={`wizard-flow-step ${state}`.trim()} aria-current={number === step ? 'step' : undefined}>
+          <span className="wizard-flow-dot">{number < step ? <Check size={13} /> : number}</span>
+          <span className="wizard-flow-label">{label}</span>
+        </li>
+      })}
+    </ol>
+    {restored && <p className="wizard-progress-note">{t('wizard.progressRestored')}</p>}
+
+    {step === 1 && <section className="wizard-step-panel" aria-labelledby="wizard-welcome-title">
+      <header className="wizard-section-head"><span>01</span><div><h2 id="wizard-welcome-title">{t('wizard.stepWelcome')}</h2><p>{t('wizard.subtitle')}</p></div></header>
+      <p className="wizard-hint">{t('wizard.vaultNote')}</p>
+    </section>}
+
+    {step === 2 && <section className="wizard-step-panel" aria-labelledby="wizard-space-title">
+      <header className="wizard-section-head"><span>02</span><div><h2 id="wizard-space-title">{t('wizard.spaceTitle')}</h2><p>{t('wizard.currentSpace', { name: vaultName })}</p></div></header>
       <div className="wizard-space-grid">
         <button className={mode === 'create' ? 'selected' : ''} onClick={() => { setMode('create'); setError(''); setDone('') }}><FolderPlus size={25} /><span><strong>{t('wizard.createNew')}</strong><small>{t('wizard.createNewHint')}</small></span><ArrowRight size={18} /></button>
         <button className={mode === 'connect' ? 'selected' : ''} onClick={() => { setMode('connect'); setError(''); setDone('') }}><FolderOpen size={25} /><span><strong>{t('wizard.connectExisting')}</strong><small>{t('wizard.connectExistingHint')}</small></span><ArrowRight size={18} /></button>
@@ -151,19 +225,45 @@ export default function FirstRunWizard({ client, vaultName, onFinish }: Props) {
       </div>}
       {done && <p className="wizard-done" role="status"><Check size={17} />{done}</p>}
       {error && <p className="wizard-error" role="alert">{error}</p>}
-    </section>
+    </section>}
 
-    <section className="wizard-section" aria-labelledby="wizard-usage-title">
-      <header><span>02</span><div><h2 id="wizard-usage-title">{t('wizard.usageTitle')}</h2><p>{t('wizard.usageHint')}</p></div></header>
+    {step === 3 && <section className="wizard-step-panel" aria-labelledby="wizard-data-title">
+      <header className="wizard-section-head"><span>03</span><div><h2 id="wizard-data-title">{t('wizard.dataTitle')}</h2><p>{t('wizard.dataDetail')}</p></div></header>
+      <div className="wizard-data-points">
+        <div className="wizard-data-point"><strong>{t('wizard.dataPoint1Title')}</strong><small>{t('wizard.dataPoint1Detail')}</small></div>
+        <div className="wizard-data-point"><strong>{t('wizard.dataPoint2Title')}</strong><small>{t('wizard.dataPoint2Detail')}</small></div>
+        <div className="wizard-data-point"><strong>{t('wizard.dataPoint3Title')}</strong><small>{t('wizard.dataPoint3Detail')}</small></div>
+      </div>
       <div className="wizard-options" role="radiogroup" aria-label={t('wizard.usageLabel')}>
         <button role="radio" aria-checked={usage === 'web'} className={usage === 'web' ? 'selected' : ''} onClick={() => setUsage('web')}><Globe size={23} /><span><strong>{t('wizard.webOnly')}</strong><small>{t('wizard.webOnlyHint')}</small></span><em>{t('wizard.webDefault')}</em></button>
         <button role="radio" aria-checked={usage === 'obsidian'} className={usage === 'obsidian' ? 'selected' : ''} onClick={() => setUsage('obsidian')}><Note size={23} /><span><strong>{t('wizard.withObsidian')}</strong><small>{t('wizard.withObsidianHint')}</small></span><em>{t('wizard.obsidianOptional')}</em></button>
       </div>
-    </section>
+      <div className="wizard-options">
+        <button aria-pressed={githubBackup} className={githubBackup ? 'selected' : ''} onClick={() => setGithubBackup(!githubBackup)}><GithubLogo size={23} /><span><strong>{t('wizard.githubOptional')}</strong><small>{t('wizard.githubOptionalHint')}</small></span><em>{t('wizard.obsidianOptional')}</em></button>
+      </div>
+      <p className="wizard-hint">{t('wizard.usageHint')}</p>
+    </section>}
 
-    <section className="wizard-section wizard-profile-start" aria-labelledby="wizard-profile-title">
-      <header><span>03</span><div><h2 id="wizard-profile-title">{t('wizard.profileTitle')}</h2><p>{t('wizard.profileHint')}</p></div></header>
-      <div className="wizard-final-actions"><button className="primary-action" onClick={() => void startInterview()}>{t('wizard.startInterview')} <ArrowRight size={17} /></button><button className="text-button" onClick={() => void finish('overview')}>{t('wizard.enterOverview')}</button></div>
-    </section>
+    {step === 4 && <section className="wizard-step-panel" aria-labelledby="wizard-profile-title">
+      <header className="wizard-section-head"><span>04</span><div><h2 id="wizard-profile-title">{t('wizard.profileTitle')}</h2><p>{t('wizard.profileHint')}</p></div></header>
+      <div className="wizard-final-actions"><button className="primary-action" onClick={() => void startInterview()}>{t('wizard.startInterview')} <ArrowRight size={17} /></button><button className="text-button" onClick={() => setStep(5)}>{t('wizard.skipInterview')}</button></div>
+    </section>}
+
+    {step === 5 && <section className="wizard-step-panel" aria-labelledby="wizard-done-title">
+      <header className="wizard-section-head"><span>05</span><div><h2 id="wizard-done-title">{t('wizard.doneTitle')}</h2><p>{t('wizard.doneDetail')}</p></div></header>
+      <div className="wizard-data-points">
+        <div className="wizard-data-point"><strong>{t('wizard.dataPoint1Title')}</strong><small>{t('wizard.dataPoint1Detail')}</small></div>
+        <div className="wizard-data-point"><strong>{t('wizard.dataPoint3Title')}</strong><small>{t('wizard.dataPoint3Detail')}</small></div>
+      </div>
+      <div className="wizard-final-actions"><button className="primary-action" onClick={() => void finish('overview')}>{t('wizard.goOverview')}</button><button className="secondary-action" onClick={() => void finish('review')}>{t('wizard.goReview')}</button></div>
+    </section>}
+
+    <div className="wizard-nav-row">
+      <button className="secondary-action" onClick={() => setStep(Math.max(1, step - 1))} disabled={step === 1}><ArrowLeft size={16} />{t('wizard.back')}</button>
+      <button className="text-button" onClick={startOver}>{t('wizard.startOver')}</button>
+      {step < TOTAL_STEPS
+        ? <button className="primary-action" onClick={() => setStep(Math.min(TOTAL_STEPS, step + 1))}>{t('wizard.next')} <ArrowRight size={16} /></button>
+        : <button className="primary-action" onClick={() => void finish('overview')}>{t('wizard.goOverview')}</button>}
+    </div>
   </main>
 }

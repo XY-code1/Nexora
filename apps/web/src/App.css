@@ -257,6 +257,25 @@ html.high-contrast .topbar,html.high-contrast .sidebar{border-color:rgba(255,255
 .wizard-interview>.onboarding-page{width:min(1280px,100%);margin-inline:auto}
 .wizard-interview .onboarding-heading{display:none}
 @media(max-width:700px){.wizard{padding:22px 16px 36px}.wizard-intro h1{font-size:2.45rem}.wizard-hero-image{height:300px;border-radius:20px}.wizard-space-grid,.wizard-options{grid-template-columns:1fr}.wizard-path-row{grid-template-columns:1fr}.wizard-path-row button{width:100%}.wizard-final-actions>*{width:100%;justify-content:center}}
+.wizard-flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:min(1080px,100%);margin:0 auto 18px;padding:0;list-style:none}
+.wizard-flow-step{display:flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:.78rem}
+.wizard-flow-dot{display:grid;place-items:center;width:26px;height:26px;border:1px solid var(--border-subtle);border-radius:50%;background:rgba(8,13,24,.5);font:700 .7rem ui-monospace,monospace}
+.wizard-flow-step.active{color:var(--text-primary)}
+.wizard-flow-step.active .wizard-flow-dot{color:var(--bg-primary);border-color:var(--color-cyan);background:var(--color-cyan)}
+.wizard-flow-step.done .wizard-flow-dot{color:var(--color-success);border-color:rgba(54,214,154,.45);background:rgba(54,214,154,.1)}
+.wizard-step-panel{width:min(1080px,100%);margin:0 auto;display:grid;gap:18px}
+.wizard-section-head{display:grid;grid-template-columns:38px 1fr;gap:14px;align-items:start;padding-top:8px;border-top:1px solid var(--border-subtle)}
+.wizard-section-head>span{display:grid;place-items:center;width:34px;height:34px;color:var(--color-cyan);border:1px solid rgba(32,217,232,.35);border-radius:10px;background:rgba(32,217,232,.06);font:700 .7rem ui-monospace,monospace}
+.wizard-section-head h2{margin:0 0 5px;font-size:1.35rem;letter-spacing:-.03em}
+.wizard-section-head p{margin:0;color:var(--text-secondary);font-size:.82rem;line-height:1.55}
+.wizard-data-points{display:grid;gap:10px}
+.wizard-data-point{display:grid;gap:4px;padding:14px 16px;border:1px solid var(--border-subtle);border-radius:12px;background:#0b1525}
+.wizard-data-point strong{font-size:.9rem}
+.wizard-data-point small{color:var(--text-secondary);font-size:.78rem;line-height:1.55}
+.wizard-nav-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:min(1080px,100%);margin:0 auto;padding:18px 0 0;border-top:1px solid var(--border-subtle)}
+.wizard-nav-row>button{display:inline-flex;align-items:center;gap:8px}
+.wizard-progress-note{width:min(1080px,100%);margin:0 auto;color:var(--text-secondary);font-size:.78rem}
+@media(max-width:700px){.wizard-flow{gap:8px}.wizard-nav-row{flex-direction:column-reverse}.wizard-nav-row>button{width:100%;justify-content:center}}
 @media(max-width:700px){.wizard-interview-header{align-items:flex-start;flex-direction:column}.wizard-interview-header .text-button{width:100%}}
 /* Product flow — stage 2: daily-use home answering four questions.
    减密：单一中文标题、宽行高、去掉英文标签与脚注。 */
