@@ -14,7 +14,12 @@ afterEach(() => {
 beforeEach(() => {
   window.history.replaceState(null, '', '/#/memory-review')
   localStorage.removeItem('nexora.onboarding.step')
+  localStorage.removeItem('nexora.onboarding.step.v2')
+  localStorage.removeItem('nexora.onboarding.usage')
+  localStorage.removeItem('nexora.onboarding.github-backup')
+  localStorage.removeItem('nexora.onboarding.topic')
   vi.spyOn(window, 'confirm').mockReturnValue(true)
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
 })
 
 const memory = {
@@ -379,29 +384,33 @@ describe('review workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
 
     // 首次启动进入分步引导，不展示完整功能菜单。
-    await screen.findByRole('heading', { name: '欢迎来到 NEXORA 个人智能中枢' })
+    await screen.findByRole('heading', { name: '欢迎来到 NEXORA' })
     expect(screen.queryByRole('button', { name: '成长仪表盘' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '欢迎' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    expect(screen.getByText('创建你的个人空间')).toBeInTheDocument()
-    // 第三步说明本地优先的数据归属与使用方式。
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    expect(screen.getByText('Obsidian 是可选编辑器，不是使用产品的前置条件。')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('radio', { name: /同时使用 Obsidian/ }))
-    // 第四步创建第一条候选记忆。
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    fireEvent.click(screen.getByRole('button', { name: /开始对话建档/ }))
+    expect(screen.getByLabelText('NEXORA 首次启动')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /开始使用/ }))
+    expect(screen.getByRole('heading', { name: '创建或连接个人空间' })).toBeInTheDocument()
+    // 第三步是可跳过的真实导入流程，随后说明本地优先的数据归属与使用方式。
+    fireEvent.click(screen.getByRole('button', { name: /继续使用此 Vault/ }))
+    expect(screen.getByRole('heading', { name: '导入你的第一份知识' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '暂时跳过导入' }))
+    expect(screen.getByText(/可选编辑同一份 Markdown 数据/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /同时使用 Obsidian/ }))
+    // 第五步创建第一条候选记忆。
+    fireEvent.click(screen.getByRole('button', { name: /我明白了，继续/ }))
     await screen.findByText('我应该怎么称呼你？')
     expect(screen.queryByRole('button', { name: '成长仪表盘' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '暂时结束并进入工作台' }))
-    await screen.findByText('一切就绪')
-    fireEvent.click(screen.getAllByRole('button', { name: '进入总览' })[0])
+    fireEvent.click(screen.getByRole('button', { name: '暂时结束建档，进入审核' }))
+    await screen.findByText('当前没有待审核记忆')
+    fireEvent.click(screen.getByRole('button', { name: /继续/ }))
+    await screen.findByRole('heading', { name: '你的个人空间已经准备好' })
+    fireEvent.click(screen.getByRole('button', { name: /进入 NEXORA/ }))
+    await waitFor(() => expect(screen.queryByLabelText('NEXORA 首次启动')).not.toBeInTheDocument())
     expect(calls).toContain('/api/v1/initialized')
     expect(spy).toHaveBeenCalled()
   })
 
   it('resumes the first-run wizard from the last interrupted step', async () => {
-    localStorage.setItem('nexora.onboarding.step', '4')
+    localStorage.setItem('nexora.onboarding.step.v2', 'conversation')
     mockApi({
       '/api/v1/memories': [],
       '/api/v1/memory-stats': { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 },
@@ -413,9 +422,35 @@ describe('review workspace', () => {
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-    await screen.findByText('开始建立个人档案')
-    expect(screen.getByText('已恢复到你上次中断的步骤。')).toBeInTheDocument()
-    expect(screen.getByText('第一条记忆')).toBeInTheDocument()
+    await screen.findByRole('heading', { name: '让 NEXORA 逐步了解你' })
+    expect(screen.getByText(/已恢复到你上次中断的位置/)).toBeInTheDocument()
+    expect(screen.getByText('你可以稍后继续完善档案')).toBeInTheDocument()
+  })
+
+  it('imports candidates inside first-run before continuing to control choices', async () => {
+    const { calls } = mockApi({
+      '/api/v1/memories': [],
+      '/api/v1/memory-stats': { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 },
+      '/api/v1/overview': { profile: { access: 'allowed', protected: false, sections: [] }, memory: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready', initialized: false },
+      '/api/v1/vault': { vaultId: 'v1', displayName: '我的个人空间', schemaVersion: 1, revision: 'r1', externalChange: false },
+      '/api/v1/imports/preview': { items: [{ index: 0, type: 'note', subject: '项目', content: '本地优先。', preview: '本地优先。', status: 'ready', reason: '' }], summary: { total: 1, ready: 1, duplicate: 0, invalid: 0 } },
+      '/api/v1/imports': { created: [{ id: 'import-1', type: 'note', subject: '项目' }], skipped: [] },
+    })
+    render(<App />)
+    fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
+    await screen.findByRole('button', { name: /开始使用/ })
+    fireEvent.click(screen.getByRole('button', { name: /开始使用/ }))
+    fireEvent.click(screen.getByRole('button', { name: /继续使用此 Vault/ }))
+    fireEvent.change(screen.getByLabelText('导入内容'), { target: { value: '本地优先。' } })
+    fireEvent.click(screen.getByRole('button', { name: '预览' }))
+    await screen.findByText('确认要导入的条目')
+    fireEvent.click(screen.getByRole('button', { name: /导入 1 条候选/ }))
+    await screen.findByText('已导入 1 条候选记忆')
+    fireEvent.click(screen.getByRole('button', { name: '继续首次设置' }))
+    expect(screen.getByRole('heading', { name: '你的数据，你的选择' })).toBeInTheDocument()
+    expect(calls).toContain('/api/v1/imports/preview')
+    expect(calls).toContain('/api/v1/imports')
   })
 
   it('shows the GitHub onboarding page and its token-safety boundary', async () => {
@@ -532,7 +567,7 @@ describe('review workspace', () => {
   })
 
   it('lists registered vaults in the first-run wizard and connects by id', async () => {
-    mockApi({
+    const { calls } = mockApi({
       '/api/v1/memories': [],
       '/api/v1/memory-stats': { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 },
       '/api/v1/overview': { profile: { access: 'allowed', protected: false, sections: [] }, memory: { candidateMemories: 0, pendingReview: 0, confirmedMemories: 0 }, clients: { total: 0, active: [] }, recentAccess: [], growth: { latestMonth: null }, pending: 0, vault: 'ready', initialized: false },
@@ -548,12 +583,12 @@ describe('review workspace', () => {
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-    await screen.findByRole('heading', { name: '欢迎来到 NEXORA 个人智能中枢' })
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
-    await screen.findByText(/最近使用的个人空间/)
+    await screen.findByRole('heading', { name: '欢迎来到 NEXORA' })
+    fireEvent.click(screen.getByRole('button', { name: /开始使用/ }))
+    await screen.findByText('最近使用')
     expect(screen.getAllByText('当前空间').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /旧空间/ }))
-    await screen.findByText('正在打开「旧空间」…')
+    await waitFor(() => expect(calls).toContain('/api/v1/vaults/connect'))
   })
 
   it('restores the Vault from a Git commit with a safety backup', async () => {
@@ -596,19 +631,18 @@ describe('review workspace', () => {
     render(<App />)
     fireEvent.change(screen.getByLabelText('本地启动令牌'), { target: { value: 'test-token' } })
     fireEvent.click(screen.getByRole('button', { name: '连接审核空间' }))
-    await screen.findByRole('heading', { name: '欢迎来到 NEXORA 个人智能中枢' })
-    fireEvent.click(screen.getByRole('button', { name: '下一步' }))
+    await screen.findByRole('heading', { name: '欢迎来到 NEXORA' })
+    fireEvent.click(screen.getByRole('button', { name: /开始使用/ }))
     fireEvent.click(screen.getByRole('button', { name: /创建新的 Vault/ }))
-    await waitFor(() => expect(screen.getByLabelText('新 Vault 的文件夹路径')).toHaveValue('C:\\Users\\test\\Nexora\\vault/my-ai-profile'))
+    await waitFor(() => expect(screen.getByLabelText('Vault 路径')).toHaveValue('C:\\Users\\test\\Nexora\\vault/my-ai-profile'))
 
-    fireEvent.change(screen.getByLabelText('文件夹名称'), { target: { value: 'my-space' } })
-    fireEvent.click(screen.getByRole('button', { name: '使用推荐目录' }))
-    expect(screen.getByLabelText('新 Vault 的文件夹路径')).toHaveValue('C:\\Users\\test\\Nexora\\vault/my-space')
+    fireEvent.click(screen.getByRole('button', { name: '使用推荐位置' }))
+    expect(screen.getByLabelText('Vault 路径')).toHaveValue('C:\\Users\\test\\Nexora\\vault/my-ai-profile')
 
-    fireEvent.click(screen.getByRole('button', { name: '浏览…' }))
-    await waitFor(() => expect(screen.getByLabelText('新 Vault 的文件夹路径')).toHaveValue('D:\\Picked\\vault'))
+    fireEvent.click(screen.getByRole('button', { name: '选择位置' }))
+    await waitFor(() => expect(screen.getByLabelText('Vault 路径')).toHaveValue('D:\\Picked\\vault'))
 
-    fireEvent.click(screen.getByRole('button', { name: '忘记个人空间 vault_ol' }))
+    fireEvent.click(screen.getByRole('button', { name: '忘记个人空间 vault_old' }))
     await waitFor(() => expect(screen.queryByText('旧空间')).not.toBeInTheDocument())
   })
 
