@@ -438,3 +438,30 @@ final result: passed
 - P3: the existing orb artwork has a wider source composition than the reference's isolated sphere; it is circularly cropped to preserve the supplied asset without introducing a fake decorative graphic.
 
 final result: passed
+# First-run Experience V2 — Design QA (2026-11-28)
+
+## Reference comparison
+
+- **Experience boundary:** PASS — onboarding is rendered by its own full-screen shell and hash routes; Workspace navigation and Overview are absent.
+- **Welcome hierarchy:** PASS — restrained brand chrome, centered interactive intelligence core, one value statement, one primary action.
+- **Vault task focus:** PASS — create/connect choices, verified current Vault, recent Vaults, and a single forward action use real local state.
+- **Import task:** PASS — the third standalone route reuses the production Import flow for file reading, preview, validation, duplicate handling and candidate creation; skipping is explicit and creates no data.
+- **Control boundary:** PASS — Vault, Obsidian, local snapshots, GitHub private backup, AI clients and Providers are distinguished without claiming a connection or successful backup.
+- **Motion:** PASS — route entrance, ambient core breathing, pointer response, press feedback; all disabled by `prefers-reduced-motion`.
+- **Responsive behavior:** PASS — 1440px and 390px screenshots show no horizontal overflow; mobile choices and actions stack without hiding capabilities.
+- **Data integrity:** PASS — no demonstration values or invented memories; the flow retains Candidate → Confirmed/Rejected review and existing APIs.
+
+## Verified captures
+
+- `artifacts/onboarding-qa/first-run-welcome-1440.png`
+- `artifacts/onboarding-qa/first-run-vault-1440.png`
+- `artifacts/onboarding-qa/first-run-vault-390.png`
+- `artifacts/onboarding-qa/first-run-import-1440.png`
+- `artifacts/onboarding-qa/first-run-import-1024.png`
+- `artifacts/onboarding-qa/first-run-import-390.png`
+
+## Result
+
+**PASSED.** The implementation matches the approved standalone first-run direction and remains visually and architecturally separate from the daily Workspace.
+
+---

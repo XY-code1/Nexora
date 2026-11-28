@@ -185,31 +185,25 @@ function App() {
     setGateError('')
     try {
       const nextClient = new ApiClient(nextToken)
-      const [result, stats] = await Promise.all([nextClient.listCandidates(controller.signal), nextClient.memoryStats(controller.signal)])
+      // Resolve the product mode before mounting either experience. This avoids
+      // flashing the Workspace shell while an untouched Vault is still being
+      // classified as first-run.
+      const [result, stats, snapshot, vaultInfo] = await Promise.all([
+        nextClient.listCandidates(controller.signal),
+        nextClient.memoryStats(controller.signal),
+        nextClient.overview(controller.signal).catch(() => null),
+        nextClient.vaultStatus(controller.signal).catch(() => null),
+      ])
       if (epoch !== sessionEpoch.current) return
-      setToken(nextToken)
       applyMemories(result)
       setMemoryStats(stats)
-      // 首次运行判定：未完成初始化、且档案为空、且没有任何记忆时，先走初始化向导。
-      // 判定在后台进行，不阻塞连接；结论到达前先按常规界面呈现。
-      // 已初始化过的 Vault 不再重复进入向导（标记存在 Vault 的 90 System/state.json）。
-      const noMemories = stats.candidateMemories === 0 && stats.confirmedMemories === 0 && stats.pendingReview === 0
-      if (noMemories) {
-        void Promise.all([
-          nextClient.overview(controller.signal).catch(() => null),
-          nextClient.vaultStatus(controller.signal).catch(() => null),
-        ]).then(([snapshot, vaultInfo]) => {
-          if (epoch !== sessionEpoch.current || controller.signal.aborted || !mountedRef.current) return
-          const untouched = snapshot !== null
-            && snapshot.initialized !== true
-            && snapshot.profile.sections.length === 0
-            && stats.candidateMemories === 0
-            && stats.confirmedMemories === 0
-            && stats.pendingReview === 0
-          setWizardVaultName(vaultInfo?.displayName && vaultInfo.displayName !== 'vault' ? vaultInfo.displayName : t('app.mySpace'))
-          setFirstRun(untouched)
-        })
-      }
+      const firstRunRequired = snapshot !== null
+        && snapshot.initialized !== true
+        && snapshot.profile.sections.length === 0
+        && stats.confirmedMemories === 0
+      setWizardVaultName(vaultInfo?.displayName && vaultInfo.displayName !== 'vault' ? vaultInfo.displayName : t('app.mySpace'))
+      setFirstRun(firstRunRequired)
+      setToken(nextToken)
       setProfileView(null); setSecurityView(null); setHuman3View(null); setMonthlyView(null); setReflectionView(null); setMonthlyTrendView(null)
       setNotice(null)
     } catch (error) {
